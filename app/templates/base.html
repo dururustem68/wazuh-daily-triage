@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ app_title }}{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css?v={{ version }}">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<script type="application/json" id="i18n">{{ {
+  "running": _('run.running'), "now": _('run.now'), "done": _('run.done'), "open": _('run.open'),
+  "failed_start": _('run.failed_start'), "status_fail": _('run.status_fail'), "error": _('run.error'),
+  "starting": _('run.starting'), "saved": _('rep.saved'), "saved_baseline": _('rep.saved_baseline'),
+  "copied": _('rep.copied'), "sure": _('kb.sure'), "save": _('rep.save'), "thinking": _('chat.thinking'),
+  "tools": _('chat.tools', n='{n}'), "proposals": _('chat.proposals', n='{n}'), "testing": _('env.testing'),
+  "test": _('env.test'), "ok": _('chk.ok'), "fail": _('chk.fail')
+} | tojson }}</script>
+<script src="/static/app.js?v={{ version }}" defer></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/"><img src="/static/icon.svg" alt="" width="22" height="22"> {{ app_title }}</a>
+  <nav class="envnav">
+    {% for e in envs %}<a href="/e/{{ e.id }}" class="{{ 'on' if env is defined and env.id == e.id }}">{{ e.name }}</a>{% endfor %}
+  </nav>
+  <div class="spacer"></div>
+  {% if demo %}<span class="pill amber">DEMO</span>{% endif %}
+  <form method="post" action="/lang" class="inline langsw">
+    {% for code, name in LANGS.items() %}<button name="lang" value="{{ code }}" class="linkbtn small {{ 'on' if code == lang else 'muted' }}" title="{{ name }}">{{ code|upper }}</button>{% endfor %}
+  </form>
+  {% if auth %}<form method="post" action="/logout" class="inline"><button class="linkbtn muted small">{{ _('nav.logout') }}</button></form>{% endif %}
+</header>
+{% if env is defined %}
+<div class="subnav">
+  <strong>{{ env.name }}</strong>
+  <a href="/e/{{ env.id }}">{{ _('nav.reports') }}</a>
+  <a href="/e/{{ env.id }}/chat">{{ _('nav.chat') }}</a>
+  <a href="/e/{{ env.id }}/k">{{ _('nav.knowledge') }}</a>
+</div>
+{% endif %}
+<main>{% block body %}{% endblock %}</main>
+<footer class="muted small">Wazuh Daily Triage {{ version }} · {{ _('footer') }} · <a href="{{ SOURCE_URL }}" rel="noopener">{{ _('nav.source') }}</a> (AGPL-3.0)</footer>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# Knowledge base seed — referenced by `seed_file` in environments.yaml.
+# Imported ONCE per environment on first use; afterwards manage entries from the UI.
+# kind: context | baseline | decision | open_item | lesson | request | rule_draft
+- kind: baseline
+  title: "31101 web 400/403/404 scanner noise, ~6,000/day"
+  body: "Cloud scanners probing .env, .git/config, wp-login. Only report when the volume rises clearly."
+  rule_ids: ["31101", "31151"]
+- kind: decision
+  title: "Do not suggest adding a notification channel"
+  body: "Owner decision. If a real incident happens, saying so clearly in the report is enough."
+- kind: open_item
+  title: "Running kernel is behind the installed one — rolling reboot pending"
+- kind: lesson
+  title: "Level 0 rules are never written to the index"
+  body: "A suppression rule always shows 0; only the count of leaking events and logtest show whether it works."
+- kind: lesson
+  title: "OS_Regex has no grouped alternation"
+  body: "^(400|408)$ never matches but passes wazuh-analysisd -t. Write ^400$|^408$ or use type=\"pcre2\"."

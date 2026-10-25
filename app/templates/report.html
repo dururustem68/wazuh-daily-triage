@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}{{ _('rep.title') }} {{ run.started_at|ts }} · {{ env.name }}{% endblock %}
+{% block body %}
+{% set v = c.volume or {} %}{% set hl = c.health or {} %}{% set lvl = (c.env or {}).high_level or env.high_level %}
+<div class="row">
+  <h1>{{ _('rep.title') }} · {{ run.started_at|ts }}</h1><span class="spacer"></span>
+  {% if run.status == 'done' %}<span class="pill big {{ HEALTH_COLORS[run.health or 'ok'] }}">{{ _('health.' ~ (run.health or 'ok')) }}</span>
+  {% elif run.status == 'error' %}<span class="pill big red">{{ _('health.error') }}</span>
+  {% else %}<span class="pill big blue">{{ _('stage.' ~ run.stage) if run.stage else run.status }}</span>{% endif %}
+</div>
+<p class="muted small">{{ _('rep.window') }}: {{ (run.window or {}).from|ts }} → {{ (run.window or {}).to|ts }} ({{ _('rep.hours', h=(run.window or {}).hours) }}) ·
+  {{ _('rep.run_scheduled') if run.trigger == 'schedule' else _('rep.run_manual') }}
+  {% if run.agent %}· {{ run.agent.provider }} {{ run.agent.model }} · {{ run.agent.steps }} {{ _('rep.steps') }} · {{ run.agent.input_tokens|n }}/{{ run.agent.output_tokens|n }} {{ _('rep.tokens') }}{% endif %}</p>
+
+{% if run.status == 'running' %}<div class="runstate" data-runstate="{{ env.id }}" data-poll="{{ run.run_id }}" data-reload="1"></div>{% endif %}
+{% if run.error %}<div class="card err"><b>{{ _('rep.failed') }}</b> {{ run.error }}</div>{% endif %}
+
+{% if run.flags %}
+<section class="flags">
+  {% for f in run.flags %}<div class="flag {{ 'red' if f.severity == 'critical' else 'amber' }}">{{ f.message }}</div>{% endfor %}
+</section>
+{% endif %}
+
+{% if run.summary_md %}
+<section class="card">
+  <h2>{{ _('rep.summary') }}</h2>
+  {{ run.summary_md|md }}
+  {% if run.health_assessment %}<h3>{{ _('rep.infra') }}</h3>{{ run.health_assessment|md }}{% endif %}
+</section>
+{% endif %}
+
+{% if run.findings %}
+<section>
+  <h2>{{ _('rep.findings') }} <span class="muted small">({{ run.findings|length }})</span></h2>
+  {% for f in run.findings %}
+  <article class="card finding sev-{{ f.severity }}" id="{{ f.id }}">
+    <div class="row">
+      <span class="pill {{ LABEL_COLORS.get(f.label, 'gray') }}">{{ _('label.' ~ f.label) }}</span>
+      <span class="pill outline">{{ _('sev.' ~ f.severity) }}</span>
+      <h3>{{ f.title }}</h3>
+    </div>
+    <div class="detail">{{ f.detail|md }}</div>
+    {% if f.evidence %}<ul class="evidence">{% for e in f.evidence %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    <p class="small muted">{% if f.rule_ids %}{{ _('rep.rules') }}: {{ f.rule_ids|join(', ') }}{% endif %}
+      {% if f.agents %} · {{ _('rep.agents') }}: {{ f.agents|join(', ') }}{% endif %}</p>
+    {% if f.recommendation %}<div class="reco"><b>{{ _('rep.recommendation') }}</b> {{ f.recommendation|md }}</div>{% endif %}
+    {% if f.rule_draft_xml %}<details><summary>{{ _('rep.rule_draft') }}</summary>
+      <pre class="code">{{ f.rule_draft_xml }}</pre>
+      <button class="btn small" data-copy-prev>{{ _('rep.copy') }}</button>
+      <p class="small muted">{{ _('rep.rule_draft_note') }}</p>
+    </details>{% endif %}
+    <div class="row fb" data-finding="/api/e/{{ env.id }}/r/{{ run.run_id }}/f/{{ f.id }}">
+      <select data-k="user_status">
+        {% for k in USER_STATUSES %}<option value="{{ k }}" {{ 'selected' if f.user_status == k }}>{{ _('us.' ~ k) }}</option>{% endfor %}
+      </select>
+      <input data-k="user_note" placeholder="{{ _('rep.note_ph') }}" value="{{ f.user_note or '' }}">
+      <button class="btn small" data-save>{{ _('rep.save') }}</button><span class="saved small muted"></span>
+    </div>
+  </article>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if run.questions %}
+<section id="questions">
+  <h2>{{ _('rep.questions') }}</h2>
+  <p class="muted small">{{ _('rep.questions_note') }}</p>
+  {% for q in run.questions %}
+  <div class="card q">
+    <p><b>{{ q.question }}</b>{% if q.why %}<br><span class="small muted">{{ q.why }}</span>{% endif %}</p>
+    {% if q.answer %}<p class="answer">✓ {{ q.answer }}</p>
+    {% else %}
+    <div class="row" data-answer="/api/e/{{ env.id }}/r/{{ run.run_id }}/q/{{ q.id }}">
+      <textarea rows="2" placeholder="{{ _('rep.answer_ph') }}"></textarea><button class="btn small primary" data-save>{{ _('rep.send') }}</button>
+    </div>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<section class="grid two">
+  {% if run.open_items %}<div class="card"><h3>{{ _('rep.open_items') }}</h3><ul>{% for o in run.open_items %}<li>{{ o }}</li>{% endfor %}</ul></div>{% endif %}
+  {% if run.closed_items %}<div class="card"><h3>{{ _('rep.closed_items') }}</h3><ul>{% for o in run.closed_items %}<li>{{ o }}</li>{% endfor %}</ul></div>{% endif %}
+  {% if proposals %}<div class="card"><h3>{{ _('rep.proposals') }}</h3><ul>{% for p in proposals %}
+    <li><span class="pill purple">{{ _('kind.' ~ p.kind) }}</span> {{ p.title }} <span class="small muted">({{ _('kst.' ~ p.status) }})</span></li>{% endfor %}</ul>
+    <a class="small" href="/e/{{ env.id }}/k?status=proposed">{{ _('rep.review') }}</a></div>{% endif %}
+</section>
+
+<section class="card">
+  <div class="row"><h2>{{ _('rep.data') }}</h2><span class="spacer"></span><span class="small muted">{{ _('rep.deterministic') }}</span></div>
+  <div class="stats">
+    <div><b>{{ v.total|n }}</b><span>{{ _('dash.alerts') }}</span></div>
+    <div><b>{{ v.high_level_total|n }}</b><span>{{ _('dash.level_plus', n=lvl) }}</span></div>
+    <div><b>{{ v.high_level_ratio_permille }}‰</b><span>{{ _('rep.high_ratio') }}</span></div>
+    <div><b>{{ (v.empty_hours or [])|length }}</b><span>{{ _('rep.empty_hours') }}</span></div>
+    <div><b>{{ hl.silence_minutes if hl.silence_minutes is not none else '—' }}</b><span>{{ _('rep.silence') }}</span></div>
+  </div>
+  {% if hourly %}
+  <div class="hist">
+    {% for h in hourly %}<div class="bar{{ ' empty' if h.n == 0 }}" data-h="{{ [2, (h.n * 100 / hmax)|round(0, 'ceil')|int]|max }}" title="{{ h.t|ts }}: {{ h.n }}"></div>{% endfor %}
+  </div>
+  <div class="row small muted"><span>{{ hourly[0].t|tss }}</span><span class="spacer"></span><span>{{ hourly[-1].t|tss }}</span></div>
+  {% endif %}
+
+  <div class="grid two">
+    <div>
+      <h3>{{ _('rep.levels') }}</h3>
+      <table class="tbl compact">{% for l, n in (v.levels or {}).items() %}<tr><td>{{ l }}</td><td class="r">{{ n|n }}</td></tr>{% endfor %}</table>
+      <h3>{{ _('rep.infra') }}</h3>
+      <table class="tbl compact">
+        {% if hl.indexer %}<tr><td>{{ _('rep.indexer') }}</td><td>{{ hl.indexer.status }} · {{ hl.indexer.number_of_nodes }} node · {{ _('rep.unassigned') }} {{ hl.indexer.unassigned_shards }}</td></tr>{% endif %}
+        {% for d in hl.indexer_disk or [] %}<tr><td>{{ _('rep.disk') }} {{ d.node }}</td><td>{{ d.percent }}% · {{ d.shards }} {{ _('rep.shards') }}</td></tr>{% endfor %}
+        {% if hl.api_version %}<tr><td>{{ _('rep.api') }}</td><td>{{ hl.api_version }}</td></tr>{% endif %}
+        {% if hl.agents_summary %}<tr><td>{{ _('rep.agents_summary') }}</td><td>{% for k, n in hl.agents_summary.items() %}{{ k }} {{ n }}{{ ' · ' if not loop.last }}{% endfor %}</td></tr>{% endif %}
+        {% for a in hl.agents_not_active or [] %}<tr><td>⚠ {{ a.name }}</td><td>{{ a.status }} · {{ _('rep.last') }} {{ a.lastKeepAlive|ts }}</td></tr>{% endfor %}
+        {% for m in hl.managers_last_2h or [] %}<tr><td>{{ m.manager }}</td><td>{{ _('rep.last2h') }} {{ m.count|n }} · {{ _('rep.last') }} {{ m.last|ts }}</td></tr>{% endfor %}
+        {% for e in hl.manager_errors or [] %}<tr><td class="small">{{ e.tag }}</td><td class="small">{{ e.count }}× {{ e.msg }}</td></tr>{% endfor %}
+      </table>
+    </div>
+    <div>
+      <h3>{{ _('rep.agents') }}</h3>
+      <table class="tbl compact"><tr><th>{{ _('rep.agent') }}</th><th class="r">{{ _('rep.count') }}</th><th class="r">{{ _('rep.prev') }}</th><th class="r">{{ _('rep.high') }}</th></tr>
+        {% for a in c.agents or [] %}<tr><td>{{ a.agent }}</td><td class="r">{{ a.count|n }}</td><td class="r muted">{{ a.prev|n }}</td><td class="r">{{ a.high|n }}</td></tr>{% endfor %}</table>
+      {% if c.watch %}<h3>{{ _('rep.watched') }}</h3>
+      <table class="tbl compact">{% for k, n in c.watch.items() %}<tr><td>{{ k }}</td><td class="r">{{ n|n }}</td></tr>{% endfor %}</table>{% endif %}
+    </div>
+  </div>
+
+  <h3>{{ _('rep.high_groups', n=lvl) }}</h3>
+  <table class="tbl"><tr><th>{{ _('rep.rule') }}</th><th>{{ _('rep.lvl') }}</th><th class="r">{{ _('rep.count') }}</th><th>{{ _('rep.desc') }}</th><th>{{ _('rep.agents_span') }}</th><th>{{ _('rep.srcip') }}</th></tr>
+  {% for r in c.high_level or [] %}
+    <tr><td>{{ r.id }}</td><td>{{ r.level }}</td><td class="r">{{ r.count|n }}</td><td>{{ r.desc }}</td>
+      <td class="small">{% for a in r.agents %}{{ a.name }} {{ a.n }} ({{ a.first|tss }}→{{ a.last|tss }}){{ '; ' if not loop.last }}{% endfor %}</td>
+      <td class="small">{% for ip, n in (r.srcips or {}).items() %}{{ ip }} ({{ n }}){{ ', ' if not loop.last }}{% endfor %}</td></tr>
+  {% endfor %}</table>
+
+  <div class="grid two">
+    <div><h3>{{ _('rep.top_rules') }}</h3>
+    <table class="tbl compact"><tr><th>{{ _('rep.rule') }}</th><th>{{ _('rep.lvl') }}</th><th class="r">{{ _('rep.count') }}</th><th class="r">{{ _('rep.prev') }}</th><th>{{ _('rep.desc') }}</th></tr>
+    {% for r in (c.top_rules or [])[:25] %}<tr><td>{{ r.id }}</td><td>{{ r.level }}</td><td class="r">{{ r.count|n }}</td><td class="r muted">{{ r.prev|n }}</td><td class="small">{{ r.desc|truncate(70) }}</td></tr>{% endfor %}</table></div>
+    <div>
+    {% if c.new_rules %}<h3>{{ _('rep.new_rules') }}</h3>
+    <table class="tbl compact">{% for r in c.new_rules %}<tr><td>{{ r.id }}</td><td>{{ r.level }}</td><td class="r">{{ r.count|n }}</td><td class="small">{{ r.desc|truncate(60) }}</td></tr>{% endfor %}</table>{% endif %}
+    <h3>{{ _('rep.srcips') }}</h3>
+    <table class="tbl compact">{% for r in c.srcips or [] %}<tr><td>{{ r.ip }}</td><td class="r">{{ r.count|n }}</td><td>{{ _('rep.max') }} {{ r.max_level }}</td><td class="small">{{ r.rules.keys()|join(', ') }}</td></tr>{% endfor %}</table>
+    {% if c.vulnerabilities %}<h3>{{ _('rep.vulns') }}</h3>
+    <p class="small">{% for k, n in c.vulnerabilities.severity.items() %}{{ k }} {{ n|n }}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+    </div>
+  </div>
+  {% if c.errors %}<h3>{{ _('rep.collect_errors') }}</h3><ul class="small">{% for e in c.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+</section>
+
+{% if run.agent and run.agent.trace %}
+<details class="card"><summary>{{ _('rep.trace', n=run.agent.trace|length) }}</summary>
+  <ol class="trace">{% for tr in run.agent.trace %}<li><code>{{ tr.tool }}</code> <span class="small muted">{{ tr.ms }} ms · {{ tr.result_chars }} chars</span>
+    <pre class="code small">{{ tr.input|tojson(indent=1) }}</pre></li>{% endfor %}</ol>
+</details>
+{% endif %}
+{% endblock %}

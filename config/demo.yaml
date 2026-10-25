@@ -1,0 +1,20 @@
+# Used with WDT_DEMO=true: synthetic data, no real connections.
+app:
+  timezone: ${TZ:-UTC}
+  language: ${APP_LANGUAGE:-en}
+llm:
+  provider: ${LLM_PROVIDER:-mock}
+  model: ${LLM_MODEL:-}
+  api_key: ${LLM_API_KEY:-}
+  base_url: ${LLM_BASE_URL:-}
+environments:
+  - id: demo
+    name: Demo Wazuh
+    description: Demo environment with synthetic data
+    indexer: {url: "https://demo:9200"}
+    api: {url: "https://demo:55000"}
+    watch_rules: ["100212", "100213"]
+    watch_groups: [authentication_failed, web_scan, sshd]
+    context_file: context/demo.md
+    seed_file: seed/example.yaml
+    schedule: {enabled: false}

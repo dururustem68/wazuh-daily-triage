@@ -1,0 +1,17 @@
+name: Feature request
+description: Suggest an idea
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes: { label: Problem, description: What part of your daily review is still manual or slow? }
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes: { label: Proposed solution }
+  - type: checkboxes
+    id: readonly
+    attributes:
+      label: Read-only
+      options:
+        - label: This feature does not require changing anything in Wazuh (or I explain why it must).

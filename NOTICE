@@ -1,0 +1,26 @@
+Wazuh Daily Triage
+Copyright (C) 2026 Rüstem Duru
+
+This program is free software: you can redistribute it and/or modify it under the
+terms of the GNU Affero General Public License as published by the Free Software
+Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along with
+this program (LICENSE). If not, see <https://www.gnu.org/licenses/>.
+
+If you run a modified version of this program for users over a network, AGPL-3.0
+section 13 requires you to offer them the corresponding source code. The web UI
+shows a "Source code" link driven by the SOURCE_URL environment variable; point it
+at your modified source.
+
+"Wazuh" is a trademark of Wazuh, Inc. This project is independent and is not
+affiliated with, endorsed or sponsored by Wazuh, Inc.
+
+Third-party components (installed at build time, not bundled in this repository):
+  FastAPI (MIT), Starlette (BSD-3-Clause), Uvicorn (BSD-3-Clause), HTTPX (BSD-3-Clause),
+  Jinja2 (BSD-3-Clause), MarkupSafe (BSD-3-Clause), markdown-it-py (MIT),
+  Pydantic (MIT), PyYAML (MIT), python-multipart (Apache-2.0).

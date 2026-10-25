@@ -1,0 +1,16 @@
+.env
+.git
+.github
+config/environments.yaml
+config/certs
+config/context/*
+!config/context/demo.md
+!config/context/example.md
+config/seed/*
+!config/seed/example.yaml
+tests
+docs
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache

@@ -1,0 +1,69 @@
+# Wazuh Daily Triage — copy to config/environments.yaml and edit.
+# ${VAR} and ${VAR:-default} are expanded from environment variables (.env), so keep secrets there.
+#
+# Single environment? You can skip this file entirely and use WAZUH_* variables in .env instead.
+
+app:
+  timezone: ${TZ:-UTC}          # schedule times and UI timestamps use this zone
+  language: ${APP_LANGUAGE:-en} # en | tr — default UI and report language
+  title: Wazuh Daily Triage
+
+llm:
+  # anthropic | openai (any OpenAI-compatible endpoint: OpenAI, Azure OpenAI, Ollama, vLLM, LM Studio, LiteLLM...) | mock
+  provider: ${LLM_PROVIDER:-anthropic}
+  model: ${LLM_MODEL}
+  api_key: ${LLM_API_KEY}
+  # openai provider: https://api.openai.com/v1 | http://ollama:11434/v1 | full Azure URL incl. ?api-version=
+  base_url: ${LLM_BASE_URL:-}
+  max_tokens: 4096
+  temperature: 0.2              # remove for reasoning models that only accept the default
+  # token_param: max_completion_tokens   # newer OpenAI models
+  # extra_body: {}                       # extra fields passed to the provider verbatim
+  max_tool_steps: 14            # tool-call budget per run (cost ceiling)
+
+environments:
+  - id: prod                    # lowercase, used in URLs
+    name: Production Wazuh
+    description: Wazuh 4.x cluster — 1 master, 2 workers, 3 indexer nodes
+    language: null              # optional per-environment report language (en | tr)
+    indexer:
+      url: https://wazuh-indexer.example.internal:9200
+      username: ${PROD_INDEXER_USER}
+      password: ${PROD_INDEXER_PASSWORD}
+      verify_tls: true
+      # ca_file: /app/config/certs/root-ca.pem     # private CA (recommended over verify_tls: false)
+      # client_cert: /app/config/certs/client.pem  # optional mutual TLS
+      # client_key: /app/config/certs/client-key.pem
+    api:                        # optional; without it agent/manager health and logtest are disabled
+      url: https://wazuh-manager.example.internal:55000
+      username: ${PROD_API_USER}
+      password: ${PROD_API_PASSWORD}
+      verify_tls: true
+    alerts_index: wazuh-alerts-4.x-*
+    vuln_index: wazuh-states-vulnerabilities-*
+    storage_prefix: daily-triage        # results: daily-triage-runs / -knowledge / -chat in THIS indexer
+    schedule:
+      enabled: true
+      time: "07:30"
+      days: [mon, tue, wed, thu, fri]
+    window_min_hours: 24        # window = since last successful run, clamped to [min, max]
+    window_max_hours: 96        # so Monday morning covers the weekend
+    high_level: 7               # "high level" threshold
+    max_silence_minutes: 60     # last alert older than this → "SIEM may be down"
+    disk_warn_percent: 75
+    # required_daemons: [wazuh-analysisd, wazuh-remoted, wazuh-db, wazuh-modulesd, wazuh-apid]
+    watch_rules: []             # rule IDs whose daily count is always reported
+    watch_groups: [authentication_failed, web_scan, sshd]
+    context_file: context/example.md    # free text describing the environment (given to the AI)
+    seed_file: seed/example.yaml        # imported into the knowledge base once
+    redact: false               # true: mask e-mails/passwords/tokens before text reaches the LLM
+    # llm:                      # optional per-environment model, e.g. a local model for regulated data
+    #   provider: openai
+    #   base_url: http://ollama:11434/v1
+    #   model: qwen3:14b
+
+  # - id: lab
+  #   name: Lab Wazuh (single node)
+  #   indexer: {url: "https://10.0.0.5:9200", username: "${LAB_INDEXER_USER}", password: "${LAB_INDEXER_PASSWORD}", ca_file: /app/config/certs/lab-ca.pem}
+  #   api: {url: "https://10.0.0.5:55000", username: "${LAB_API_USER}", password: "${LAB_API_PASSWORD}", ca_file: /app/config/certs/lab-ca.pem}
+  #   schedule: {time: "07:45", days: [mon, tue, wed, thu, fri]}

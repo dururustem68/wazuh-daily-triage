@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="{{ lang }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ _('login.title') }} · {{ app_title }}</title><link rel="stylesheet" href="/static/style.css?v={{ version }}"><link rel="icon" href="/static/icon.svg"></head>
+<body class="center">
+<div>
+<form class="card login" method="post" action="/login">
+  <h1><img src="/static/icon.svg" alt="" width="28" height="28"> {{ app_title }}</h1>
+  <p class="muted">{{ _('login.subtitle') }}</p>
+  {% if err %}<p class="err">{{ err }}</p>{% endif %}
+  <label>{{ _('login.password') }} <input type="password" name="password" autofocus required></label>
+  <button class="btn primary" type="submit">{{ _('login.submit') }}</button>
+</form>
+<form method="post" action="/lang" class="langsw center-row">
+  {% for code, name in LANGS.items() %}<button name="lang" value="{{ code }}" class="linkbtn small {{ 'on' if code == lang else 'muted' }}">{{ name }}</button>{% endfor %}
+</form>
+<p class="small muted center-row"><a href="{{ SOURCE_URL }}" rel="noopener">{{ _('nav.source') }}</a> · AGPL-3.0</p>
+</div>
+</body></html>

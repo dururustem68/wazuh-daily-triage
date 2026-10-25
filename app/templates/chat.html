@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ _('nav.chat') }} · {{ env.name }}{% endblock %}
+{% block body %}
+<div class="chat-wrap">
+  <aside class="sessions">
+    <a class="btn primary small" href="/e/{{ env.id }}/chat">{{ _('chat.new') }}</a>
+    {% for s in sessions %}<a class="sess {{ 'on' if s.session == session }}" href="?s={{ s.session }}"><span>{{ s.title }}</span><small>{{ s.ts|tss }}</small></a>{% endfor %}
+  </aside>
+  <section class="chat" data-chat="/api/e/{{ env.id }}/chat" data-session="{{ session or '' }}">
+    <div class="msgs" id="msgs">
+      {% if not hist %}
+      <div class="hint muted">
+        <p>{{ _('chat.ask', env=env.name) }}</p>
+        <ul>{% for i in range(1, 6) %}<li data-suggest>{{ _('chat.ex' ~ i) }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+      {% for m in hist %}
+      <div class="msg {{ m.role }}">
+        {% if m.role == 'assistant' %}{{ m.content|md }}
+          {% if m.trace %}<details class="small"><summary>{{ _('chat.tools', n=m.trace|length) }}</summary><ol>{% for tr in m.trace %}<li><code>{{ tr.tool }}</code> {{ tr.input|tojson }}</li>{% endfor %}</ol></details>{% endif %}
+        {% else %}{{ m.content }}{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <form class="composer" id="composer">
+      <textarea name="text" rows="2" placeholder="{{ _('chat.placeholder') }}" required></textarea>
+      <button class="btn primary">{{ _('chat.send') }}</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

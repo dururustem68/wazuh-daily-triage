@@ -1,0 +1,4 @@
+- `jenkins` is internet-facing on purpose (customers trigger builds); do not suggest closing it, assess compensating controls.
+- `laptop-ops` is a personal Windows workstation; 60602 application errors are normal noise.
+- Team SSH logins come from the VPN range 100.64.0.0/10.
+- Every Linux server runs unattended-upgrades around 06:00 UTC.
