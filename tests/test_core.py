@@ -239,3 +239,33 @@ async def test_turkish_report_language(tmp_path):
     run = await rt.run_triage(rt.get("demo"), "tr-1")
     assert "sahte LLM" in run["summary_md"]
     assert any("ajan aktif değil" in f["message"] for f in run["flags"])
+
+
+def test_llm_from_env(monkeypatch):
+    from app.config import LLMConfig, llm_from_env
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_TEMPERATURE", "none")
+    monkeypatch.setenv("LLM_TOKEN_PARAM", "max_completion_tokens")
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "medium")
+    monkeypatch.setenv("LLM_EXTRA_BODY", '{"top_p": 0.9}')
+    c = LLMConfig(**llm_from_env())
+    assert c.temperature is None and c.token_param == "max_completion_tokens"
+    assert c.extra_body == {"reasoning_effort": "medium", "top_p": 0.9}
+
+
+async def test_openai_body_params():
+    from app.config import LLMConfig
+    seen = {}
+
+    def h(req):
+        seen.update(json.loads(req.content))
+        seen["url"] = str(req.url)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]})
+    cfg = LLMConfig(provider="openai", model="m", api_key="k", temperature=None,
+                    token_param="max_completion_tokens", extra_body={"reasoning_effort": "low"},
+                    base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
+    llm = OpenAICompatLLM(cfg)
+    llm.client = httpx.AsyncClient(transport=httpx.MockTransport(h))
+    await llm.complete("s", [{"role": "user", "content": "x"}], [])
+    assert seen["url"] == "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    assert "temperature" not in seen and seen["max_completion_tokens"] == 4096 and seen["reasoning_effort"] == "low"

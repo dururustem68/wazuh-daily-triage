@@ -14,3 +14,5 @@ All notable changes to this project are documented here. The format follows
 - Web UI in English and Turkish; connection test in the UI and `python -m app.check`.
 - Single-environment configuration from environment variables; mutual TLS; redaction option.
 - Demo mode with synthetic data.
+- Provider guide for Claude, OpenAI, Gemini, DeepSeek, Azure and local models; `LLM_TEMPERATURE`,
+  `LLM_TOKEN_PARAM`, `LLM_REASONING_EFFORT`, `LLM_EXTRA_BODY` variables.

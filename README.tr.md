@@ -7,7 +7,7 @@ geri yazar, yalnızca insan kararı gereken yerde size soru sorar ve cevapların
 Yapay zekâ anahtarınız sizin: Anthropic, OpenAI, Azure OpenAI ya da OpenAI uyumlu herhangi bir uç nokta (Ollama,
 vLLM, LM Studio, LiteLLM). Tek Docker konteyner; Wazuh'a karşı salt okunur.
 
-[English README](README.md) · [Yetkiler ve ağ](docs/permissions.md) · [Katkı](CONTRIBUTING.md) · [Güvenlik](SECURITY.md)
+[English README](README.md) · [Yapay zekâ sağlayıcıları](docs/providers.tr.md) · [Yetkiler ve ağ](docs/permissions.md) · [Katkı](CONTRIBUTING.md) · [Güvenlik](SECURITY.md)
 
 ![Rapor](docs/screenshot-report.png)
 
@@ -62,6 +62,23 @@ vi config/context/<ortam>.md       # ortamı anlatan birkaç satır
 ```
 
 `config/environments.yaml`, `config/context/*`, `config/seed/*`, `config/certs/` ve `.env` git'e girmez.
+
+## Yapay zekâ sağlayıcıları
+
+Anahtar sizin. Her sağlayıcı için ayrıntılı kurulum: **[docs/providers.tr.md](docs/providers.tr.md)**.
+
+| Sağlayıcı | `LLM_PROVIDER` | `LLM_BASE_URL` | Örnek `LLM_MODEL` |
+|---|---|---|---|
+| Claude (Anthropic) | `anthropic` | — | `claude-sonnet-5-5` |
+| OpenAI | `openai` | `https://api.openai.com/v1` | `gpt-6.1-sol` ¹ |
+| Google Gemini | `openai` | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.8-flash` |
+| DeepSeek | `openai` | `https://api.deepseek.com` | `deepseek-flash` |
+| Azure OpenAI | `openai` | `?api-version=` içeren tam deployment adresi | deployment adınız |
+| Ollama / vLLM / LM Studio / LiteLLM | `openai` | ör. `http://ollama:11434/v1` | ör. `qwen3:14b` |
+
+¹ OpenAI akıl yürütme modelleri ayrıca `LLM_TOKEN_PARAM=max_completion_tokens` ve `LLM_TEMPERATURE=none` ister.
+
+Model araç kullanımını (function calling) desteklemelidir. Her ortam kendi modelini seçebilir (`llm:` bloğu).
 
 ## Güvenlik
 

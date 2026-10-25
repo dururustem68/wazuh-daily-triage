@@ -195,6 +195,31 @@ class Settings(BaseModel):
         return env.language if env.language in LANGUAGES else self.app.language
 
 
+def llm_from_env() -> dict:
+    """LLM settings from LLM_* variables (single-environment mode)."""
+    E = os.environ.get
+    llm: dict = {"provider": E("LLM_PROVIDER", "anthropic"), "model": E("LLM_MODEL", ""),
+                 "api_key": E("LLM_API_KEY", ""), "base_url": E("LLM_BASE_URL") or None}
+    if E("LLM_MAX_TOKENS"):
+        llm["max_tokens"] = int(E("LLM_MAX_TOKENS"))
+    temp = E("LLM_TEMPERATURE")
+    if temp is not None and temp.strip() != "":
+        llm["temperature"] = None if temp.strip().lower() in ("none", "default", "off") else float(temp)
+    if E("LLM_TOKEN_PARAM"):
+        llm["token_param"] = E("LLM_TOKEN_PARAM")
+    extra: dict = {}
+    if E("LLM_REASONING_EFFORT"):
+        extra["reasoning_effort"] = E("LLM_REASONING_EFFORT")
+    if E("LLM_EXTRA_BODY"):
+        import json
+        extra.update(json.loads(E("LLM_EXTRA_BODY")))
+    if extra:
+        llm["extra_body"] = extra
+    if E("LLM_MAX_TOOL_STEPS"):
+        llm["max_tool_steps"] = int(E("LLM_MAX_TOOL_STEPS"))
+    return llm
+
+
 def settings_from_env() -> dict:
     """Single-environment configuration from plain environment variables (no YAML needed)."""
     E = os.environ.get
@@ -217,8 +242,7 @@ def settings_from_env() -> dict:
         env["alerts_index"] = E("WAZUH_ALERTS_INDEX")
     return {
         "app": {"timezone": E("TZ", "UTC"), "language": E("APP_LANGUAGE", "en")},
-        "llm": {"provider": E("LLM_PROVIDER", "anthropic"), "model": E("LLM_MODEL", ""),
-                "api_key": E("LLM_API_KEY", ""), "base_url": E("LLM_BASE_URL") or None},
+        "llm": llm_from_env(),
         "environments": [env],
     }
 
@@ -227,6 +251,7 @@ def load_settings(path: str | os.PathLike | None = None) -> Settings:
     path = Path(path or os.environ.get("WDT_CONFIG", "config/environments.yaml"))
     if path.exists():
         raw = _expand(yaml.safe_load(path.read_text(encoding="utf-8")) or {})
+        raw.setdefault("llm", llm_from_env())  # no llm block → LLM_* variables
         base = path.parent
     else:
         raw = settings_from_env()

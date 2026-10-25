@@ -7,7 +7,7 @@ Indexer, asks you only what needs a human decision — and remembers your answer
 Bring your own AI: Anthropic, OpenAI, Azure OpenAI or any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio,
 LiteLLM). One Docker container, read-only towards Wazuh.
 
-[Türkçe README](README.tr.md) · [Permissions & network](docs/permissions.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[Türkçe README](README.tr.md) · [AI providers](docs/providers.md) · [Permissions & network](docs/permissions.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ![Report](docs/screenshot-report.png)
 
@@ -92,15 +92,22 @@ vi config/context/<env>.md         # a few lines describing the environment
 
 ## AI providers
 
-| `LLM_PROVIDER` | `LLM_BASE_URL` | Notes |
-|---|---|---|
-| `anthropic` | — | System prompt is cached (prompt caching) |
-| `openai` | `https://api.openai.com/v1` | For newer models set `token_param: max_completion_tokens` and remove `temperature` |
-| `openai` | `http://ollama:11434/v1` | Local model: `docker compose --profile ollama up -d`; pick a model with tool calling |
-| `openai` | vLLM / LM Studio / LiteLLM / full Azure URL with `?api-version=` | Any OpenAI-compatible endpoint |
+Bring your own key. Full setup for each provider, including model names and parameter quirks:
+**[docs/providers.md](docs/providers.md)**.
 
-Each environment may override the model (`llm:` block) — e.g. a local model for an environment whose data must
-not leave your network. Small local models can struggle with multi-step tool use; `max_tool_steps` caps cost.
+| Provider | `LLM_PROVIDER` | `LLM_BASE_URL` | Example `LLM_MODEL` |
+|---|---|---|---|
+| Claude (Anthropic) | `anthropic` | — | `claude-sonnet-5-5` |
+| OpenAI | `openai` | `https://api.openai.com/v1` | `gpt-6.1-sol` ¹ |
+| Google Gemini | `openai` | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.8-flash` |
+| DeepSeek | `openai` | `https://api.deepseek.com` | `deepseek-flash` |
+| Azure OpenAI | `openai` | full deployment URL with `?api-version=` | your deployment |
+| Ollama / vLLM / LM Studio / LiteLLM | `openai` | e.g. `http://ollama:11434/v1` | e.g. `qwen3:14b` |
+
+¹ OpenAI reasoning models also need `LLM_TOKEN_PARAM=max_completion_tokens` and `LLM_TEMPERATURE=none`.
+
+The model must support tool (function) calling. Each environment can override the model (`llm:` block) — e.g.
+a local model for an environment whose data must not leave your network. `max_tool_steps` caps cost per run.
 
 ## Compatibility
 
