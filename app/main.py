@@ -419,6 +419,16 @@ async def api_inbox_act(request: Request, env_id: str, body: InboxActReq):
     return {"ok": True, "updated": n}
 
 
+@app.post("/api/e/{env_id}/k/{kid}/chat")
+async def api_knowledge_chat(request: Request, env_id: str, kid: str):
+    _env(request, env_id)
+    try:
+        session = await _rt(request).chat_from_knowledge(env_id, kid, ui_lang(request))
+    except KeyError:
+        raise HTTPException(404, "not found") from None
+    return {"session": session, "url": f"/e/{env_id}/chat?s={session}"}
+
+
 @app.post("/api/e/{env_id}/r/{run_id}/f/{fid}/chat")
 async def api_finding_chat(request: Request, env_id: str, run_id: str, fid: str):
     _env(request, env_id)

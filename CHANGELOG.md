@@ -3,6 +3,20 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.4] — 2026-10-26
+
+### Added
+- **"Discuss in chat"** on every knowledge base entry: opens a chat with the entry, its rule XML and — when the last
+  deployment failed — the failed steps, so the draft can be corrected (`POST /api/e/{env}/k/{id}/chat`).
+
+### Fixed
+- Rule deployment: when Wazuh refuses the upload, nothing has been written — the run now stops with
+  "nothing was changed" instead of attempting a rollback that fails the same way and reports
+  "rollback FAILED — check the manager now". A permission error names the missing RBAC grant.
+
+### Docs
+- `rules:delete` on `rule:file:<file>` is needed for every deploy (overwrite), not only for the first rollback.
+
 ## [0.4.3] — 2026-10-26
 
 ### Added

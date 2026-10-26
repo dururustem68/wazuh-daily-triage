@@ -63,7 +63,7 @@ Keep the read-only `daily-triage` user for everything else.
 |---|---|---|
 | `rules:read` | `rule:file:*` | read the file, check IDs and parent rules |
 | `rules:update` | `*:*:*` | upload the rules file (Wazuh only accepts `*:*:*` for this action) |
-| `rules:delete` | `rule:file:wdt_rules.xml` | remove the file again if the very first deploy is rolled back |
+| `rules:delete` | `rule:file:<file>` (same name as `rule_deploy.file`) | **required for every deploy**: the upload uses `overwrite=true`, which Wazuh checks as a delete of the existing file; also removes the file again if the very first deploy is rolled back. A wrong file name here gives `Permission denied: Resource type: rule:file` |
 | `manager:read` | `*:*:*` | status, configuration validation |
 | `manager:restart` | `*:*:*` | restart a standalone manager |
 | `cluster:status` | `*:*:*` | is a cluster running |

@@ -140,3 +140,24 @@ async def test_parent_load_order():
     assert not a["ok"] and "loads after" in a["errors"][0]
     assert (await R.analyse(x.format(p="99919"), RuleDeployCfg(file="zz_wdt_rules.xml"), API()))["ok"]
     assert (await R.analyse(x.format(p="60106"), cfg, API()))["ok"]
+
+
+async def test_upload_refused_changes_nothing(monkeypatch):
+    rt = Runtime(load_settings(os.path.join(ROOT, "config/demo.yaml")), demo=True)
+    er = rt.get("demo")
+    api = er.api
+    from app.wazuh.api import WazuhAPIError
+
+    async def refuse(name, content):
+        raise WazuhAPIError("rule file upload failed: Permission denied: Resource type: rule:file")
+    monkeypatch.setattr(api, "rule_file_put", refuse)
+    k = await er.repo.add_knowledge("rule_draft", "d", "", extra={"xml": DETECT})
+    restarts = api.restarts
+    rec = await rt.rule_deploy("demo", k["id"], "alice")
+    names = [s["step"] for s in rec["steps"]]
+    assert rec["state"] == "failed" and "rules:delete" in rec["error"]
+    assert "nothing was changed" in names and "rollback" not in names and api.restarts == restarts
+    # the failed draft can be taken to chat
+    sid = await rt.chat_from_knowledge("demo", k["id"], "tr")
+    hist = await er.repo.chat_history(sid, 10)
+    assert any("rules:delete" in (m.get("text") or m.get("content") or "") for m in hist)

@@ -252,7 +252,19 @@ async def apply(api: WazuhAPI, cfg: RuleDeployCfg, kid: str, xml: str, ids: list
             step("rollback FAILED — check the manager now", False, e)
 
     try:
-        await api.rule_file_put(cfg.file, new)
+        try:
+            await api.rule_file_put(cfg.file, new)
+        except WazuhAPIError as e:
+            # nothing was written: no rollback, no restart
+            hint = ""
+            if "Permission denied" in str(e) or "4000" in str(e):
+                hint = (f" — the deploy user needs rules:update on *:*:* and rules:delete on rule:file:{cfg.file}"
+                        " (overwrite); see docs/rule-deployment.md")
+            step("upload", False, f"{e}{hint}")
+            step("nothing was changed", True, "the rule file and the manager are untouched")
+            err = DeployError(f"upload refused{hint}")
+            err.steps = steps
+            raise err from e
         step("upload", True)
         val = await api.config_validation(cluster)
         bad = [x for x in val if x.get("status") != "OK"]
@@ -278,7 +290,7 @@ async def apply(api: WazuhAPI, cfg: RuleDeployCfg, kid: str, xml: str, ids: list
         err.steps = steps
         raise err from e
     except DeployError as e:
-        if not any(s["step"] == "rollback" for s in steps):
+        if not any(s["step"] in ("rollback", "nothing was changed") for s in steps):
             step("error", False, e)
             await rollback("manager did not come back")
         e.steps = steps

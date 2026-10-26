@@ -661,6 +661,33 @@ class Runtime:
         await rt.repo.chat_add(session, "assistant", "\n".join(lines))
         return session
 
+    async def chat_from_knowledge(self, env_id: str, kid: str, lang: str | None = None) -> str:
+        """Open a chat session about one knowledge entry (e.g. a rule draft whose deployment failed)."""
+        rt = self.get(env_id)
+        lang = lang or self.lang(rt.env)
+        d = await rt.store.get("knowledge", kid)
+        if not d or d.get("env") != rt.env.id:
+            raise KeyError(kid)
+        session = uuid.uuid4().hex[:12]
+        lines = [f"### {d.get('title', '')}", "", f"`{d.get('kind')}` · {d.get('status')} · id `{kid}`"]
+        if d.get("rule_ids"):
+            lines += ["", "Rules: " + ", ".join(d["rule_ids"])]
+        if d.get("body"):
+            lines += ["", d["body"]]
+        xml = rulemod.extract_xml(d) if d.get("kind") == "rule_draft" else ""
+        if xml:
+            lines += ["", "```xml", xml.strip(), "```"]
+        dep = d.get("deploy") or {}
+        if dep.get("state") == "failed":
+            lines += ["", f"**{t(lang, 'kb.chat_deploy_failed')}** {dep.get('error', '')}"]
+            lines += [f"- {'✓' if x.get('ok') else '✗'} {x.get('step')} {x.get('detail', '')}"[:400]
+                      for x in dep.get("steps") or []]
+        lines += ["", t(lang, "kb.chat_ask")]
+        await rt.repo.chat_add(session, "user", t(lang, "kb.chat_open", title=d.get("title", "")))
+        await asyncio.sleep(0.005)
+        await rt.repo.chat_add(session, "assistant", "\n".join(lines))
+        return session
+
     # ------------------------------------------------------------ connection test
     async def check(self, env_id: str, with_llm: bool = True) -> list[dict]:
         """Checks every dependency of one environment; used by the UI button and `python -m app.check`."""
