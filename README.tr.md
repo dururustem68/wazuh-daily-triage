@@ -82,8 +82,9 @@ vi config/context/<ortam>.md       # ortamı anlatan birkaç satır
 
 ### Kubernetes
 
-Kustomize tabanı ve örnek overlay: **[deploy/kubernetes](deploy/kubernetes/README.md)** — tek replika, root olmayan
-kullanıcı, salt okunur dosya sistemi, PVC gerekmez (durum Wazuh Indexer'da).
+Kustomize tabanı, örnek overlay ve isteğe bağlı bileşenler: **[deploy/kubernetes](deploy/kubernetes/README.md)** — tek
+replika, root olmayan kullanıcı, salt okunur dosya sistemi, PVC gerekmez (durum Wazuh Indexer'da). Bileşenler:
+`networkpolicy`, `ingress-nginx` (TLS, cert-manager, oauth2-proxy seçeneği) ve `ingress-traefik-authentik` (SSO).
 
 ## Yapay zekâ sağlayıcıları
 

@@ -37,3 +37,17 @@ jobs:
           tags: wazuh-daily-triage:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  kustomize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the example overlay with every component
+        working-directory: deploy/kubernetes/example
+        run: |
+          cp secret.env.example secret.env
+          kubectl kustomize . > /dev/null
+          for c in networkpolicy ingress-nginx ingress-traefik-authentik; do
+            sed -i "s#^components: .*#components: [../components/$c]#" kustomization.yaml
+            kubectl kustomize . > /dev/null && echo "$c OK"
+          done

@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wazuh-daily-triage
+  annotations:
+    # cert-manager issues the certificate (remove if you provide triage-tls yourself, e.g. a wildcard secret):
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Optional: only from your office/VPN ranges
+    # nginx.ingress.kubernetes.io/whitelist-source-range: "192.0.2.0/24,198.51.100.0/24"
+    # Optional SSO with oauth2-proxy (then set AUTH_DISABLED=true and add the networkpolicy component):
+    # nginx.ingress.kubernetes.io/auth-url: "https://oauth2.example.com/oauth2/auth"
+    # nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.example.com/oauth2/start?rd=$scheme://$host$escaped_request_uri"
+    # nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User,X-Auth-Request-Email"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [triage.example.com]
+      secretName: triage-tls
+  rules:
+    - host: triage.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: wazuh-daily-triage
+                port: { number: 8080 }

@@ -3,6 +3,19 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.2] — 2026-10-26
+
+### Changed
+- **Watch board** is now a work list per environment: recommendations waiting for a decision (with detail and
+  server checks), questions waiting for an answer (answer inline), rule changes (proposed / deployed / failed),
+  requests and open items, other knowledge proposals — collected across recent runs, not per report.
+
+### Added
+- **Kubernetes components** (`deploy/kubernetes/components/`): `networkpolicy`, `ingress-nginx` (TLS via
+  cert-manager, IP allow-list and oauth2-proxy options) and `ingress-traefik-authentik` (Traefik IngressRoute +
+  Authentik forward auth). The example overlay now covers notifications, two runs a day and rule deployment;
+  CI builds the overlay with every component. `base/networkpolicy.yaml` moved to the component.
+
 ## [0.4.1] — 2026-10-26
 
 ### Fixed

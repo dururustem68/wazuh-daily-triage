@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Optional: Traefik IngressRoute with Authentik forward auth (single sign-on). The application's password login
+# is switched off (AUTH_DISABLED=true); the SSO user (X-authentik-username) is recorded for rule deployments.
+# Use together with the networkpolicy component so that only Traefik can reach the pod.
+# Authentik: Applications → Create with provider → Proxy Provider → "Forward auth (single application)",
+# external host https://triage.example.com, bind a group; then add the application to the embedded outpost.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - ingressroute.yaml
+configMapGenerator:
+  - name: wazuh-daily-triage-env
+    behavior: merge
+    literals:
+      - AUTH_DISABLED=true
+      - COOKIE_SECURE=true
+      - NOTIFY_UI_URL=https://triage.example.com

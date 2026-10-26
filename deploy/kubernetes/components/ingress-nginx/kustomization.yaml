@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Optional: expose the UI through ingress-nginx with TLS, keeping the application's own password login.
+# Edit ingress.yaml (host, TLS secret / cert-manager issuer) before use.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - ingress.yaml
+configMapGenerator:
+  - name: wazuh-daily-triage-env
+    behavior: merge
+    literals:
+      - COOKIE_SECURE=true              # served over HTTPS
+      # The app sees the controller as the client; XFF is only used for login throttling.
+      - FORWARDED_ALLOW_IPS=10.0.0.0/8   # your pod CIDR — never "*"

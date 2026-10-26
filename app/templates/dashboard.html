@@ -3,71 +3,104 @@
 <div class="page-head">
   <div class="titles"><h1>{{ _('dash.title') }}</h1></div>
 </div>
-<div class="grid cards">
 {% for c in cards %}
-  {% set last = c.last %}
-  <section class="card env-card h-{{ (last.health or 'ok') if last else 'none' }}">
+{% set last = c.last %}
+<section class="env-block">
+  <div class="card env-card h-{{ (last.health or 'ok') if last else 'none' }}">
     <div class="row">
       <h2><a href="/e/{{ c.env.id }}">{{ c.env.name }}</a></h2>
-      <div class="spacer"></div>
       {% if last %}<span class="pill {{ HEALTH_COLORS[last.health or 'ok'] }}">{{ _('health.' ~ (last.health or 'ok')) }}</span>{% endif %}
-    </div>
-    {% if c.env.description %}<p class="muted small">{{ c.env.description }}</p>{% endif %}
-    {% if last %}
-      <div class="stats">
-        <div><b>{{ last.metrics.total|n }}</b><span>{{ _('dash.alerts') }}</span></div>
-        <div><b>{{ last.metrics.high|n }}</b><span>{{ _('dash.level_plus', n=c.env.high_level) }}</span></div>
-        <div><b>{{ (last.findings or [])|selectattr('label','equalto','real_incident')|list|length }}</b><span>{{ _('dash.real') }}</span></div>
-        <div><b>{{ c.new_f }}</b><span>{{ _('dash.unreviewed') }}</span></div>
-      </div>
-      {% set crit = (last.flags or [])|selectattr('severity','equalto','critical')|list %}
-      {% if crit %}<div class="flags">{% for f in crit %}<div class="flag red">{{ f.message }}</div>{% endfor %}</div>{% endif %}
-
-      {% if c.top %}
-      <div class="waiting">
-        <div class="row"><h3>{{ _('dash.waiting_title') }}</h3><span class="spacer"></span>
-          {% if c.urgent %}<span class="pill red">{{ _('dash.urgent', n=c.urgent) }}</span>{% endif %}
-          <a class="small" href="/e/{{ c.env.id }}/inbox">{{ _('inbox.waiting', n=c.inbox) }} →</a></div>
-        <ul class="wlist">
-        {% for it in c.top %}{% set f = it.finding %}
-          <li class="sev-{{ f.severity }}"><a href="/e/{{ c.env.id }}/inbox?i={{ it.idx }}">
-            <span class="pill {{ LABEL_COLORS.get(f.label, 'gray') }}">{{ _('label.' ~ f.label) }}</span>
-            <span class="wt">{{ f.title|truncate(90) }}</span>
-            {% if it.seen > 1 %}<span class="muted small">×{{ it.seen }}</span>{% endif %}
-            <span class="pill outline">{{ _('sev.' ~ f.severity) }}</span></a></li>
-        {% endfor %}
-        </ul>
-      </div>
-      {% endif %}
-
-      {% if c.props %}
-      <div class="waiting">
-        <div class="row"><h3>{{ _('dash.props_title') }}</h3><span class="spacer"></span>
-          <a class="small" href="/e/{{ c.env.id }}/k?status=proposed">{{ _('dash.proposals', n=c.proposals) }} →</a></div>
-        <ul class="wlist">
-        {% for p in c.props %}<li><a href="/e/{{ c.env.id }}/k?status=proposed">
-          <span class="pill purple">{{ _('kind.' ~ p.kind) }}</span><span class="wt">{{ p.title|truncate(90) }}</span></a></li>{% endfor %}
-        </ul>
-      </div>
-      {% endif %}
-
-      <details class="small"><summary class="muted">{{ _('dash.last_summary') }}</summary><div class="summary">{{ last.summary_md|md }}</div></details>
-      <p class="small muted">{{ _('dash.last_report') }}: <a href="/e/{{ c.env.id }}/r/{{ last.run_id }}">{{ last.started_at|ts }}</a>
-        · {{ _('dash.window', h=last.window.hours) }}</p>
-      {% if c.open_q %}
-      <p class="row small"><a class="pill blue" href="/e/{{ c.env.id }}/r/{{ last.run_id }}#questions">{{ _('dash.questions_waiting', n=c.open_q) }}</a></p>
-      {% endif %}
-    {% else %}
-      <div class="empty"><b>{{ _('dash.no_report') }}</b></div>
-    {% endif %}
-    <div class="row actions">
-      <button class="btn primary" data-run="{{ c.env.id }}" {{ 'disabled' if c.running }}>{{ _('run.running') if c.running else _('run.now') }}</button>
-      <a class="btn" href="/e/{{ c.env.id }}/chat">{{ _('nav.chat') }}</a>
-      <span class="spacer"></span>
-      <span class="small muted">{% if c.next %}{{ _('dash.next', t=c.next) }}{% else %}{{ _('dash.schedule_off') }}{% endif %}</span>
+      <div class="spacer"></div>
+      <span class="small muted">{% if last %}{{ _('dash.last_report') }}: <a href="/e/{{ c.env.id }}/r/{{ last.run_id }}">{{ last.started_at|ts }}</a> · {% endif %}{% if c.next %}{{ _('dash.next', t=c.next) }}{% else %}{{ _('dash.schedule_off') }}{% endif %}</span>
+      <button class="btn primary small" data-run="{{ c.env.id }}" {{ 'disabled' if c.running }}>{{ _('run.running') if c.running else _('run.now') }}</button>
     </div>
     <div class="runstate small" data-runstate="{{ c.env.id }}" {% if c.running %}data-poll="{{ c.running }}"{% endif %}></div>
-  </section>
+    {% if last %}
+    <div class="stats">
+      <div><b>{{ last.metrics.total|n }}</b><span>{{ _('dash.alerts') }}</span></div>
+      <div><b>{{ last.metrics.high|n }}</b><span>{{ _('dash.level_plus', n=c.env.high_level) }}</span></div>
+      <div><b>{{ c.inbox }}</b><span>{{ _('nav.inbox') }}</span></div>
+      <div><b>{{ c.urgent }}</b><span>{{ _('dash.urgent_label') }}</span></div>
+      <div><b>{{ c.questions|length }}</b><span>{{ _('dash.q_label') }}</span></div>
+    </div>
+    {% set crit = (last.flags or [])|selectattr('severity','equalto','critical')|list %}
+    {% if crit %}<div class="flags">{% for f in crit %}<div class="flag red">{{ f.message }}</div>{% endfor %}</div>{% endif %}
+    {% else %}
+    <div class="empty"><b>{{ _('dash.no_report') }}</b></div>
+    {% endif %}
+  </div>
+
+  {% if last %}
+  <div class="board">
+    <div class="col">
+      <div class="bsec">
+        <div class="bhead"><h3>{{ _('dash.waiting_title') }}</h3><span class="count">{{ c.inbox }}</span><span class="spacer"></span>
+          <a class="small" href="/e/{{ c.env.id }}/inbox">{{ _('dash.open_all') }} →</a></div>
+        {% for it in c.top %}{% set f = it.finding %}
+        <div class="brow sev-{{ f.severity }}">
+          <div class="row">
+            <span class="pill {{ LABEL_COLORS.get(f.label, 'gray') }}">{{ _('label.' ~ f.label) }}</span>
+            <span class="pill outline">{{ _('sev.' ~ f.severity) }}</span>
+            <a class="bt" href="/e/{{ c.env.id }}/inbox?i={{ it.idx }}">{{ f.title }}</a>
+            {% if it.seen > 1 %}<span class="muted small">×{{ it.seen }}</span>{% endif %}
+          </div>
+          {% if f.detail %}<div class="bd">{{ (f.detail|md|striptags)|truncate(260) }}</div>{% endif %}
+          {% if f.manual_checks %}<div class="small muted">{{ _('dash.has_checks', n=f.manual_checks|length) }}</div>{% endif %}
+        </div>
+        {% else %}<div class="bempty">{{ _('inbox.empty') }}</div>{% endfor %}
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="bsec">
+        <div class="bhead"><h3>{{ _('dash.q_title') }}</h3><span class="count">{{ c.questions|length }}</span></div>
+        {% for x in c.questions %}
+        <div class="brow">
+          <div class="bt">{{ x.q.question }}</div>
+          {% if x.q.why %}<div class="bd">{{ x.q.why }}</div>{% endif %}
+          <div class="row qa" data-answer="/api/e/{{ c.env.id }}/r/{{ x.run_id }}/q/{{ x.q.id }}">
+            <textarea rows="1" placeholder="{{ _('rep.answer_ph') }}"></textarea><button class="btn small primary" data-save>{{ _('rep.send') }}</button>
+          </div>
+        </div>
+        {% else %}<div class="bempty">{{ _('dash.q_none') }}</div>{% endfor %}
+      </div>
+
+      <div class="bsec">
+        <div class="bhead"><h3>{{ _('dash.rules_title') }}</h3><span class="count">{{ c.rules|length }}</span><span class="spacer"></span>
+          <a class="small" href="/e/{{ c.env.id }}/k?kind=rule_draft">{{ _('dash.open_all') }} →</a></div>
+        {% for k in c.rules %}{% set d = k.deploy or {} %}
+        <div class="brow">
+          <div class="row">
+            {% if d.state %}<span class="pill {{ {'deployed':'green','failed':'red','removed':'gray'}.get(d.state, 'amber') }}">{{ _('rd.state.' ~ d.state) }}</span>
+            {% else %}<span class="pill {{ 'amber' if k.status == 'proposed' else 'green' }}">{{ _('kst.' ~ k.status) }}</span>{% endif %}
+            <a class="bt" href="/e/{{ c.env.id }}/k?kind=rule_draft">{{ k.title }}</a>
+          </div>
+          {% if d.state %}<div class="small muted">{{ d.by }} · {{ d.at|ts }}{% if d.error %} — {{ d.error|truncate(120) }}{% endif %}</div>{% endif %}
+        </div>
+        {% else %}<div class="bempty">{{ _('dash.rules_none') }}</div>{% endfor %}
+      </div>
+
+      <div class="bsec">
+        <div class="bhead"><h3>{{ _('dash.open_title') }}</h3><span class="count">{{ c.requests|length + c.open_items|length + c.report_open|length }}</span><span class="spacer"></span>
+          <a class="small" href="/e/{{ c.env.id }}/k">{{ _('nav.knowledge') }} →</a></div>
+        {% for k in c.requests %}<div class="brow"><div class="row"><span class="pill blue">{{ _('kind.request') }}</span><span class="bt">{{ k.title }}</span></div></div>{% endfor %}
+        {% for k in c.open_items %}<div class="brow"><div class="row"><span class="pill teal">{{ _('kind.open_item') }}</span><span class="bt">{{ k.title }}</span></div></div>{% endfor %}
+        {% for o in c.report_open %}<div class="brow"><div class="row"><span class="pill gray">{{ _('dash.from_report') }}</span><span class="bt">{{ o }}</span></div></div>{% endfor %}
+        {% if not (c.requests or c.open_items or c.report_open) %}<div class="bempty">{{ _('dash.open_none') }}</div>{% endif %}
+      </div>
+
+      {% if c.other_props %}
+      <div class="bsec">
+        <div class="bhead"><h3>{{ _('dash.props_title') }}</h3><span class="count">{{ c.other_props|length }}</span><span class="spacer"></span>
+          <a class="small" href="/e/{{ c.env.id }}/k?status=proposed">{{ _('dash.open_all') }} →</a></div>
+        {% for p in c.other_props %}<div class="brow"><div class="row"><span class="pill purple">{{ _('kind.' ~ p.kind) }}</span>
+          <a class="bt" href="/e/{{ c.env.id }}/k?status=proposed">{{ p.title }}</a></div>
+          {% if p.body %}<div class="bd">{{ (p.body|md|striptags)|truncate(180) }}</div>{% endif %}</div>{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</section>
 {% endfor %}
-</div>
 {% endblock %}

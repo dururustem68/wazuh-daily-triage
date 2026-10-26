@@ -97,3 +97,10 @@ def test_kb_import_export_web(c):
     r = c.get("/api/e/demo/kb/export?kind=baseline")
     assert r.status_code == 200 and "web-import" in r.text and "attachment" in r.headers["content-disposition"]
     assert "data-kimport" in c.get("/e/demo/k").text
+
+
+def test_watch_board_sections(c):
+    c.post("/login", data={"password": "pw"})
+    c.post("/lang", data={"lang": "en"})
+    page = c.get("/").text
+    assert "Waiting for your decision" in page and "Rule changes" in page and "Requests and open items" in page

@@ -240,12 +240,29 @@ async def dashboard(request: Request):
         new_f = sum(1 for f in (last or {}).get("findings") or []
                     if f.get("user_status") == "new" and f.get("label") in ("real_incident", "investigate", "detection_gap"))
         inbox = await _safe(rt.inbox(er.env.id), [])
-        top = [dict(it, idx=i) for i, it in enumerate(inbox)][:8]
+        top = [dict(it, idx=i) for i, it in enumerate(inbox)][:10]
         urgent = sum(1 for it in inbox if it["finding"].get("label") in ("real_incident", "detection_gap")
                      or it["finding"].get("severity") in ("critical", "high"))
+        # unanswered questions across recent runs (newest first, same question once)
+        questions, seen_q = [], set()
+        for r in runs:
+            for q in r.get("questions") or []:
+                k = (q.get("question") or "").strip().lower()
+                if not q.get("answer") and k and k not in seen_q:
+                    seen_q.add(k)
+                    questions.append({"q": q, "run_id": r["run_id"], "at": r.get("started_at")})
+        kb = await _safe(er.repo.list_knowledge(status=["proposed", "active"], size=500), [])
+        rules = sorted([k for k in kb if k["kind"] == "rule_draft"],
+                       key=lambda k: (k["status"] != "proposed", ((k.get("deploy") or {}).get("state") == "deployed"),
+                                      k.get("updated_at", "")), reverse=False)
+        requests = [k for k in kb if k["kind"] == "request" and k["status"] == "active"]
+        open_items = [k for k in kb if k["kind"] == "open_item" and k["status"] == "active"]
+        other_props = [k for k in kb if k["status"] == "proposed" and k["kind"] != "rule_draft"]
         cards.append({"env": er.env, "last": last, "running": er.current_run, "next": rt.next_run(er.env, lang),
                       "proposals": len(props), "open_q": open_q, "new_f": new_f, "inbox": len(inbox),
-                      "top": top, "urgent": urgent, "props": props[:5]})
+                      "top": top, "urgent": urgent, "questions": questions[:6], "rules": rules[:6],
+                      "requests": requests[:6], "open_items": open_items[:6],
+                      "report_open": (last or {}).get("open_items") or [], "other_props": other_props[:6]})
     return tpl.TemplateResponse(request, "dashboard.html", _ctx(request, cards=cards))
 
 

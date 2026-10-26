@@ -109,8 +109,9 @@ vi config/context/<env>.md         # a few lines describing the environment
 
 ### Kubernetes
 
-Kustomize base and example overlay in **[deploy/kubernetes](deploy/kubernetes/README.md)** — single replica,
-non-root, read-only filesystem, no PVC (state lives in the Wazuh Indexer).
+Kustomize base, example overlay and optional components in **[deploy/kubernetes](deploy/kubernetes/README.md)** —
+single replica, non-root, read-only filesystem, no PVC (state lives in the Wazuh Indexer). Components:
+`networkpolicy`, `ingress-nginx` (TLS, cert-manager, oauth2-proxy option) and `ingress-traefik-authentik` (SSO).
 
 ## AI providers
 

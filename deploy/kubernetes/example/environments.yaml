@@ -3,9 +3,20 @@ app:
   timezone: ${TZ:-UTC}
   language: ${APP_LANGUAGE:-en}
 llm:
-  provider: anthropic
+  provider: anthropic          # or openai (OpenAI, Gemini, DeepSeek, Azure, Ollama…) — docs/providers.md
   model: claude-sonnet-5-5
   api_key: ${LLM_API_KEY}
+  # base_url: https://api.deepseek.com
+  max_tokens: 8000             # the report must fit; too low = truncated reports
+  max_tool_steps: 16
+
+notify:                        # docs/notifications.md — a channel is on when its fields are set
+  ui_url: ${NOTIFY_UI_URL:-}
+  on_run_summary: true         # short message after every run (default false: critical only)
+  telegram: {bot_token: "${TELEGRAM_BOT_TOKEN:-}", chat_id: "${TELEGRAM_CHAT_ID:-}"}
+  teams: {webhook_url: "${TEAMS_WEBHOOK_URL:-}"}
+  email: {host: "${SMTP_HOST:-}", username: "${SMTP_USER:-}", password: "${SMTP_PASSWORD:-}",
+          sender: "${SMTP_FROM:-}", to: ["${SMTP_TO:-}"]}
 environments:
   - id: prod
     name: Production Wazuh
@@ -20,6 +31,13 @@ environments:
       username: ${API_USER}
       password: ${API_PASSWORD}
       verify_tls: false
-    schedule: {time: "07:30", days: [mon, tue, wed, thu, fri]}
+    schedule: {times: ["07:30", "19:30"], days: [mon, tue, wed, thu, fri]}
+    window_min_hours: 12
+    # Optional "Approve and deploy" for rule drafts (docs/rule-deployment.md): separate API user
+    rule_deploy:
+      enabled: false
+      username: ${DEPLOY_USER:-}
+      password: ${DEPLOY_PASSWORD:-}
+      file: wdt_rules.xml
     context_file: context/main.md
     seed_file: seed/main.yaml

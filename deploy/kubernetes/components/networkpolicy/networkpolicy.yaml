@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# In: only from the ingress controller (needed when AUTH_DISABLED=true behind SSO, recommended otherwise).
+# Out: DNS, Wazuh indexer/API, HTTPS (LLM, Telegram, Teams), SMTP.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wazuh-daily-triage
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx   # traefik, kube-system (k3s/RKE2), kong...
+      ports:
+        - port: 8080
+  egress:
+    - ports:              # DNS
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    - to:                 # Wazuh in this cluster (wazuh-kubernetes) ...
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: wazuh
+      # ... or outside the cluster — replace the block above with:
+      # - ipBlock: { cidr: 192.0.2.10/32 }
+      ports:
+        - { port: 9200 }
+        - { port: 55000 }
+    - ports:              # hosted LLM, Telegram, Teams (HTTPS)
+        - { port: 443 }
+    - ports:              # SMTP (only if e-mail notifications are used)
+        - { port: 587 }
+        - { port: 465 }
