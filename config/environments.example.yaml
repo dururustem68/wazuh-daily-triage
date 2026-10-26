@@ -56,6 +56,7 @@ environments:
     window_max_hours: 96        # so Monday morning covers the weekend
     high_level: 7               # "high level" threshold
     max_silence_minutes: 60     # last alert older than this → "SIEM may be down"
+    liveness: {enabled: true, interval_minutes: 10}   # quick check without AI; notifies problem + recovery
     disk_warn_percent: 75
     # required_daemons: [wazuh-analysisd, wazuh-remoted, wazuh-db, wazuh-modulesd, wazuh-apid]
     watch_rules: []             # rule IDs whose daily count is always reported

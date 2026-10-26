@@ -56,6 +56,9 @@ class Runtime:
         self._tasks: set[asyncio.Task] = set()
         self._run_locks: dict[str, asyncio.Lock] = {}
         self.notify_transport = None       # tests inject an httpx.MockTransport here
+        self.live_state: dict[str, dict] = {}
+        self._live_last: dict[str, float] = {}
+        self._live_busy: set[str] = set()
         for e in settings.environments:
             if demo:
                 from .demo import FakeAPI, FakeIndexer
@@ -332,6 +335,8 @@ class Runtime:
         try:
             lang = self.lang(rt.env)
             items = critical_items(run, cfg, self.finding_key)
+            if rt.env.liveness.enabled and cfg.on_liveness:   # health flags are the liveness check's job
+                items = [i for i in items if i["kind"] != "flag"]
             if items:
                 prev = await rt.repo.list_runs(2 * max(1, cfg.repeat_hours // 6) + 4, light=True)
                 seen = recently_notified([r for r in prev if r.get("run_id") != run.get("run_id")], cfg.repeat_hours)
@@ -379,6 +384,89 @@ class Runtime:
         except Exception:  # noqa: BLE001
             log.exception("rule notification failed")
             return {}
+
+    # ------------------------------------------------------------ liveness
+    async def liveness_state(self, env_id: str) -> dict | None:
+        if env_id not in self.live_state:
+            d = await self.get(env_id).store.get("knowledge", f"_live_{env_id}")
+            if d:
+                self.live_state[env_id] = d
+        return self.live_state.get(env_id)
+
+    async def liveness_check(self, env_id: str, transport=None) -> dict:
+        """Quick health probe; notifies on new problems, reminds every repeat_hours, and on recovery."""
+        rt = self.get(env_id)
+        env, cfg = rt.env, rt.env.liveness
+        lang = self.lang(env)
+        now = datetime.now(UTC)
+        probs = await Collector(env, rt.ix, rt.api, lang).liveness(now, cfg.silence_minutes or env.max_silence_minutes)
+        prev = await self.liveness_state(env_id) or {}
+        old = prev.get("problems") or {}
+        cur: dict[str, dict] = {}
+        for code, msg in probs.items():
+            o = old.get(code) or {}
+            cur[code] = {"msg": msg, "since": o.get("since") or iso(now), "notified": o.get("notified")}
+        new = [c for c in cur if c not in old]
+        resolved = {c: o for c, o in old.items() if c not in cur}
+        ncfg = self.settings.notify_for(env)
+        can = ncfg.enabled and ncfg.channels and ncfg.on_liveness
+        link = f"{ncfg.ui_url.rstrip('/')}/" if ncfg.ui_url else ""
+        sent = None
+        try:
+            if can and new:
+                lines = [("🔴 " if c in new else "• ") + v["msg"] for c, v in cur.items()]
+                sent = await notify_send(ncfg, plain_message(t(lang, "live.title_problem", env=env.name), lines, link),
+                                         transport=transport)
+                for v in cur.values():
+                    v["notified"] = iso(now)
+            elif can and cur:
+                last_n = min((_parse(v["notified"]) for v in cur.values() if v.get("notified")), default=None)
+                if last_n is None or (now - last_n).total_seconds() >= cfg.repeat_hours * 3600:
+                    lines = [f"{v['msg']} — {t(lang, 'live.since', t=_fmt_local(v['since'], self.tz))}" for v in cur.values()]
+                    sent = await notify_send(ncfg, plain_message(t(lang, "live.title_still", env=env.name), lines, link),
+                                             transport=transport)
+                    for v in cur.values():
+                        v["notified"] = iso(now)
+            if can and resolved and cfg.notify_recovery and not cur:
+                lines = [t(lang, "live.lasted", text=o["msg"], m=round((now - _parse(o["since"])).total_seconds() / 60))
+                         for o in resolved.values()]
+                sent = await notify_send(ncfg, plain_message(t(lang, "live.title_ok", env=env.name), lines, link),
+                                         transport=transport)
+        except Exception:  # noqa: BLE001
+            log.exception("liveness notification failed")
+        if new or resolved:
+            log.warning("%s liveness: new=%s resolved=%s", env_id, new, list(resolved))
+        state = {"id": f"_live_{env_id}", "env": "__meta__", "kind": "liveness", "status": "closed",
+                 "title": env_id, "problems": cur, "checked_at": iso(now), "created_at": prev.get("created_at") or now_iso(),
+                 "updated_at": now_iso(), "last_result": sent}
+        self.live_state[env_id] = state
+        try:
+            await rt.store.put("knowledge", state["id"], state)
+        except Exception:  # noqa: BLE001 — the indexer may be the thing that is down
+            pass
+        return state
+
+    async def _liveness_tick(self):
+        loop_now = asyncio.get_running_loop().time()
+        for env_id, rt in self.envs.items():
+            cfg = rt.env.liveness
+            if not cfg.enabled or env_id in self._live_busy:
+                continue
+            if loop_now - self._live_last.get(env_id, -1e9) < cfg.interval_minutes * 60:
+                continue
+            self._live_last[env_id] = loop_now
+            self._live_busy.add(env_id)
+
+            async def go(eid=env_id):
+                try:
+                    await self.liveness_check(eid, transport=self.notify_transport)
+                except Exception:  # noqa: BLE001
+                    log.exception("liveness check failed: %s", eid)
+                finally:
+                    self._live_busy.discard(eid)
+            task = asyncio.create_task(go())
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
 
     async def notify_test(self, env_id: str, transport=None) -> dict:
         rt = self.get(env_id)
@@ -655,6 +743,10 @@ class Runtime:
                             await self.start_run(rt.env.id, trigger="schedule")
             except Exception:  # noqa: BLE001
                 log.exception("scheduler error")
+            try:
+                await self._liveness_tick()
+            except Exception:  # noqa: BLE001
+                log.exception("liveness scheduler error")
             await asyncio.sleep(20)
 
     def next_run(self, env: Environment, lang: str = "en") -> str | None:
@@ -743,6 +835,13 @@ def normalize_report(sub: dict | None, fallback_text: str = "", lang: str = "en"
             "findings": findings, "questions": questions,
             "open_items": [_s(x) for x in _as_list(sub.get("open_items"))],
             "closed_items": [_s(x) for x in _as_list(sub.get("closed_items"))]}
+
+
+def _fmt_local(ts: str, tz) -> str:
+    try:
+        return _parse(ts).astimezone(tz).strftime("%d.%m %H:%M")
+    except (ValueError, TypeError):
+        return ts
 
 
 def flags_only_report(flags: list[dict], err: str, lang: str, key: str = "run.ai_failed") -> dict:

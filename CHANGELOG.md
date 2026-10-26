@@ -3,6 +3,14 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.3] — 2026-10-26
+
+### Added
+- **Liveness check** every `liveness.interval_minutes` (default 10, no AI): indexer unreachable or red, API
+  unreachable, required daemon down, SIEM silent, indexer disk ≥ 90 %, cluster not running. Notifies when a
+  problem starts, reminds every `repeat_hours` and says when it recovered; status pill and problems on the watch
+  board; `POST /api/e/{env}/liveness` runs it on demand. The daily run no longer repeats these health flags.
+
 ## [0.4.2] — 2026-10-26
 
 ### Changed

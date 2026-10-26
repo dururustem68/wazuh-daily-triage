@@ -33,6 +33,7 @@ environments:
       verify_tls: false
     schedule: {times: ["07:30", "19:30"], days: [mon, tue, wed, thu, fri]}
     window_min_hours: 12
+    liveness: {enabled: true, interval_minutes: 10}   # problem / recovered notifications, no AI
     # Optional "Approve and deploy" for rule drafts (docs/rule-deployment.md): separate API user
     rule_deploy:
       enabled: false

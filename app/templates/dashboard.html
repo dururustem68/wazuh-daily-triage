@@ -10,6 +10,9 @@
     <div class="row">
       <h2><a href="/e/{{ c.env.id }}">{{ c.env.name }}</a></h2>
       {% if last %}<span class="pill {{ HEALTH_COLORS[last.health or 'ok'] }}">{{ _('health.' ~ (last.health or 'ok')) }}</span>{% endif %}
+      {% if c.live %}{% set lp = c.live.problems or {} %}
+        <span class="pill {{ 'red' if lp else 'green' }}" title="{{ _('live.checked', t=c.live.checked_at|ts) }}">● {{ _('live.bad', n=lp|length) if lp else _('live.ok') }}</span>
+      {% endif %}
       <div class="spacer"></div>
       <span class="small muted">{% if last %}{{ _('dash.last_report') }}: <a href="/e/{{ c.env.id }}/r/{{ last.run_id }}">{{ last.started_at|ts }}</a> · {% endif %}{% if c.next %}{{ _('dash.next', t=c.next) }}{% else %}{{ _('dash.schedule_off') }}{% endif %}</span>
       <button class="btn primary small" data-run="{{ c.env.id }}" {{ 'disabled' if c.running }}>{{ _('run.running') if c.running else _('run.now') }}</button>
@@ -23,8 +26,12 @@
       <div><b>{{ c.urgent }}</b><span>{{ _('dash.urgent_label') }}</span></div>
       <div><b>{{ c.questions|length }}</b><span>{{ _('dash.q_label') }}</span></div>
     </div>
-    {% set crit = (last.flags or [])|selectattr('severity','equalto','critical')|list %}
-    {% if crit %}<div class="flags">{% for f in crit %}<div class="flag red">{{ f.message }}</div>{% endfor %}</div>{% endif %}
+    {% if c.live and c.live.problems %}
+      <div class="flags">{% for code, p in c.live.problems.items() %}<div class="flag red">{{ p.msg }} <span class="small muted">· {{ _('live.since', t=p.since|ts) }}</span></div>{% endfor %}</div>
+    {% else %}
+      {% set crit = (last.flags or [])|selectattr('severity','equalto','critical')|list %}
+      {% if crit %}<div class="flags">{% for f in crit %}<div class="flag red">{{ f.message }}</div>{% endfor %}</div>{% endif %}
+    {% endif %}
     {% else %}
     <div class="empty"><b>{{ _('dash.no_report') }}</b></div>
     {% endif %}

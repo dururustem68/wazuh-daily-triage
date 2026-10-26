@@ -66,6 +66,15 @@ class Endpoint(BaseModel):
 DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
 
+class LivenessCfg(BaseModel):
+    """Quick health check every few minutes, without the LLM: notifies when Wazuh breaks and when it recovers."""
+    enabled: bool = True
+    interval_minutes: int = Field(10, ge=2, le=120)
+    silence_minutes: int | None = None    # default: the environment's max_silence_minutes
+    repeat_hours: float = 2               # remind while a problem persists
+    notify_recovery: bool = True
+
+
 class RuleDeployCfg(BaseModel):
     """Optional: let "Approve and deploy" write approved rule drafts to the manager.
 
@@ -173,6 +182,7 @@ class Environment(BaseModel):
     llm: LLMConfig | None = None      # per-environment model override (e.g. local model for regulated data)
     notify: NotifyCfg | None = None   # per-environment notification override
     rule_deploy: RuleDeployCfg = Field(default_factory=RuleDeployCfg)
+    liveness: LivenessCfg = Field(default_factory=LivenessCfg)
 
     @field_validator("id")
     @classmethod
@@ -284,6 +294,7 @@ def notify_from_env() -> dict:
         "on_run_error": _bool(E("NOTIFY_ON_RUN_ERROR"), False),
         "on_run_summary": _bool(E("NOTIFY_ON_RUN_SUMMARY"), False),
         "on_rule_deploy": _bool(E("NOTIFY_ON_RULE_DEPLOY"), True),
+        "on_liveness": _bool(E("NOTIFY_ON_LIVENESS"), True),
         "repeat_hours": int(E("NOTIFY_REPEAT_HOURS", "24")),
         "ui_url": E("NOTIFY_UI_URL", ""),
         "email": {"host": E("SMTP_HOST", ""), "port": int(E("SMTP_PORT", "587")), "security": E("SMTP_SECURITY", "starttls"),
@@ -317,6 +328,9 @@ def settings_from_env() -> dict:
                       "password": E("WAZUH_API_PASSWORD", ""), "verify_tls": verify, "ca_file": E("WAZUH_CA_FILE") or None}
     if E("WAZUH_ALERTS_INDEX"):
         env["alerts_index"] = E("WAZUH_ALERTS_INDEX")
+    if E("LIVENESS_INTERVAL_MINUTES") or E("LIVENESS_ENABLED"):
+        env["liveness"] = {"enabled": _bool(E("LIVENESS_ENABLED"), True),
+                           "interval_minutes": int(E("LIVENESS_INTERVAL_MINUTES") or 10)}
     if _bool(E("RULE_DEPLOY_ENABLED"), False):
         env["rule_deploy"] = {"enabled": True, "username": E("WAZUH_DEPLOY_USER", ""),
                               "password": E("WAZUH_DEPLOY_PASSWORD", ""),

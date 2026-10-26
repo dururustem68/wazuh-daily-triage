@@ -5,7 +5,7 @@ kind: Kustomization
 namespace: wazuh-daily-triage
 resources:
   - namespace.yaml
-  - ../base   # when copied elsewhere: https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.4.2
+  - ../base   # when copied elsewhere: https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.4.3
 # Optional building blocks — copy the component next to this overlay if you need to edit it (host names...):
 components: []
 #  - ../components/networkpolicy               # only the ingress controller may reach the pod; limited egress
@@ -13,7 +13,7 @@ components: []
 #  - ../components/ingress-traefik-authentik   # Traefik + Authentik SSO (AUTH_DISABLED=true)
 images:
   - name: ghcr.io/dururustem68/wazuh-daily-triage
-    newTag: "0.4.2"
+    newTag: "0.4.3"
 configMapGenerator:
   - name: wazuh-daily-triage-config
     files:

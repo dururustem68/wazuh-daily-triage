@@ -142,6 +142,53 @@ class Collector:
                 h["manager_errors"] = list(agg.values())[:15]
         return h
 
+    # ------------------------------------------------------------------ liveness (every few minutes)
+    async def liveness(self, now: datetime, silence_minutes: int) -> dict[str, str]:
+        """Critical problems only, as {code: message}. Cheap: a few small queries, no aggregations."""
+        L, p = self.lang, {}
+        try:
+            ch = await self.ix.cluster_health()
+            if ch.get("status") == "red":
+                p["indexer_status"] = t(L, "flag.indexer_status", s="red")
+        except Exception as e:  # noqa: BLE001
+            p["indexer_down"] = t(L, "live.indexer_down", e=str(e)[:160])
+            return p  # nothing else can be checked through the indexer
+        try:
+            for a in await self.ix.allocation() or []:
+                pc = _int(a.get("disk.percent"))
+                if a.get("node") and pc is not None and pc >= 90:
+                    p[f"indexer_disk:{a['node']}"] = t(L, "flag.indexer_disk", node=a["node"], p=pc)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            last = await self.ix.search(self.env.alerts_index, {
+                "size": 1, "sort": [{TS: "desc"}], "_source": [TS],
+                "query": {"range": {TS: {"gte": "now-7d", "lte": "now+5m"}}}})
+            hits = last["hits"]["hits"]
+            if not hits:
+                p["silence"] = t(L, "flag.no_alerts_7d")
+            else:
+                sil = round((now - _parse(hits[0]["_source"][TS])).total_seconds() / 60)
+                if sil > silence_minutes:
+                    p["silence"] = t(L, "flag.silence", m=sil, t=silence_minutes)
+        except Exception as e:  # noqa: BLE001
+            p["alerts_query"] = t(L, "live.query_failed", e=str(e)[:160])
+        if self.api:
+            try:
+                ms = await self.api.manager_status()
+                down = sorted(k for k in self.env.required_daemons if ms.get(k, "running") != "running")
+                if down:
+                    p["daemons"] = t(L, "flag.daemons", d=", ".join(down))
+            except Exception as e:  # noqa: BLE001
+                p["api_down"] = t(L, "live.api_down", e=str(e)[:160])
+            try:
+                cl = await self.api.cluster_health()
+                if cl and cl.get("enabled") == "yes" and cl.get("running") != "yes":
+                    p["cluster"] = t(L, "flag.cluster")
+            except Exception:  # noqa: BLE001
+                pass
+        return p
+
     # ------------------------------------------------------------------ volume
     async def _volume(self, frm, to, hours) -> dict:
         r = await self.ix.search(self.env.alerts_index, {

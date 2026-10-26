@@ -362,6 +362,7 @@ async def test_notifications(settings, monkeypatch):
                                    teams=N.TeamsCfg(webhook_url="https://example.invalid/workflows/hook"))
     rt = Runtime(settings2, demo=True)
     er = rt.get("demo")
+    er.env.liveness.enabled = False      # with liveness on, health flags are left to the liveness check
     run = {"run_id": "n-1", "env": "demo", "status": "done", "started_at": "2026-10-26T07:50:00.000Z",
            "flags": [{"severity": "critical", "code": "silence", "message": "Last alert was 300 min ago"},
                      {"severity": "warn", "code": "agents", "message": "1 agent not active"}],
@@ -460,3 +461,31 @@ async def test_agent_forced_final_and_fallback(settings):
     assert tb.submitted is None and len(forced) == 3 + FINAL_ATTEMPTS
     assert forced[:2] == [None, None] and all(f == "submit_report" for f in forced[2:])
     assert res.stopped in ("text", "max_steps")
+
+
+async def test_liveness_problem_reminder_recovery(settings):
+    from app import notify as N
+    sent = []
+
+    def h(req):
+        sent.append(json.loads(req.content)["text"])
+        return httpx.Response(200, json={"ok": True})
+    s2 = settings.model_copy(deep=True)
+    s2.notify = N.NotifyCfg(telegram=N.TelegramCfg(bot_token="1:a", chat_id="1"))
+    rt = Runtime(s2, demo=True)
+    er = rt.get("demo")
+    tr = httpx.MockTransport(h)
+
+    async def broken():
+        raise RuntimeError("connection refused")
+    real = er.ix.cluster_health
+    er.ix.cluster_health = broken
+    st = await rt.liveness_check("demo", transport=tr)
+    assert "indexer_down" in st["problems"] and len(sent) == 1 and "connection refused" in sent[0]
+    await rt.liveness_check("demo", transport=tr)            # still failing, within repeat_hours → quiet
+    assert len(sent) == 1
+    er.ix.cluster_health = real
+    er.env.liveness.silence_minutes = 10 ** 7                # demo data is old; ignore silence here
+    st = await rt.liveness_check("demo", transport=tr)
+    assert not st["problems"] and len(sent) == 2 and "connection refused" in sent[1]
+    assert (await rt.liveness_state("demo"))["checked_at"]

@@ -141,6 +141,7 @@ a local model for an environment whose data must not leave your network. `max_to
 | The run itself failed | `on_run_error: false` |
 | Short summary after **every** run (health, counts, recommendations waiting) | `on_run_summary: false` |
 | A rule draft was deployed, rolled back or removed | `on_rule_deploy: true` |
+| **Liveness check every 10 min** (no AI): indexer/API unreachable, daemon down, SIEM silent, disk ≥ 90 % — problem, reminder, recovered | `on_liveness: true`, `liveness.interval_minutes` |
 
 The same critical item is not repeated within `repeat_hours` (24). A channel is active as soon as its fields are
 set; **Test notifications** on the environment page checks all of them.

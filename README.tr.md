@@ -112,6 +112,7 @@ Model araç kullanımını (function calling) desteklemelidir. Her ortam kendi m
 | Koşunun kendisi başarısız | `on_run_error: false` |
 | **Her** koşudan sonra kısa özet (sağlık, sayılar, bekleyen öneriler) | `on_run_summary: false` |
 | Kural taslağı uygulandı, geri alındı ya da kaldırıldı | `on_rule_deploy: true` |
+| **10 dakikada bir canlılık kontrolü** (yapay zekâ yok): indexer/API erişilemez, süreç durdu, SIEM sessiz, disk ≥ %90 — sorun, hatırlatma, düzeldi | `on_liveness: true`, `liveness.interval_minutes` |
 
 Aynı kritik konu `repeat_hours` (24) içinde tekrar gönderilmez. Bir kanal, alanları dolu olduğu anda etkinleşir;
 ortam sayfasındaki **Bildirim testi** hepsini dener.

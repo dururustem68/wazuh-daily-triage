@@ -258,7 +258,8 @@ async def dashboard(request: Request):
         requests = [k for k in kb if k["kind"] == "request" and k["status"] == "active"]
         open_items = [k for k in kb if k["kind"] == "open_item" and k["status"] == "active"]
         other_props = [k for k in kb if k["status"] == "proposed" and k["kind"] != "rule_draft"]
-        cards.append({"env": er.env, "last": last, "running": er.current_run, "next": rt.next_run(er.env, lang),
+        live = await _safe(rt.liveness_state(er.env.id), None) if er.env.liveness.enabled else None
+        cards.append({"env": er.env, "last": last, "running": er.current_run, "next": rt.next_run(er.env, lang), "live": live,
                       "proposals": len(props), "open_q": open_q, "new_f": new_f, "inbox": len(inbox),
                       "top": top, "urgent": urgent, "questions": questions[:6], "rules": rules[:6],
                       "requests": requests[:6], "open_items": open_items[:6],
@@ -545,6 +546,12 @@ async def api_rule_deploy(request: Request, env_id: str, kid: str, body: DeployR
 @app.post("/api/e/{env_id}/k/{kid}/undeploy")
 async def api_rule_undeploy(request: Request, env_id: str, kid: str):
     return await _deploy(request, env_id, kid, "", remove=True)
+
+
+@app.post("/api/e/{env_id}/liveness")
+async def api_liveness(request: Request, env_id: str):
+    _env(request, env_id)
+    return await _rt(request).liveness_check(env_id, transport=_rt(request).notify_transport)
 
 
 class ImportReq(BaseModel):

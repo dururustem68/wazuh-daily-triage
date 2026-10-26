@@ -11,6 +11,15 @@ a short message after every run.
 | The triage run itself failed | `on_run_error: false` |
 | Summary after **every** run: health, alert counts, findings by label, recommendations waiting | `on_run_summary: false` |
 | A rule draft was deployed, failed and rolled back, or removed | `on_rule_deploy: true` |
+| **Liveness check** (every `liveness.interval_minutes`, default 10): indexer unreachable or red, API unreachable, required daemon down, no alerts for `max_silence_minutes`, indexer disk ≥ 90 %, cluster not running — sent when it starts, repeated every `liveness.repeat_hours` (2) while it lasts, and a "recovered" message at the end | `on_liveness: true` |
+
+The liveness check needs no AI and costs a few small queries. While it is on, the daily runs do not send the same
+health flags again. Configure it per environment:
+
+```yaml
+    liveness: {enabled: true, interval_minutes: 5, repeat_hours: 2, notify_recovery: true}
+    max_silence_minutes: 60        # "SIEM silent" threshold (liveness.silence_minutes overrides it)
+```
 
 The same item is not sent again within `repeat_hours` (default 24), so a twice-daily schedule does not repeat
 an unresolved problem every 12 hours. Findings you already decided on (inbox) are never sent.

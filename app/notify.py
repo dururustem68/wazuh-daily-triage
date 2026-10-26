@@ -68,6 +68,7 @@ class NotifyCfg(BaseModel):
     on_run_error: bool = False          # the triage run itself failed
     on_run_summary: bool = False        # a short summary after EVERY run (health, counts, waiting recommendations)
     on_rule_deploy: bool = True         # a rule draft was deployed, failed (rolled back) or removed
+    on_liveness: bool = True            # liveness check: problem / still failing / recovered
     repeat_hours: int = 24              # do not repeat the same item within this period
     ui_url: str = ""                    # base URL used for links, e.g. http://127.0.0.1:18080
     email: EmailCfg = Field(default_factory=EmailCfg)
