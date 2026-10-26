@@ -63,6 +63,11 @@ vi config/context/<ortam>.md       # ortamı anlatan birkaç satır
 
 `config/environments.yaml`, `config/context/*`, `config/seed/*`, `config/certs/` ve `.env` git'e girmez.
 
+### Kubernetes
+
+Kustomize tabanı ve örnek overlay: **[deploy/kubernetes](deploy/kubernetes/README.md)** — tek replika, root olmayan
+kullanıcı, salt okunur dosya sistemi, PVC gerekmez (durum Wazuh Indexer'da).
+
 ## Yapay zekâ sağlayıcıları
 
 Anahtar sizin. Her sağlayıcı için ayrıntılı kurulum: **[docs/providers.tr.md](docs/providers.tr.md)**.

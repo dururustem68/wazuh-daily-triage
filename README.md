@@ -90,6 +90,11 @@ vi config/context/<env>.md         # a few lines describing the environment
 
 `config/environments.yaml`, `config/context/*`, `config/seed/*`, `config/certs/` and `.env` are git-ignored.
 
+### Kubernetes
+
+Kustomize base and example overlay in **[deploy/kubernetes](deploy/kubernetes/README.md)** — single replica,
+non-root, read-only filesystem, no PVC (state lives in the Wazuh Indexer).
+
 ## AI providers
 
 Bring your own key. Full setup for each provider, including model names and parameter quirks:
