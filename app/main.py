@@ -429,6 +429,7 @@ async def api_inbox_act(request: Request, env_id: str, body: InboxActReq):
 
 class IncidentReq(BaseModel):
     md: str | None = None
+    provider: str | None = None       # "zammad" (default) | "jira"
 
 
 @app.post("/api/e/{env_id}/r/{run_id}/f/{fid}/incident")
@@ -458,7 +459,7 @@ async def api_incident_save(request: Request, env_id: str, run_id: str, fid: str
 async def api_incident_ticket(request: Request, env_id: str, run_id: str, fid: str, body: IncidentReq):
     _env(request, env_id)
     try:
-        return await _rt(request).incident_ticket(env_id, run_id, fid, body.md)
+        return await _rt(request).incident_ticket(env_id, run_id, fid, body.md, body.provider or "zammad")
     except KeyError as e:
         raise HTTPException(404) from e
     except PermissionError as e:

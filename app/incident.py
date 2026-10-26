@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 
 import httpx
 
-from .config import ZammadCfg
+from .config import JiraCfg, ZammadCfg
 
 TEMPLATE = {
     "en": """# Incident record — {title}
@@ -114,3 +114,26 @@ async def zammad_ticket(cfg: ZammadCfg, title: str, body_md: str, transport=None
             raise RuntimeError(f"Zammad {r.status_code}: {r.text[:300]}")
         d = r.json()
         return {"id": d.get("id"), "number": d.get("number"), "url": f"{cfg.url.rstrip('/')}/#ticket/zoom/{d.get('id')}"}
+
+
+async def jira_ticket(cfg: JiraCfg, title: str, body_md: str, transport=None) -> dict:
+    """Create an issue via the Jira REST API (v3) with the record as a plain-text (ADF) description.
+
+    Needs a Jira Cloud API token (or a PAT for Data Center) with project/browse + create issue rights."""
+    payload = {
+        "fields": {
+            "project": {"key": cfg.project},
+            "summary": title[:250],
+            "issuetype": {"name": cfg.issue_type or "Task"},
+            "description": {"type": "doc", "version": 1, "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": body_md[:32767]}]}]},
+        }
+    }
+    async with httpx.AsyncClient(base_url=cfg.url.rstrip("/"), verify=cfg.verify_tls, timeout=30,
+                                 auth=(cfg.email, cfg.token), transport=transport) as c:
+        r = await c.post("/rest/api/3/issue", json=payload)
+        if r.status_code >= 400:
+            raise RuntimeError(f"Jira {r.status_code}: {r.text[:300]}")
+        d = r.json()
+        return {"id": d.get("id"), "key": d.get("key"), "number": d.get("key"),
+                "url": f"{cfg.url.rstrip('/')}/browse/{d.get('key')}"}

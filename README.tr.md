@@ -61,7 +61,8 @@ koşu özetlerini e-posta, Telegram, Microsoft Teams, Slack, Discord, ntfy ya da
   başlamalar, OOM, node baskısı, event'ler, pod logları; secret asla): alarmın nedeni tahmin edilmez, kontrol
   edilir ([docs/sources.md](docs/sources.md)).
 - **Olay kaydı taslağı** — bulguda tek tık: yapay zekâ kanıtları toplar ve olay şablonunuzu doldurur (zaman
-  çizelgesi, kök neden, etki, kanıt sorguları, aksiyonlar); düzenleyin, indirin ya da Zammad'da iç not olarak açın.
+  çizelgesi, kök neden, etki, kanıt sorguları, aksiyonlar); düzenleyin, indirin ya da Zammad veya Jira'da bilet
+  olarak açın.
 - **MCP sunucusu** — aynı salt-okunur araçlar Claude Desktop ya da herhangi bir MCP istemcisi için: kendi
   asistanınızla canlı veriyle inceleyin ([docs/mcp.md](docs/mcp.md)).
 - **Değerlendirme** — `python -m app.eval`, elle incelediğiniz günleri yeniden çalıştırıp yapay zekâyı puanlar

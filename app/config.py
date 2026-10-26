@@ -157,14 +157,24 @@ class ZammadCfg(BaseModel):
     verify_tls: bool = True
 
 
+class JiraCfg(BaseModel):
+    url: str = ""                         # https://<site>.atlassian.net (or a self-hosted base URL)
+    email: str = ""                       # the account e-mail (basic auth user)
+    token: str = ""                       # Jira Cloud API token / personal access token
+    project: str = ""                     # project key, e.g. SEC
+    issue_type: str = "Task"              # issue type name, e.g. Task / Incident
+    verify_tls: bool = True
+
+
 class IncidentCfg(BaseModel):
     """Incident record drafts from findings (e.g. ISO 27001 / ISMS-18 records)."""
     id_prefix: str = "INC-"
     template_file: str | None = None      # markdown skeleton the AI fills; default: built-in
     template: str | None = None           # … or the skeleton inline ({id} {title} {by} are filled in)
     zammad: ZammadCfg | None = None       # optional: open the draft as an internal Zammad ticket
+    jira: JiraCfg | None = None           # optional: open the draft as a Jira issue
 
-    @field_validator("zammad", mode="before")
+    @field_validator("zammad", "jira", mode="before")
     @classmethod
     def _z(cls, v):
         return None if isinstance(v, dict) and not v.get("url") else v

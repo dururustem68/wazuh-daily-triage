@@ -70,8 +70,8 @@ of silencing.
   pressure, events, pod logs; never secrets) so the cause of an alert can be checked, not guessed
   ([docs/sources.md](docs/sources.md)).
 - **Incident record drafts** — one click on a finding: the AI gathers the evidence and fills your incident
-  template (timeline, root cause, impact, evidence queries, actions); edit, download, or open it as an internal
-  Zammad ticket.
+  template (timeline, root cause, impact, evidence queries, actions); edit, download, or open it as a Zammad or
+  Jira ticket.
 - **MCP server** — the same read-only tools for Claude Desktop or any MCP client, so you can investigate with live
   data from your own assistant ([docs/mcp.md](docs/mcp.md)).
 - **Evaluation** — `python -m app.eval` replays days you reviewed yourself and scores the AI (recall, noise

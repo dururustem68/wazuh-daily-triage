@@ -774,12 +774,18 @@ class Runtime:
             await rt.repo.save_run(run)
         return rec
 
-    async def incident_ticket(self, env_id: str, run_id: str, fid: str, md: str | None = None) -> dict:
+    async def incident_ticket(self, env_id: str, run_id: str, fid: str, md: str | None = None,
+                              provider: str = "zammad") -> dict:
         from . import incident as inc
         rt = self.get(env_id)
-        z = rt.env.incident.zammad
-        if not z:
-            raise PermissionError("Zammad is not configured (incident.zammad)")
+        if provider == "jira":
+            cfg = rt.env.incident.jira
+            if not cfg:
+                raise PermissionError("Jira is not configured (incident.jira)")
+        else:
+            cfg = rt.env.incident.zammad
+            if not cfg:
+                raise PermissionError("Zammad is not configured (incident.zammad)")
         async with self.run_lock(run_id):
             run = await rt.repo.get_run(run_id)
             f = next((x for x in (run or {}).get("findings") or [] if x.get("id") == fid), None)
@@ -789,8 +795,13 @@ class Runtime:
                 return f["incident"]["ticket"]
             if md:
                 f["incident"]["md"] = md
-            t = await inc.zammad_ticket(z, f"{f['incident']['id']} — {f.get('title', '')}", f["incident"]["md"],
-                                        transport=self.notify_transport)
+            title = f"{f['incident']['id']} — {f.get('title', '')}"
+            if provider == "jira":
+                t = await inc.jira_ticket(cfg, title, f["incident"]["md"], transport=self.notify_transport)
+                t["provider"] = "jira"
+            else:
+                t = await inc.zammad_ticket(cfg, title, f["incident"]["md"], transport=self.notify_transport)
+                t["provider"] = "zammad"
             f["incident"]["ticket"] = t
             await rt.repo.save_run(run)
         return t

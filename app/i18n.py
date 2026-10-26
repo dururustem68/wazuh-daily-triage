@@ -252,6 +252,7 @@ EN: dict[str, str] = {
     "inc.download": "Download .md",
     "inc.regen": "Regenerate",
     "inc.ticket": "Open as Zammad ticket",
+    "inc.ticket_jira": "Open as Jira ticket",
     "inc.working": "Writing the record — the AI checks the evidence (up to a minute)…",
 }
 
@@ -494,6 +495,7 @@ TR: dict[str, str] = {
     "inc.download": ".md indir",
     "inc.regen": "Yeniden üret",
     "inc.ticket": "Zammad bileti aç",
+    "inc.ticket_jira": "Jira bileti aç",
     "inc.working": "Kayıt yazılıyor — yapay zekâ kanıtları kontrol ediyor (bir dakikaya kadar)…",
 }
 
@@ -736,6 +738,7 @@ ES: dict[str, str] = {
     "inc.download": "Descargar .md",
     "inc.regen": "Regenerar",
     "inc.ticket": "Abrir como ticket de Zammad",
+    "inc.ticket_jira": "Abrir como ticket de Jira",
     "inc.working": "Escribiendo el registro — la IA comprueba la evidencia (hasta un minuto)…",
 }
 
@@ -978,6 +981,7 @@ DE: dict[str, str] = {
     "inc.download": ".md herunterladen",
     "inc.regen": "Neu erzeugen",
     "inc.ticket": "Als Zammad-Ticket öffnen",
+    "inc.ticket_jira": "Als Jira-Ticket öffnen",
     "inc.working": "Protokoll wird geschrieben — die KI prüft die Belege (bis zu einer Minute)…",
 }
 

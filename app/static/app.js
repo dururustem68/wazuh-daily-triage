@@ -253,7 +253,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <button class="btn small" data-inc-copy>${escapeHtml(tr("copy"))}</button>
         <button class="btn small" data-inc-dl>${escapeHtml(tr("inc_download"))}</button>
         <button class="btn small" data-inc-regen>${escapeHtml(tr("inc_regen"))}</button>
-        ${box.dataset.zammad === "1" ? `<button class="btn small" data-inc-ticket>${escapeHtml(tr("inc_ticket"))}</button>` : ""}
+        ${box.dataset.zammad === "1" ? `<button class="btn small" data-inc-ticket="zammad">${escapeHtml(tr("inc_ticket"))}</button>` : ""}
+        ${box.dataset.jira === "1" ? `<button class="btn small" data-inc-ticket="jira">${escapeHtml(tr("inc_ticket_jira"))}</button>` : ""}
         <span class="small muted inc-msg"></span></div>`;
       const ta = area.querySelector("textarea"), msg = area.querySelector(".inc-msg");
       area.querySelector("[data-inc-save]").addEventListener("click", async () => {
@@ -267,12 +268,13 @@ document.addEventListener("DOMContentLoaded", () => {
         a.download = box.dataset.file; a.click(); URL.revokeObjectURL(a.href);
       });
       area.querySelector("[data-inc-regen]").addEventListener("click", () => generate());
-      const tk = area.querySelector("[data-inc-ticket]");
-      if (tk) tk.addEventListener("click", async () => {
+      area.querySelectorAll("[data-inc-ticket]").forEach(tk => tk.addEventListener("click", async () => {
         tk.disabled = true;
-        try { const t = await api(url + "/ticket", "POST", { md: ta.value }); msg.innerHTML = `<a href="${escapeHtml(t.url)}" target="_blank" rel="noopener">Zammad #${escapeHtml(String(t.number))}</a>`; }
-        catch (e) { msg.textContent = e.message; tk.disabled = false; }
-      });
+        try {
+          const t = await api(url + "/ticket", "POST", { md: ta.value, provider: tk.dataset.incTicket });
+          msg.innerHTML = `<a href="${escapeHtml(t.url)}" target="_blank" rel="noopener">#${escapeHtml(String(t.number))}</a>`;
+        } catch (e) { msg.textContent = e.message; tk.disabled = false; }
+      }));
     };
     const generate = async () => {
       area.hidden = false; area.innerHTML = `<p class="small">⏳ ${escapeHtml(tr("inc_working"))}</p>`;

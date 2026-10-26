@@ -12,6 +12,7 @@ All notable changes to this project are documented here. The format follows
 - **Spanish** and **German** UI (`es`, `de`), selectable from the language menu; the report language follows.
 - **Helm chart** in `deploy/helm/wazuh-daily-triage` (hardened deployment, optional read-only RBAC, ingress and
   network policy), linted and rendered in CI.
+- **Jira ticketing** next to Zammad for incident record drafts (`incident.jira`, basic auth + ADF description).
 
 ### Changed
 - CI now runs **CodeQL** and a **dependency audit** (`pip-audit`); releases attach an **SPDX SBOM** artifact.

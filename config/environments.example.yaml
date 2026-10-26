@@ -5,7 +5,7 @@
 
 app:
   timezone: ${TZ:-UTC}          # schedule times and UI timestamps use this zone
-  language: ${APP_LANGUAGE:-en} # en | tr — default UI and report language
+  language: ${APP_LANGUAGE:-en} # en | tr | es | de — default UI and report language
   title: Wazuh Daily Triage
 
 llm:
@@ -26,12 +26,16 @@ notify:                         # critical alerts only — see docs/notification
   email: {host: "${SMTP_HOST:-}", username: "${SMTP_USER:-}", password: "${SMTP_PASSWORD:-}", sender: "${SMTP_FROM:-}", to: []}
   telegram: {bot_token: "${TELEGRAM_BOT_TOKEN:-}", chat_id: "${TELEGRAM_CHAT_ID:-}"}
   teams: {webhook_url: "${TEAMS_WEBHOOK_URL:-}"}
+  slack: {webhook_url: "${SLACK_WEBHOOK_URL:-}"}
+  discord: {webhook_url: "${DISCORD_WEBHOOK_URL:-}"}
+  webhook: {url: "${WEBHOOK_URL:-}", token: "${WEBHOOK_TOKEN:-}"}
+  ntfy: {topic: "${NTFY_TOPIC:-}", token: "${NTFY_TOKEN:-}"}
 
 environments:
   - id: prod                    # lowercase, used in URLs
     name: Production Wazuh
     description: Wazuh 4.x cluster — 1 master, 2 workers, 3 indexer nodes
-    language: null              # optional per-environment report language (en | tr)
+    language: null              # optional per-environment report language (en | tr | es | de)
     indexer:
       url: https://wazuh-indexer.example.internal:9200
       username: ${PROD_INDEXER_USER}
@@ -95,6 +99,7 @@ environments:
     #   id_prefix: "INC-"
     #   template_file: incident-template.md   # optional; {id} {title} {by} are filled in (or template: inline)
     #   zammad: {url: "https://zammad.example.com", token: "${ZAMMAD_TOKEN:-}", group: "SecOps", customer: "secops@example.com"}
+    #   jira: {url: "https://wazuh.atlassian.net", email: "${JIRA_EMAIL:-}", token: "${JIRA_TOKEN:-}", project: "SEC", issue_type: "Incident"}
     # anomaly: true             # rule × agent spikes / new pairs vs. 14 days (no AI)
     # llm:                      # optional per-environment model, e.g. a local model for regulated data
     #   provider: openai

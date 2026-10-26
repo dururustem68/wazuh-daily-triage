@@ -5,6 +5,7 @@ import os
 from datetime import UTC, datetime, timedelta
 
 import httpx
+import pytest
 
 from app.collector import Collector
 from app.config import KubernetesSource, SourceEndpoint, load_settings
@@ -124,6 +125,37 @@ async def test_incident_draft_and_ticket():
     t = await rt.incident_ticket("demo", run_id, fid)
     assert t["number"] == "70042" and seen["auth"] == "Token token=t" and seen["body"]["article"]["internal"]
     assert (await rt.incident_ticket("demo", run_id, fid))["id"] == 42   # idempotent
+
+
+async def test_incident_jira_ticket():
+    rt = rt_demo()
+    er = rt.get("demo")
+    run_id = await rt.start_run("demo")
+    for t in list(rt._tasks):
+        await t
+    run = await er.repo.get_run(run_id)
+    fid = run["findings"][0]["id"]
+    await rt.incident_draft("demo", run_id, fid, "alice")
+    from app.config import JiraCfg
+    er.env.incident.jira = JiraCfg(url="https://wazuh.atlassian.net", email="a@b.c", token="t",
+                                   project="SEC", issue_type="Incident")
+    seen = {}
+
+    def j(req):
+        seen["body"] = json.loads(req.content)
+        seen["auth"] = req.headers["authorization"]
+        return httpx.Response(201, json={"id": "10042", "key": "SEC-42"})
+    rt.notify_transport = httpx.MockTransport(j)
+    t = await rt.incident_ticket("demo", run_id, fid, provider="jira")
+    assert t["key"] == "SEC-42" and t["number"] == "SEC-42" and t["provider"] == "jira"
+    f = seen["body"]["fields"]
+    assert f["project"]["key"] == "SEC" and f["issuetype"]["name"] == "Incident"
+    assert f["description"]["type"] == "doc" and seen["auth"].startswith("Basic ")
+    assert (await rt.incident_ticket("demo", run_id, fid, provider="jira"))["key"] == "SEC-42"   # idempotent
+    # wrong provider → permission error when not configured
+    with pytest.raises(PermissionError):
+        er.env.incident.zammad = None
+        await rt.incident_ticket("demo", run_id, fid, provider="zammad")
 
 
 def test_mcp_endpoint(monkeypatch):
