@@ -116,6 +116,13 @@ async def analyse(xml: str, cfg: RuleDeployCfg, api: WazuhAPI | None, high_level
                     risky.append(f"rule {r['id']}: lowers level {pl} → {r['level']} for child events of {p}")
                 if p not in parents_info:
                     errors.append(f"rule {r['id']}: parent rule {p} does not exist")
+                    continue
+                pi = parents_info[p]
+                # etc/rules files load alphabetically: a parent in a later file is not known yet
+                if pi.get("relative_dirname") == "etc/rules" and pi.get("filename") != cfg.file \
+                        and str(pi.get("filename", "")) > cfg.file:
+                    errors.append(f"rule {r['id']}: parent {p} is in {pi.get('filename')}, which loads after "
+                                  f"{cfg.file} (alphabetical) — rename rule_deploy.file, e.g. zz_{cfg.file}")
     return {"ok": not errors, "errors": errors, "risky": sorted(set(risky)), "ids": ids,
             "xml": _normalise(xml), "parents": {k: {"level": v.get("level"), "description": v.get("description"),
                                                     "filename": v.get("filename")} for k, v in parents_info.items()}}

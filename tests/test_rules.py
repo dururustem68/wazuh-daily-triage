@@ -127,3 +127,16 @@ async def test_kb_import_export():
     out = await rt.kb_export("demo", kinds=["baseline"])
     e = next(x for x in out if x.get("key") == "n-31101")
     assert e["body"] == "changed" and e["rule_ids"] == ["31101"]
+
+
+async def test_parent_load_order():
+    class API:
+        async def rules(self, ids):
+            return [{"id": 99919, "level": 9, "filename": "zz_local_rules_seviye.xml", "relative_dirname": "etc/rules"},
+                    {"id": 60106, "level": 3, "filename": "0580-win-security_rules.xml", "relative_dirname": "ruleset/rules"}]
+    cfg = RuleDeployCfg(enabled=True)
+    x = '<group name="x,"><rule id="100951" level="12"><if_sid>{p}</if_sid><description>t</description></rule></group>'
+    a = await R.analyse(x.format(p="99919"), cfg, API())
+    assert not a["ok"] and "loads after" in a["errors"][0]
+    assert (await R.analyse(x.format(p="99919"), RuleDeployCfg(file="zz_wdt_rules.xml"), API()))["ok"]
+    assert (await R.analyse(x.format(p="60106"), cfg, API()))["ok"]

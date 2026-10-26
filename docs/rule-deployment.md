@@ -97,6 +97,13 @@ If an identical policy already exists under another name, Wazuh answers `4009`; 
 > The application itself only ever writes `rule_deploy.file`; keep the credentials in a secret and do not reuse
 > the user elsewhere. Ruleset files shipped by Wazuh (`ruleset/rules`) are not writable through this endpoint.
 
+## Load order
+
+Wazuh loads `ruleset/rules` first, then `etc/rules` **alphabetically**. A draft whose `if_sid` points at a rule in
+another custom file must be in a file that sorts *after* it — otherwise the parent is unknown when the draft loads.
+The check refuses such drafts and suggests a name; if you keep level-lowering rules in files like
+`zz_local_rules.xml`, use `file: zz_wdt_rules.xml` (and the same name in the deploy user's `rules:delete` policy).
+
 ## Deployment types
 
 | Wazuh | Notes |

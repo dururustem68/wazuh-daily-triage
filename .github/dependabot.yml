@@ -1,11 +1,22 @@
+# Dependency update proposals. Updates are grouped so each ecosystem opens ONE pull request per cycle.
 version: 2
 updates:
   - package-ecosystem: pip
     directory: /
-    schedule: { interval: weekly }
+    schedule: { interval: monthly }
+    groups:
+      python:
+        patterns: ["*"]
+    open-pull-requests-limit: 3
   - package-ecosystem: docker
     directory: /
-    schedule: { interval: weekly }
+    schedule: { interval: monthly }
+    groups:
+      docker:
+        patterns: ["*"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
+    groups:
+      github-actions:
+        patterns: ["*"]

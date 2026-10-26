@@ -290,8 +290,9 @@ async def knowledge_page(request: Request, env_id: str, kind: str | None = None,
     for r in rows:
         if r.get("kind") == "rule_draft":
             r["_xml"] = extract_xml(r)
+    ctx_md = er.env.context_text(_rt(request).settings.base_dir) if kind in (None, "context") and not status else ""
     return tpl.TemplateResponse(request, "knowledge.html", _ctx(request, er=er, env=er.env, rows=rows,
-                                                                kind=kind, status=status,
+                                                                kind=kind, status=status, ctx_md=ctx_md,
                                                                 deploy_on=_rt(request).deploy_ready(er.env)))
 
 

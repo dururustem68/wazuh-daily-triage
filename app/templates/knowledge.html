@@ -44,6 +44,14 @@
   {% for k in KINDS %}<a href="?kind={{ k }}" class="{{ 'on' if kind == k }}">{{ _('kind.' ~ k) }}</a>{% endfor %}
 </div>
 
+{% if ctx_md %}
+<details class="card ctxfile" {{ 'open' if kind == 'context' }}>
+  <summary>{{ _('kb.ctx_file') }} <span class="pill gray">{{ env.context_file }}</span></summary>
+  <p class="small muted">{{ _('kb.ctx_file_help') }}</p>
+  <div class="kbody">{{ ctx_md|md }}</div>
+</details>
+{% endif %}
+{% if kind == 'context' and not rows %}<div class="card empty"><b>{{ _('kb.ctx_empty') }}</b>{{ _('kb.ctx_empty_help') }}</div>{% endif %}
 {% for r in rows %}
 <article class="card k st-{{ r.status }}" data-k="/api/e/{{ env.id }}/k/{{ r.id }}">
   <div class="row">
@@ -79,6 +87,6 @@
   </div>
 </article>
 {% else %}
-<div class="card empty"><b>{{ _('kb.empty') }}</b></div>
+{% if kind != 'context' %}<div class="card empty"><b>{{ _('kb.empty') }}</b></div>{% endif %}
 {% endfor %}
 {% endblock %}
