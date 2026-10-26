@@ -5,11 +5,16 @@ actually alive, separates real risk from known noise, writes a short diagnostic 
 Indexer, asks you only what needs a human decision — and remembers your answers next time.
 
 Bring your own AI: Anthropic, OpenAI, Azure OpenAI or any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio,
-LiteLLM). One Docker container, read-only towards Wazuh.
+LiteLLM). One Docker container, read-only towards Wazuh by default. Critical alerts and run summaries go to
+e-mail, Telegram or Microsoft Teams.
 
-[Türkçe README](README.tr.md) · [Permissions & network](docs/permissions.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[Türkçe README](README.tr.md) · [AI providers](docs/providers.md) · [Notifications](docs/notifications.md) · [Permissions & network](docs/permissions.md) · [Rule deployment](docs/rule-deployment.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ![Report](docs/screenshot-report.png)
+
+| Recommendation inbox | Knowledge base and rule drafts |
+|---|---|
+| ![Inbox](docs/screenshot-inbox.png) | ![Knowledge base](docs/screenshot-knowledge.png) |
 
 ## Why
 
@@ -21,7 +26,7 @@ of silencing.
 
 ## Features
 
-- **Scheduled daily run** per environment (time + weekdays). The window is "since the last successful run", so
+- **Scheduled runs** per environment (one or more times a day + weekdays). The window is "since the last successful run", so
   Monday morning covers the weekend.
 - **Deterministic collection first** — independent of the AI: last alert time and empty hours (blind spots),
   indexer health and disk, manager daemons, inactive agents, `ossec.log` errors, level distribution, high-level
@@ -29,12 +34,24 @@ of silencing.
   **seen for the first time in 14 days**, watched rules, vulnerability summary.
 - **AI diagnosis** — the model reads the summary plus your knowledge base, digs deeper with read-only tools
   (time distribution, IP profile, ±30 min correlation, logtest, rule definitions) and submits a structured
-  report: *real incident, investigate, detection gap, false positive, baseline increase…* It can draft Wazuh
-  rules (never applies them) and checks them for XML errors, OS_Regex pitfalls and ID collisions.
+  report: *real incident, investigate, detection gap, false positive, baseline increase…* It drafts Wazuh
+  rules and checks them for XML errors, OS_Regex pitfalls and ID collisions.
+- **Rule drafts you can ship** — every draft comes with copy-paste commands for the manager (backup,
+  `wazuh-analysisd -t`, restart, roll back). Optionally, **Approve and deploy** writes it to one dedicated rules
+  file through the Wazuh API, validates, restarts, checks it loaded, runs a two-way logtest and rolls back on any
+  failure; drafts that silence or lower alerts need a typed second confirmation
+  ([docs/rule-deployment.md](docs/rule-deployment.md)). Off by default.
 - **It asks you** — "Was this SSH login yours?" Your answer goes into the knowledge base and is context for the
   next run.
 - **Knowledge base** — known noise, decisions ("don't suggest X"), open items, lessons, "look at this tomorrow"
-  requests. AI proposals have **no effect until you approve them**.
+  requests. AI proposals have **no effect until you approve them**. Bring your existing notes with YAML
+  import/export (UI or `python -m app.kb`), repeatable without duplicates.
+- **Recommendation inbox** — findings one at a time, de-duplicated across runs; one decision settles every
+  occurrence. Findings that need a look on a server carry exact read-only commands, and **Investigate in chat**
+  opens a conversation where you paste the output and get the next step.
+- **Notifications by e-mail, Telegram or Microsoft Teams** — critical situations (SIEM silent, indexer red, real
+  incidents) without repeating the same item every run, an optional short summary after every run, and rule
+  deployments ([docs/notifications.md](docs/notifications.md)).
 - **Chat** — ask questions about an environment; answers use the same tools and show their tool calls.
 - **Stored in Wazuh itself** — `daily-triage-runs`, `daily-triage-knowledge`, `daily-triage-chat` indices in
   each environment's own indexer. No extra database.
@@ -90,17 +107,100 @@ vi config/context/<env>.md         # a few lines describing the environment
 
 `config/environments.yaml`, `config/context/*`, `config/seed/*`, `config/certs/` and `.env` are git-ignored.
 
+### Kubernetes
+
+Kustomize base and example overlay in **[deploy/kubernetes](deploy/kubernetes/README.md)** — single replica,
+non-root, read-only filesystem, no PVC (state lives in the Wazuh Indexer).
+
 ## AI providers
 
-| `LLM_PROVIDER` | `LLM_BASE_URL` | Notes |
-|---|---|---|
-| `anthropic` | — | System prompt is cached (prompt caching) |
-| `openai` | `https://api.openai.com/v1` | For newer models set `token_param: max_completion_tokens` and remove `temperature` |
-| `openai` | `http://ollama:11434/v1` | Local model: `docker compose --profile ollama up -d`; pick a model with tool calling |
-| `openai` | vLLM / LM Studio / LiteLLM / full Azure URL with `?api-version=` | Any OpenAI-compatible endpoint |
+Bring your own key. Full setup for each provider, including model names and parameter quirks:
+**[docs/providers.md](docs/providers.md)**.
 
-Each environment may override the model (`llm:` block) — e.g. a local model for an environment whose data must
-not leave your network. Small local models can struggle with multi-step tool use; `max_tool_steps` caps cost.
+| Provider | `LLM_PROVIDER` | `LLM_BASE_URL` | Example `LLM_MODEL` |
+|---|---|---|---|
+| Claude (Anthropic) | `anthropic` | — | `claude-sonnet-5-5` |
+| OpenAI | `openai` | `https://api.openai.com/v1` | `gpt-6.1-sol` ¹ |
+| Google Gemini | `openai` | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.8-flash` |
+| DeepSeek | `openai` | `https://api.deepseek.com` | `deepseek-flash` |
+| Azure OpenAI | `openai` | full deployment URL with `?api-version=` | your deployment |
+| Ollama / vLLM / LM Studio / LiteLLM | `openai` | e.g. `http://ollama:11434/v1` | e.g. `qwen3:14b` |
+
+¹ OpenAI reasoning models also need `LLM_TOKEN_PARAM=max_completion_tokens` and `LLM_TEMPERATURE=none`.
+
+The model must support tool (function) calling. Each environment can override the model (`llm:` block) — e.g.
+a local model for an environment whose data must not leave your network. `max_tool_steps` caps cost per run.
+
+## Notifications — e-mail, Telegram, Microsoft Teams
+
+| When | Setting (default) |
+|---|---|
+| SIEM silent, indexer red, manager daemon down, indexer disk ≥ 90 % | `on_critical_flags: true` |
+| Finding labelled *real incident* / severity *critical* | `on_real_incident: true`, `on_critical_findings: true` |
+| The run itself failed | `on_run_error: false` |
+| Short summary after **every** run (health, counts, recommendations waiting) | `on_run_summary: false` |
+| A rule draft was deployed, rolled back or removed | `on_rule_deploy: true` |
+
+The same critical item is not repeated within `repeat_hours` (24). A channel is active as soon as its fields are
+set; **Test notifications** on the environment page checks all of them.
+
+```sh
+# .env — any combination of channels
+NOTIFY_UI_URL=https://triage.example.internal      # link in messages
+NOTIFY_ON_RUN_SUMMARY=true
+
+TELEGRAM_BOT_TOKEN=123456789:AA...                 # @BotFather → /newbot
+TELEGRAM_CHAT_ID=-1001234567890                    # see below
+
+TEAMS_WEBHOOK_URL=https://...                      # channel → Workflows → "Post to a channel when a webhook request is received"
+
+SMTP_HOST=smtp.example.org
+SMTP_PORT=587
+SMTP_SECURITY=starttls                             # starttls | ssl | none
+SMTP_USER=...
+SMTP_PASSWORD=...
+SMTP_FROM=wazuh-triage@example.org
+SMTP_TO=secops@example.org,oncall@example.org
+```
+
+- **Telegram chat id:** add the bot to the group (or send it a message), send `/start@<your_bot>`, then open
+  `https://api.telegram.org/bot<token>/getUpdates` and take `"chat":{"id":...}` — group ids are negative
+  (`-100…`). Already sending Wazuh alerts to Telegram through the Dashboard's Notifications plugin? The same
+  bot token and chat id work here.
+- **Teams:** the old Office 365 "Incoming Webhook" connectors are retired; use the Workflows template above.
+  Messages arrive as Adaptive Cards with a link to the report.
+- Multi-environment setups put the same keys in a `notify:` block, globally or per environment —
+  see [docs/notifications.md](docs/notifications.md).
+
+Messages contain environment names, finding titles, host names and IPs — pick channels accordingly.
+
+## Rule drafts — commands or one-click deploy
+
+Every rule draft in the knowledge base has three buttons:
+
+- **Commands** — a copy-paste block for the manager: backup, append to `etc/rules/wdt_rules.xml`,
+  `wazuh-analysisd -t` (restores the backup if it fails), restart, verify, roll back. Works everywhere.
+- **Approve and deploy** — opt-in per environment (`rule_deploy`). Writes the draft through the Wazuh API with a
+  separate least-privilege user, validates, restarts the manager or cluster, checks the rule IDs are loaded,
+  runs the draft's two-way logtest and **rolls back automatically** on any failure. Drafts that silence or lower
+  alerts need the rule IDs typed as a second confirmation.
+- **Remove from Wazuh** — undoes a deployed draft the same way.
+
+Setup and the exact API permissions: [docs/rule-deployment.md](docs/rule-deployment.md).
+
+## Knowledge base import / export
+
+Bring the notes you already keep (known noise, decisions, lessons) as a YAML list — the same format as
+[`config/seed/example.yaml`](config/seed/example.yaml):
+
+```sh
+python -m app.kb import noise.yaml -e prod --dry-run     # preview
+python -m app.kb import noise.yaml -e prod --update      # add new, update changed (matched by key or kind+title)
+kubectl exec -i deploy/wazuh-daily-triage -- python -m app.kb import - -e prod --update < noise.yaml
+python -m app.kb export -e prod --kind baseline > baseline.yaml
+```
+
+Or use **Import / export** on the knowledge base page. Re-running never creates duplicates.
 
 ## Compatibility
 
@@ -111,8 +211,9 @@ not leave your network. Small local models can struggle with multi-step tool use
 
 ## Security model
 
-- **Read-only towards Wazuh.** No active response, no rule/config writes, no agent commands. The only index
-  writes go to its own `daily-triage-*` indices.
+- **Read-only towards Wazuh by default.** No active response, no config writes, no agent commands. The only
+  index writes go to its own `daily-triage-*` indices. The opt-in rule deployment uses a separate API user that
+  can only upload custom rules files and restart the manager; the application writes one dedicated file.
 - **Prompt injection.** Alert content (URLs, `full_log`, user agents, user names) is attacker-controlled. The
   prompt marks it as data, and even a fooled model can at most add a *proposal* to the knowledge base, which
   does nothing until you approve it.
@@ -138,8 +239,9 @@ schedule  │ Collector ──► deterministic summary + health flags          
           │   vulns · agent · rule · logtest · validate_rule_xml · propose        │
           │      │                                                               │
           │      ▼                                                               │
-          │ submit_report ──► daily-triage-runs                                  │
+          │ submit_report ──► daily-triage-runs ──► notify (mail/Telegram/Teams) │
           │ Web UI / chat ◄──► daily-triage-knowledge / -chat                    │
+          │ Approve & deploy (opt-in, separate API user) ──► etc/rules/wdt_rules │
           └───────────┬──────────────────────────────┬───────────────────────────┘
                       │ HTTPS 9200                   │ HTTPS 55000
                Wazuh Indexer                  Wazuh server API
@@ -162,8 +264,7 @@ without a cluster. Adding a UI language = adding a dictionary to `app/i18n.py`.
 ## Roadmap
 
 - Expose the tools as an **MCP server** (use them from Claude Desktop and other MCP clients)
-- Notifications on critical flags (e-mail, Slack, Teams, webhook)
-- Rule lifecycle: draft → approval → `analysisd -t` + logtest + apply, in a separate privileged component
+- More notification channels (Slack, generic webhook)
 - OIDC login, multiple users and an approval audit trail
 - Weekly vulnerability/SCA digest, streaming chat answers
 

@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wazuh-daily-triage
+spec:
+  # Exactly one replica: the built-in scheduler would run every daily check once per replica.
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: triage
+          image: ghcr.io/dururustem68/wazuh-daily-triage:0.4.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: wazuh-daily-triage-env
+            - secretRef:
+                name: wazuh-daily-triage-secret
+          env:
+            - name: WDT_CONFIG
+              value: /app/config/environments.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: config
+          configMap:
+            name: wazuh-daily-triage-config
+            # The overlay's configMapGenerator must provide these three keys.
+            items:
+              - { key: environments.yaml, path: environments.yaml }
+              - { key: context.md, path: context/main.md }
+              - { key: seed.yaml, path: seed/main.yaml }
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }

@@ -239,3 +239,180 @@ async def test_turkish_report_language(tmp_path):
     run = await rt.run_triage(rt.get("demo"), "tr-1")
     assert "sahte LLM" in run["summary_md"]
     assert any("ajan aktif değil" in f["message"] for f in run["flags"])
+
+
+def test_llm_from_env(monkeypatch):
+    from app.config import LLMConfig, llm_from_env
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_TEMPERATURE", "none")
+    monkeypatch.setenv("LLM_TOKEN_PARAM", "max_completion_tokens")
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "medium")
+    monkeypatch.setenv("LLM_EXTRA_BODY", '{"top_p": 0.9}')
+    c = LLMConfig(**llm_from_env())
+    assert c.temperature is None and c.token_param == "max_completion_tokens"
+    assert c.extra_body == {"reasoning_effort": "medium", "top_p": 0.9}
+
+
+async def test_openai_body_params():
+    from app.config import LLMConfig
+    seen = {}
+
+    def h(req):
+        seen.update(json.loads(req.content))
+        seen["url"] = str(req.url)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]})
+    cfg = LLMConfig(provider="openai", model="m", api_key="k", temperature=None,
+                    token_param="max_completion_tokens", extra_body={"reasoning_effort": "low"},
+                    base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
+    llm = OpenAICompatLLM(cfg)
+    llm.client = httpx.AsyncClient(transport=httpx.MockTransport(h))
+    await llm.complete("s", [{"role": "user", "content": "x"}], [])
+    assert seen["url"] == "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    assert "temperature" not in seen and seen["max_completion_tokens"] == 4096 and seen["reasoning_effort"] == "low"
+
+
+async def test_retry_on_overload(monkeypatch):
+    import asyncio as _a
+
+    from app.config import LLMConfig
+    sleeps = []
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+    monkeypatch.setattr(_a, "sleep", fake_sleep)
+    calls = {"n": 0}
+
+    def h(req):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(503, json={"error": {"status": "UNAVAILABLE"}})
+        if calls["n"] == 2:
+            return httpx.Response(429, headers={"retry-after": "7"}, json={})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]})
+    llm = OpenAICompatLLM(LLMConfig(provider="openai", model="m", api_key="k"))
+    llm.client = httpx.AsyncClient(transport=httpx.MockTransport(h))
+    r = await llm.complete("s", [{"role": "user", "content": "x"}], [])
+    assert r.text == "ok" and calls["n"] == 3 and sleeps[1] == 7
+
+
+async def test_llm_failure_keeps_deterministic_report(settings, monkeypatch):
+    from app.llm.base import LLMError
+    rt = Runtime(settings, demo=True)
+
+    class Down:
+        name = "down"
+
+        async def complete(self, *a, **k):
+            raise LLMError("LLM 503: high demand")
+    monkeypatch.setattr(rt, "llm_for", lambda env: Down())
+    run = await rt.run_triage(rt.get("demo"), "down-1")
+    assert run["status"] == "done" and run["ai_error"].startswith("LLM 503")
+    assert run["findings"] and run["collected"]["volume"]["total"] > 0
+    assert "AI analysis unavailable" in run["summary_md"]
+
+
+def test_schedule_times(tmp_path):
+    from app.config import Schedule
+    s = Schedule(times=["19:50", "07:50"], days=["mon"])
+    assert s.all_times == ["07:50", "19:50"]
+    assert Schedule(time="06:00").all_times == ["06:00"]
+    with pytest.raises(ValueError):
+        Schedule(times=["7:5"])
+
+
+async def test_inbox_dedupe_act_and_chat(settings):
+    rt = Runtime(settings, demo=True)
+    er = rt.get("demo")
+    await rt.run_triage(er, "ib-1")
+    await rt.run_triage(er, "ib-2")
+    items = await rt.inbox("demo")
+    assert items and all(it["seen"] == 2 for it in items)          # same findings in both runs → grouped
+    first = items[0]
+    assert len(first["refs"]) == 2
+    checks = [it for it in items if it["finding"].get("manual_checks")]
+    assert checks and checks[0]["finding"]["manual_checks"][0]["command"]
+    n = await rt.inbox_act("demo", first["refs"], "false_positive", "known scanner")
+    assert n == 2
+    after = await rt.inbox("demo")
+    assert len(after) == len(items) - 1 and first["key"] not in {i["key"] for i in after}
+    it = checks[0] if checks[0]["key"] != first["key"] else checks[-1]
+    sess = await rt.chat_from_finding("demo", it["run_id"], it["finding"]["id"], "en")
+    hist = await er.repo.chat_history(sess)
+    assert [m["role"] for m in hist] == ["user", "assistant"] and "```sh" in hist[1]["content"]
+    r = await rt.chat("demo", sess, "output: 240")          # conversation continues with the context
+    assert r["session"] == sess
+
+
+async def test_notifications(settings, monkeypatch):
+    from app import notify as N
+    sent = {"tg": [], "teams": [], "mail": []}
+
+    def h(req):
+        body = json.loads(req.content)
+        if "api.telegram.org" in str(req.url):
+            sent["tg"].append(body)
+        else:
+            sent["teams"].append(body)
+        return httpx.Response(200, json={"ok": True})
+    monkeypatch.setattr(N, "_send_email", lambda cfg, msg: sent["mail"].append(msg))
+    settings2 = settings.model_copy(deep=True)
+    settings2.notify = N.NotifyCfg(ui_url="http://127.0.0.1:18080",
+                                   email=N.EmailCfg(host="smtp.example", sender="a@example.org", to=["b@example.org"]),
+                                   telegram=N.TelegramCfg(bot_token="123:abc", chat_id="42"),
+                                   teams=N.TeamsCfg(webhook_url="https://example.invalid/workflows/hook"))
+    rt = Runtime(settings2, demo=True)
+    er = rt.get("demo")
+    run = {"run_id": "n-1", "env": "demo", "status": "done", "started_at": "2026-10-26T07:50:00.000Z",
+           "flags": [{"severity": "critical", "code": "silence", "message": "Last alert was 300 min ago"},
+                     {"severity": "warn", "code": "agents", "message": "1 agent not active"}],
+           "findings": [{"id": "f1", "label": "real_incident", "severity": "high", "title": "SSH brute force succeeded",
+                         "rule_ids": ["5715"], "agents": ["db01"]},
+                        {"id": "f2", "label": "investigate", "severity": "medium", "title": "noise"}]}
+    await er.repo.save_run(run)
+    tr = httpx.MockTransport(h)
+    res = await rt.notify_run(er, run, transport=tr)
+    assert res == {"email": "ok", "telegram": "ok", "teams": "ok"}
+    txt = sent["tg"][0]["text"]
+    assert "Last alert was 300" in txt and "SSH brute force" in txt and "noise" not in txt and "/e/demo/r/n-1" in txt
+    assert sent["teams"][0]["attachments"][0]["contentType"] == "application/vnd.microsoft.card.adaptive"
+    assert sent["mail"][0]["title"].endswith("CRITICAL")
+    # same items again 12 h later → suppressed
+    run2 = dict(run, run_id="n-2", notified=None)
+    await er.repo.save_run(run2)
+    assert await rt.notify_run(er, run2, transport=tr) == {}
+    assert len(sent["tg"]) == 1
+    assert (await rt.notify_test("demo", transport=tr))["telegram"] == "ok"
+
+    # run summary: off by default, on → one message after every run, even without critical items
+    quiet = {"run_id": "n-3", "env": "demo", "status": "done", "health": "ok", "started_at": "2026-10-26T19:50:00.000Z",
+             "metrics": {"total": 1200, "high": 30}, "flags": [],
+             "findings": [{"id": "f1", "label": "investigate", "severity": "medium", "title": "x"}]}
+    await er.repo.save_run(quiet)
+    n = len(sent["tg"])
+    assert await rt.notify_run(er, quiet, transport=tr) == {}
+    rt.settings.notify.on_run_summary = True
+    assert (await rt.notify_run(er, quiet, transport=tr))["telegram"] == "ok"
+    txt = sent["tg"][n]["text"]
+    assert "1,200" in txt and "/e/demo/r/n-3" in txt
+    # rule deploy notification
+    from app import rules as R
+    R.POLL_FIRST = R.POLL_EVERY = 0.01
+    k = await er.repo.add_knowledge("rule_draft", "notify me", "", extra={"xml":
+        '<group name="x,"><rule id="100990" level="9"><if_sid>5710</if_sid><description>t</description></rule></group>'})
+    n = len(sent["tg"])
+    rt.notify_transport = tr
+    rec = await rt.rule_deploy("demo", k["id"], "alice")
+    assert rec["state"] == "deployed" and "100990" in sent["tg"][n]["text"] and "alice" in sent["tg"][n]["text"]
+
+
+def test_empty_env_vars_fall_back(tmp_path, monkeypatch):
+    from app.config import load_settings, notify_from_env
+    monkeypatch.setenv("SMTP_PORT", "")
+    monkeypatch.setenv("SMTP_TO", "a@example.org, b@example.org")
+    assert notify_from_env()["email"]["port"] == 587
+    p = tmp_path / "environments.yaml"
+    p.write_text('llm: {provider: mock}\nnotify:\n  email: {host: h, port: "${SMTP_PORT:-587}", sender: s@example.org, '
+                 'to: ["${SMTP_TO:-}"]}\nenvironments:\n  - id: x\n    name: X\n    indexer: {url: "https://192.0.2.1:9200"}\n')
+    s = load_settings(p)
+    n = s.notify_for(s.environments[0])
+    assert n.email.port == 587 and n.email.to == ["a@example.org", "b@example.org"] and n.channels == ["email"]

@@ -287,8 +287,8 @@ class ToolBox:
             existing = await self.api.rules([i for i in res["rule_ids"] if i])
             res["id_collisions"] = [{"id": r["id"], "file": r.get("filename"), "description": r.get("description")}
                                     for r in existing]
-        res["note"] = ("Syntax/ID check only. Before going live run wazuh-analysisd -t on the manager and "
-                       "logtest with real events; this application never applies rules.")
+        res["note"] = ("Syntax/ID check only. Propose it with propose_knowledge(kind=rule_draft, xml=..., tests=...); "
+                       "the user approves and deploys it (validated, restarted, rolled back on failure) or runs the commands.")
         return res
 
     async def propose_knowledge(self, a):
@@ -297,8 +297,18 @@ class ToolBox:
             return {"error": f"invalid kind; one of: {', '.join(k for k in KNOWLEDGE_KINDS if k != 'answer')}"}
         if len(self.proposals) >= 10:
             return {"error": "at most 10 proposals per run"}
+        extra = {}
+        if kind == "rule_draft":
+            if a.get("xml"):
+                extra["xml"] = str(a["xml"])[:20000]
+            tests = [t for t in (a.get("tests") or []) if isinstance(t, dict) and t.get("event")][:6]
+            if tests:
+                extra["tests"] = [{"event": str(t["event"])[:4000], "log_format": str(t.get("log_format") or "syslog"),
+                                   "location": str(t.get("location") or "daily-triage"),
+                                   "expect": "no_match" if t.get("expect") == "no_match" else "match"} for t in tests]
         doc = await self.repo.add_knowledge(kind, a["title"], a.get("body", ""), status="proposed",
-                                            created_by="ai", rule_ids=a.get("rule_ids"), source_run=self.run_id)
+                                            created_by="ai", rule_ids=a.get("rule_ids"), source_run=self.run_id,
+                                            extra=extra or None)
         self.proposals.append(doc)
         return {"ok": True, "id": doc["id"], "status": "proposed",
                 "note": "No effect until the user approves it in the UI."}
@@ -352,7 +362,14 @@ FINDING = _obj({
     "rule_ids": {"type": "array", "items": {"type": "string"}},
     "agents": {"type": "array", "items": {"type": "string"}},
     "recommendation": {"type": "string", "description": "Recommended manual action or next step"},
-    "rule_draft_xml": {"type": "string", "description": "Optional Wazuh rule draft (XML). Never applied, suggestion only."},
+    "rule_draft_xml": {"type": "string", "description": "Optional Wazuh rule draft (XML). Also propose it as a rule_draft so the user can approve it."},
+    "manual_checks": {"type": "array", "description":
+        "Checks only a human can do on hosts you cannot reach (log greps, config/service state, who logged in). "
+        "Exact READ-ONLY commands, one host each. Omit when the indexer data is enough.",
+        "items": _obj({"host": {"type": "string", "description": "agent/host name"},
+                       "purpose": {"type": "string", "description": "what the output will tell us"},
+                       "command": {"type": "string", "description": "read-only shell command (sudo allowed)"}},
+                      ["host", "command"])},
 }, ["label", "severity", "title", "detail"])
 
 SPECS: dict[str, dict] = {
@@ -395,10 +412,16 @@ SPECS: dict[str, dict] = {
         "parameters": _obj({"xml": {"type": "string"}}, ["xml"])},
     "propose_knowledge": {"name": "propose_knowledge", "description":
         "Add a PROPOSAL to the knowledge base (baseline, decision, open item, lesson, rule draft). It has no "
-        "effect until the user approves it. Only for durable, reusable knowledge.",
+        "effect until the user approves it. Only for durable, reusable knowledge. For kind=rule_draft put the full "
+        "<group> XML in `xml` and two-way test events in `tests`.",
         "parameters": _obj({"kind": {"type": "string", "enum": [k for k in KNOWLEDGE_KINDS if k != "answer"]},
                             "title": {"type": "string"}, "body": {"type": "string"},
-                            "rule_ids": {"type": "array", "items": {"type": "string"}}}, ["kind", "title"])},
+                            "rule_ids": {"type": "array", "items": {"type": "string"}},
+                            "xml": {"type": "string", "description": "rule_draft only: complete <group>...</group> XML"},
+                            "tests": {"type": "array", "description": "rule_draft only: logtest events", "items": _obj({
+                                "event": {"type": "string"}, "log_format": {"type": "string"},
+                                "expect": {"type": "string", "enum": ["match", "no_match"]}}, ["event", "expect"])}},
+                           ["kind", "title"])},
     "list_reports": {"name": "list_reports", "description": "List of recent daily triage reports.",
         "parameters": _obj({"size": {"type": "integer"}})},
     "get_report": {"name": "get_report", "description": "A full report (the last successful one if run_id is omitted).",

@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ _('kb.title') }} · {{ env.name }}{% endblock %}
 {% block body %}
-<h1>{{ _('kb.title') }}</h1>
-<p class="muted">{{ _('kb.intro') }}</p>
+<div class="page-head">
+  <div class="titles"><div class="eyebrow">{{ env.name }}</div><h1>{{ _('kb.title') }}</h1>
+    <div class="sub">{{ _('kb.intro') }}</div></div>
+</div>
 
-<details class="card" open>
+<details class="card">
   <summary><b>{{ _('kb.new') }}</b></summary>
   <form class="kform" data-kadd="/api/e/{{ env.id }}/k">
     <div class="row">
@@ -16,12 +18,29 @@
   </form>
 </details>
 
+<details class="card">
+  <summary><b>{{ _('kb.io') }}</b></summary>
+  <p class="small muted">{{ _('kb.io_help') }}</p>
+  <form class="kform" data-kimport="/api/e/{{ env.id }}/kb/import">
+    <textarea name="text" rows="8" placeholder="- kind: baseline&#10;  title: &quot;31101 web scanner noise&quot;&#10;  body: &quot;…&quot;&#10;  rule_ids: [&quot;31101&quot;]&#10;  key: &quot;noise-31101&quot;"></textarea>
+    <div class="row small">
+      <input type="file" accept=".yaml,.yml,.json" data-kfile>
+      <label><input type="checkbox" name="update"> {{ _('kb.io_update') }}</label>
+      <label><input type="checkbox" name="dry_run" checked> {{ _('kb.io_dry') }}</label>
+      <span class="spacer"></span>
+      <a class="btn small" href="/api/e/{{ env.id }}/kb/export">{{ _('kb.io_export') }}</a>
+      <button class="btn small primary">{{ _('kb.io_import') }}</button>
+    </div>
+    <div class="small kimport-out"></div>
+  </form>
+</details>
+
 <div class="row filters small">
   <a href="?" class="{{ 'on' if not kind and not status }}">{{ _('kb.all') }}</a>
   <a href="?status=proposed" class="{{ 'on' if status == 'proposed' }}">{{ _('kb.proposed') }}</a>
   <a href="?status=active" class="{{ 'on' if status == 'active' }}">{{ _('kb.active') }}</a>
   <a href="?status=closed" class="{{ 'on' if status == 'closed' }}">{{ _('kb.closed') }}</a>
-  <span>|</span>
+  <span class="sep"></span>
   {% for k in KINDS %}<a href="?kind={{ k }}" class="{{ 'on' if kind == k }}">{{ _('kind.' ~ k) }}</a>{% endfor %}
 </div>
 
@@ -37,8 +56,22 @@
   {% if r.body %}<div class="kbody">{{ r.body|md }}</div>{% endif %}
   <textarea class="kraw" hidden>{{ r.body or '' }}</textarea>
   {% if r.rule_ids %}<p class="small muted">{{ _('rep.rules') }}: {{ r.rule_ids|join(', ') }}</p>{% endif %}
-  <div class="row small">
-    {% if r.status == 'proposed' %}<button class="btn small primary" data-set="active">{{ _('kb.approve') }}</button><button class="btn small" data-set="rejected">{{ _('kb.reject') }}</button>{% endif %}
+  {% if r.kind == 'rule_draft' %}
+    {% if r.deploy %}<p class="small"><span class="pill {{ {'deployed':'green','failed':'red','running':'amber'}.get(r.deploy.state, 'gray') }}">{{ _('rd.state.' ~ r.deploy.state) }}</span>
+      {{ r.deploy.by }} · {{ r.deploy.at|ts }} · <code>{{ r.deploy.file }}</code>{% if r.deploy.error %} — {{ r.deploy.error }}{% endif %}</p>
+      {% if r.deploy.steps %}<details><summary class="small">{{ _('rd.steps') }}</summary><ul class="steps small">
+        {% for st in r.deploy.steps %}<li class="{{ 'ok' if st.ok else 'bad' }}">{{ '✓' if st.ok else '✗' }} {{ st.step }} {{ st.detail }}</li>{% endfor %}
+      </ul></details>{% endif %}{% endif %}
+    {% if r._xml %}<details><summary class="small">{{ _('rd.xml') }}</summary><pre class="code">{{ r._xml }}</pre>
+      <button class="btn small" data-copy-prev>{{ _('rep.copy') }}</button></details>{% endif %}
+    <div class="rd-out small" hidden></div>
+  {% endif %}
+  <div class="row small kactions">
+    {% set deployed = r.kind == 'rule_draft' and r.deploy and r.deploy.state == 'deployed' %}
+    {% if r.kind == 'rule_draft' and deploy_on and not deployed and r.status in ('proposed', 'active') %}<button class="btn small primary" data-deploy>{{ _('rd.deploy') }}</button>{% endif %}
+    {% if deployed and deploy_on %}<button class="btn small" data-undeploy>{{ _('rd.undeploy') }}</button>{% endif %}
+    {% if r.kind == 'rule_draft' %}<button class="btn small" data-cmds>{{ _('rd.cmds') }}</button>{% endif %}
+    {% if r.status == 'proposed' %}<button class="btn small {{ '' if r.kind == 'rule_draft' else 'primary' }}" data-set="active">{{ _('rd.approve_only') if r.kind == 'rule_draft' else _('kb.approve') }}</button><button class="btn small" data-set="rejected">{{ _('kb.reject') }}</button>{% endif %}
     {% if r.status == 'active' %}<button class="btn small" data-set="closed">{{ _('kb.close') }}</button>{% endif %}
     {% if r.status in ('closed', 'rejected') %}<button class="btn small" data-set="active">{{ _('kb.reopen') }}</button>{% endif %}
     <button class="btn small" data-edit>{{ _('kb.edit') }}</button>
@@ -46,6 +79,6 @@
   </div>
 </article>
 {% else %}
-<p class="muted">{{ _('kb.empty') }}</p>
+<div class="card empty"><b>{{ _('kb.empty') }}</b></div>
 {% endfor %}
 {% endblock %}

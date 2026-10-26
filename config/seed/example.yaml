@@ -1,5 +1,7 @@
 # Knowledge base seed — referenced by `seed_file` in environments.yaml.
-# Imported ONCE per environment on first use; afterwards manage entries from the UI.
+# Imported ONCE per environment on first use; afterwards manage entries from the UI, or re-import with
+# "Import / export" on the knowledge page / `python -m app.kb import file.yaml -e <env> --update`.
+# Optional per entry: key (stable id for re-imports), status (active|proposed|closed|rejected).
 # kind: context | baseline | decision | open_item | lesson | request | rule_draft
 - kind: baseline
   title: "31101 web 400/403/404 scanner noise, ~6,000/day"

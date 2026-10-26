@@ -1,0 +1,25 @@
+# Mounted at /app/config. Context and seed files are mounted as context/main.md and seed/main.yaml.
+app:
+  timezone: ${TZ:-UTC}
+  language: ${APP_LANGUAGE:-en}
+llm:
+  provider: anthropic
+  model: claude-sonnet-5-5
+  api_key: ${LLM_API_KEY}
+environments:
+  - id: prod
+    name: Production Wazuh
+    indexer:
+      # In-cluster Wazuh (wazuh-kubernetes): https://indexer.wazuh.svc.cluster.local:9200
+      url: https://indexer.wazuh.svc.cluster.local:9200
+      username: ${INDEXER_USER}
+      password: ${INDEXER_PASSWORD}
+      verify_tls: false   # use ca_file with a mounted CA in production
+    api:
+      url: https://wazuh.wazuh.svc.cluster.local:55000
+      username: ${API_USER}
+      password: ${API_PASSWORD}
+      verify_tls: false
+    schedule: {time: "07:30", days: [mon, tue, wed, thu, fri]}
+    context_file: context/main.md
+    seed_file: seed/main.yaml

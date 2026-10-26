@@ -43,6 +43,7 @@ function escapeHtml(s) {
 document.addEventListener("DOMContentLoaded", () => {
   // histogram bar heights (CSP forbids inline style attributes)
   document.querySelectorAll(".hist .bar[data-h]").forEach(b => { b.style.height = b.dataset.h + "%"; });
+  document.querySelectorAll("[data-w]").forEach(b => { b.style.width = b.dataset.w + "%"; });
 
   // start a run
   document.querySelectorAll("[data-run]").forEach(btn => btn.addEventListener("click", async () => {
@@ -98,12 +99,86 @@ document.addEventListener("DOMContentLoaded", () => {
       location.reload();
     } catch (e) { alertInline(kf, e.message); }
   });
+  // knowledge import (YAML) — preview first, then import
+  const ki = document.querySelector("[data-kimport]");
+  if (ki) {
+    const fileIn = ki.querySelector("[data-kfile]");
+    fileIn.addEventListener("change", async () => {
+      if (fileIn.files[0]) ki.querySelector("textarea").value = await fileIn.files[0].text();
+    });
+    ki.addEventListener("submit", async ev => {
+      ev.preventDefault();
+      const f = new FormData(ki), out = ki.querySelector(".kimport-out");
+      const dry = f.get("dry_run") === "on";
+      try {
+        const r = await api(ki.dataset.kimport, "POST", { text: f.get("text"), update: f.get("update") === "on", dry_run: dry });
+        out.innerHTML = (dry ? `<b>${escapeHtml(tr("kb_io_dry"))}:</b> ` : "")
+          + escapeHtml(tr("kb_io_result").replace("{added}", r.added).replace("{updated}", r.updated)
+                       .replace("{skipped}", r.skipped).replace("{errors}", r.errors.length))
+          + (r.errors.length ? `<ul class="bad">${r.errors.map(e => `<li>${escapeHtml(e)}</li>`).join("")}</ul>` : "");
+        if (!dry && (r.added || r.updated)) setTimeout(() => location.reload(), 1500);
+      } catch (e) { out.innerHTML = `<p class="bad">${escapeHtml(e.message)}</p>`; }
+    });
+  }
+
   document.querySelectorAll("[data-k]").forEach(card => {
     if (card.tagName !== "ARTICLE") return;
     const url = card.dataset.k;
     card.querySelectorAll("[data-set]").forEach(b => b.addEventListener("click", async () => {
       await api(url, "POST", { status: b.dataset.set }); location.reload();
     }));
+    // rule drafts: commands / deploy / remove
+    const out = card.querySelector(".rd-out");
+    const show = html => { out.hidden = false; out.innerHTML = html; };
+    const listHtml = (cls, title, items) => items && items.length
+      ? `<div class="${cls}"><b>${escapeHtml(title)}</b><ul>${items.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>` : "";
+    const stepsHtml = rec => `<ul class="steps">${(rec.steps || []).map(s =>
+      `<li class="${s.ok ? "ok" : "bad"}">${s.ok ? "✓" : "✗"} ${escapeHtml(s.step)} ${escapeHtml(s.detail || "")}</li>`).join("")}</ul>`
+      + (rec.error ? `<p class="bad">${escapeHtml(rec.error)}</p>` : "");
+    const cmds = card.querySelector("[data-cmds]");
+    if (cmds) cmds.addEventListener("click", async () => {
+      cmds.disabled = true;
+      try {
+        const v = await api(url + "/rule", "GET");
+        show(listHtml("bad", tr("rd_errors"), v.analysis.errors) + listHtml("warn", tr("rd_risky"), v.analysis.risky)
+          + (v.deploy_enabled ? "" : `<p class="muted">${escapeHtml(tr("rd_disabled"))}</p>`)
+          + `<p class="muted">${escapeHtml(tr("rd_cmds_note"))}</p><pre class="code">${escapeHtml(v.commands)}</pre>`
+          + `<button class="btn small" data-copy-out>${escapeHtml(tr("copy"))}</button>`);
+        out.querySelector("[data-copy-out]").addEventListener("click", ev => {
+          navigator.clipboard.writeText(v.commands); ev.target.textContent = tr("copied"); });
+      } catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); }
+      cmds.disabled = false;
+    });
+    const dep = card.querySelector("[data-deploy]");
+    if (dep) dep.addEventListener("click", async () => {
+      let v;
+      try { v = await api(url + "/rule", "GET"); } catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); return; }
+      const a = v.analysis;
+      if (a.errors.length) { show(listHtml("bad", tr("rd_errors"), a.errors)); return; }
+      let confirmText = "";
+      if (a.risky.length) {
+        confirmText = prompt(tr("rd_type_ids").replace("{reasons}", a.risky.join("\n")).replace("{ids}", a.ids.join(",")));
+        if (confirmText === null) return;
+      } else if (!confirm(tr("rd_confirm").replace("{file}", v.file))) return;
+      card.querySelectorAll("button").forEach(b => b.disabled = true);
+      show(`<p>⏳ ${escapeHtml(tr("rd_working"))}</p>`);
+      try {
+        const rec = await api(url + "/deploy", "POST", { confirm: confirmText });
+        show(stepsHtml(rec));
+        setTimeout(() => location.reload(), rec.state === "deployed" ? 2500 : 8000);
+      } catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); card.querySelectorAll("button").forEach(b => b.disabled = false); }
+    });
+    const und = card.querySelector("[data-undeploy]");
+    if (und) und.addEventListener("click", async () => {
+      let v;
+      try { v = await api(url + "/rule", "GET"); } catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); return; }
+      if (!confirm(tr("rd_unconfirm").replace("{file}", v.file))) return;
+      card.querySelectorAll("button").forEach(b => b.disabled = true);
+      show(`<p>⏳ ${escapeHtml(tr("rd_working"))}</p>`);
+      try { const rec = await api(url + "/undeploy", "POST"); show(stepsHtml(rec)); setTimeout(() => location.reload(), 2500); }
+      catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); card.querySelectorAll("button").forEach(b => b.disabled = false); }
+    });
+
     const del = card.querySelector("[data-del]");
     if (del) del.addEventListener("click", async () => {
       if (del.dataset.confirm !== "1") { del.dataset.confirm = "1"; del.textContent = tr("sure"); return; }
@@ -125,6 +200,25 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // open a chat about a finding
+  document.querySelectorAll("[data-chat-finding]").forEach(b => b.addEventListener("click", async () => {
+    b.disabled = true;
+    try { const r = await api(b.dataset.chatFinding, "POST"); location.href = r.url; }
+    catch (e) { b.disabled = false; alert(e.message); }
+  }));
+
+  // recommendation inbox: one decision applies to every occurrence, then the next item
+  const card = document.getElementById("inbox");
+  if (card) card.querySelectorAll("[data-status]").forEach(b => b.addEventListener("click", async () => {
+    const out = card.querySelector(".saved");
+    card.querySelectorAll("button").forEach(x => x.disabled = true);
+    try {
+      await api(card.dataset.act, "POST", { refs: JSON.parse(card.dataset.refs), user_status: b.dataset.status,
+                                            user_note: card.querySelector("[data-note]").value });
+      location.href = card.dataset.next;   // the same index now shows the next item
+    } catch (e) { out.textContent = tr("error") + " " + e.message; card.querySelectorAll("button").forEach(x => x.disabled = false); }
+  }));
+
   // connection test
   document.querySelectorAll("[data-check]").forEach(btn => btn.addEventListener("click", async () => {
     const box = document.getElementById("checks");
@@ -135,6 +229,19 @@ document.addEventListener("DOMContentLoaded", () => {
         `<li class="${x.ok ? "ok" : "bad"}"><b>${escapeHtml(x.ok ? tr("ok") : tr("fail"))}</b> ${escapeHtml(x.label)} — <span class="small">${escapeHtml(x.detail)}</span></li>`).join("") + "</ul>";
     } catch (e) { box.textContent = tr("error") + " " + e.message; }
     btn.disabled = false; btn.textContent = tr("test");
+  }));
+
+  // notification test
+  document.querySelectorAll("[data-notify-test]").forEach(btn => btn.addEventListener("click", async () => {
+    const box = document.getElementById("checks");
+    btn.disabled = true; box.hidden = false; box.textContent = tr("testing");
+    try {
+      const r = await api(`/api/e/${btn.dataset.notifyTest}/notify-test`, "POST");
+      box.innerHTML = r.results.length ? "<ul class='checklist'>" + r.results.map(x =>
+        `<li class="${x.ok ? "ok" : "bad"}"><b>${escapeHtml(x.ok ? tr("ok") : tr("fail"))}</b> ${escapeHtml(x.channel)} — <span class="small">${escapeHtml(x.detail)}</span></li>`).join("") + "</ul>"
+        : escapeHtml(r.message || "");
+    } catch (e) { box.textContent = tr("error") + " " + e.message; }
+    btn.disabled = false;
   }));
 
   // chat
@@ -163,7 +270,7 @@ function initChat(chat) {
     const text = ta.value.trim();
     if (!text) return;
     const hint = msgs.querySelector(".hint"); if (hint) hint.remove();
-    add("user", escapeHtml(text));
+    add("user", `<span class="ut">${escapeHtml(text)}</span>`);
     ta.value = ""; form.querySelector("button").disabled = true;
     const pend = add("assistant pending", escapeHtml(tr("thinking")));
     try {
