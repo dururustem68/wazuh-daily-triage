@@ -22,6 +22,7 @@ All settings work either in `.env` (single environment) or in the `llm:` block o
 | `LLM_REASONING_EFFORT` | `extra_body.reasoning_effort` | e.g. `low`, `medium`, `high` |
 | `LLM_EXTRA_BODY` | `extra_body` | JSON object passed to the provider verbatim |
 | `LLM_MAX_TOOL_STEPS` | `max_tool_steps` | tool-call budget per run (cost ceiling, default 14) |
+| `LLM_MAX_RETRIES` | `max_retries` | retries on 429/5xx/overload with backoff (default 4) |
 
 After changing anything run `docker compose exec triage python -m app.check` — the last line tests the model.
 

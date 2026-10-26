@@ -187,8 +187,18 @@ class Runtime:
                                    [k for k in knowledge if k["kind"] != "answer"], self.settings.app.timezone, lang)
             usr = triage_user_message(_compact(collected), prev, answers, requests)
             tb = ToolBox(env, rt.ix, rt.api, repo, mode="triage", run_id=run_id)
-            res = await run_agent(self.llm_for(env), sysmsg, [{"role": "user", "content": usr}], tb,
-                                  llm_cfg.max_tool_steps, stop_on="submit_report")
+            try:
+                res = await run_agent(self.llm_for(env), sysmsg, [{"role": "user", "content": usr}], tb,
+                                      llm_cfg.max_tool_steps, stop_on="submit_report")
+            except LLMError as e:
+                # The AI is unavailable (after retries): keep the deterministic part instead of losing the run.
+                log.warning("run %s: AI analysis failed, saving deterministic report: %s", run_id, e)
+                rep = flags_only_report(flags, str(e), lang)
+                run.update(status="done", stage=None, finished_at=now_iso(), ai_error=str(e)[:500], **rep,
+                           agent={"steps": 0, "stopped": "llm_error", "trace": [],
+                                  "provider": llm_cfg.provider, "model": llm_cfg.model})
+                await repo.save_run(run)  # requests stay open for the next run
+                return run
             rep = normalize_report(tb.submitted, res.text, lang)
             run.update(
                 status="done", stage=None, finished_at=now_iso(), **rep,
@@ -395,6 +405,18 @@ def normalize_report(sub: dict | None, fallback_text: str = "", lang: str = "en"
             "findings": findings, "questions": questions,
             "open_items": [_s(x) for x in _as_list(sub.get("open_items"))],
             "closed_items": [_s(x) for x in _as_list(sub.get("closed_items"))]}
+
+
+def flags_only_report(flags: list[dict], err: str, lang: str) -> dict:
+    """Report built from deterministic flags only (used when the LLM is unavailable)."""
+    findings = []
+    for f in flags:
+        crit = f.get("severity") == "critical"
+        findings.append({"id": f"f{len(findings) + 1}", "label": "investigate", "severity": "high" if crit else "medium",
+                         "title": f.get("message", f.get("code", "")), "detail": f"`{f.get('code')}`",
+                         "evidence": [], "rule_ids": [], "agents": [], "user_status": "new"})
+    return {"summary_md": t(lang, "run.ai_failed", err=err[:300]), "health_assessment": "",
+            "findings": findings, "questions": [], "open_items": [], "closed_items": []}
 
 
 def _compact(c: dict) -> dict:

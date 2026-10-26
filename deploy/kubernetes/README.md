@@ -6,7 +6,7 @@ configuration and secrets).
 ```sh
 cp -r deploy/kubernetes/example ~/triage-overlay && cd ~/triage-overlay
 # point the base at the repository:
-sed -i 's#  - ../base .*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.1.1#' kustomization.yaml
+sed -i 's#  - ../base .*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.1.2#' kustomization.yaml
 cp secret.env.example secret.env && vi secret.env environments.yaml context.md
 kubectl apply -k .
 kubectl -n wazuh-daily-triage rollout status deploy/wazuh-daily-triage

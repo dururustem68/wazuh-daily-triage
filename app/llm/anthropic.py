@@ -7,7 +7,7 @@ import json
 
 import httpx
 
-from .base import LLMError, LLMResponse, ToolCall
+from .base import LLMError, LLMResponse, ToolCall, post_with_retry
 
 
 class AnthropicLLM:
@@ -59,9 +59,9 @@ class AnthropicLLM:
             body["tools"] = [{"name": t["name"], "description": t["description"],
                               "input_schema": t["parameters"]} for t in tools]
         try:
-            r = await self.client.post(self.url, content=json.dumps(body), headers={
+            r = await post_with_retry(self.client, self.url, content=json.dumps(body), headers={
                 "x-api-key": self.cfg.api_key, "anthropic-version": "2023-06-01",
-                "content-type": "application/json"})
+                "content-type": "application/json"}, retries=self.cfg.max_retries, label="Anthropic API")
         except httpx.HTTPError as e:
             raise LLMError(f"cannot reach Anthropic API: {e}") from e
         if r.status_code >= 400:

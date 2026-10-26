@@ -96,6 +96,7 @@ class LLMConfig(BaseModel):
     token_param: Literal["max_tokens", "max_completion_tokens"] = "max_tokens"
     extra_body: dict = Field(default_factory=dict)  # passed through to the provider verbatim
     max_tool_steps: int = 14
+    max_retries: int = 4              # retries on 429/5xx/overload with backoff (honours Retry-After)
     timeout: float = 180.0
 
     @field_validator("temperature", mode="before")
@@ -215,6 +216,8 @@ def llm_from_env() -> dict:
         extra.update(json.loads(E("LLM_EXTRA_BODY")))
     if extra:
         llm["extra_body"] = extra
+    if E("LLM_MAX_RETRIES"):
+        llm["max_retries"] = int(E("LLM_MAX_RETRIES"))
     if E("LLM_MAX_TOOL_STEPS"):
         llm["max_tool_steps"] = int(E("LLM_MAX_TOOL_STEPS"))
     return llm

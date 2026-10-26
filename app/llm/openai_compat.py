@@ -7,7 +7,7 @@ import json
 
 import httpx
 
-from .base import LLMError, LLMResponse, ToolCall
+from .base import LLMError, LLMResponse, ToolCall, post_with_retry
 
 
 class OpenAICompatLLM:
@@ -54,7 +54,8 @@ class OpenAICompatLLM:
             headers["authorization"] = f"Bearer {self.cfg.api_key}"
             headers["api-key"] = self.cfg.api_key  # Azure OpenAI
         try:
-            r = await self.client.post(self.url, content=json.dumps(body), headers=headers)
+            r = await post_with_retry(self.client, self.url, content=json.dumps(body), headers=headers,
+                                      retries=self.cfg.max_retries, label="LLM endpoint")
         except httpx.HTTPError as e:
             raise LLMError(f"cannot reach LLM endpoint ({self.url}): {e}") from e
         if r.status_code >= 400:

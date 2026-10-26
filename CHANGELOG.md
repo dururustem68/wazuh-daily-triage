@@ -3,6 +3,14 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] — 2026-10-26
+
+### Fixed
+- LLM calls are retried with backoff on overload / rate-limit / gateway errors (429, 5xx, 529), honouring
+  `Retry-After` (`max_retries`, `LLM_MAX_RETRIES`, default 4).
+- If the AI provider is still unavailable, the run is saved with the deterministic health flags and data
+  instead of failing; open requests are kept for the next run.
+
 ## [0.1.1] — 2026-10-26
 
 ### Added

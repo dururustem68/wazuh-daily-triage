@@ -269,3 +269,43 @@ async def test_openai_body_params():
     await llm.complete("s", [{"role": "user", "content": "x"}], [])
     assert seen["url"] == "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
     assert "temperature" not in seen and seen["max_completion_tokens"] == 4096 and seen["reasoning_effort"] == "low"
+
+
+async def test_retry_on_overload(monkeypatch):
+    import asyncio as _a
+
+    from app.config import LLMConfig
+    sleeps = []
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+    monkeypatch.setattr(_a, "sleep", fake_sleep)
+    calls = {"n": 0}
+
+    def h(req):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(503, json={"error": {"status": "UNAVAILABLE"}})
+        if calls["n"] == 2:
+            return httpx.Response(429, headers={"retry-after": "7"}, json={})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]})
+    llm = OpenAICompatLLM(LLMConfig(provider="openai", model="m", api_key="k"))
+    llm.client = httpx.AsyncClient(transport=httpx.MockTransport(h))
+    r = await llm.complete("s", [{"role": "user", "content": "x"}], [])
+    assert r.text == "ok" and calls["n"] == 3 and sleeps[1] == 7
+
+
+async def test_llm_failure_keeps_deterministic_report(settings, monkeypatch):
+    from app.llm.base import LLMError
+    rt = Runtime(settings, demo=True)
+
+    class Down:
+        name = "down"
+
+        async def complete(self, *a, **k):
+            raise LLMError("LLM 503: high demand")
+    monkeypatch.setattr(rt, "llm_for", lambda env: Down())
+    run = await rt.run_triage(rt.get("demo"), "down-1")
+    assert run["status"] == "done" and run["ai_error"].startswith("LLM 503")
+    assert run["findings"] and run["collected"]["volume"]["total"] > 0
+    assert "AI analysis unavailable" in run["summary_md"]
