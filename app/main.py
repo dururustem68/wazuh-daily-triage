@@ -198,8 +198,9 @@ async def set_lang(request: Request, lang: str = Form(...)):
     if not back.startswith(str(request.base_url)):
         back = "/"
     r = RedirectResponse(back, status_code=303)
-    if lang in LANGUAGES:
-        r.set_cookie("lang", lang, max_age=365 * 86400, samesite="strict", secure=COOKIE_SECURE)
+    code = next((x for x in LANGUAGES if x == lang), None)   # the stored value is always one of ours
+    if code:
+        r.set_cookie("lang", code, max_age=365 * 86400, samesite="strict", secure=COOKIE_SECURE)
     return r
 
 

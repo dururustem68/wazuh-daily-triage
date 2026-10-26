@@ -19,6 +19,9 @@ from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import Any
 
+from defusedxml import ElementTree as SafeET
+from defusedxml.common import DefusedXmlException
+
 from ..collector import TS, _b, _parse, iso
 from ..config import Environment
 from ..redact import redact
@@ -274,7 +277,7 @@ class ToolBox:
         xml = a["xml"]
         res: dict[str, Any] = {}
         try:
-            root = ET.fromstring(f"<root>{xml}</root>")
+            root = SafeET.fromstring(f"<root>{xml}</root>")   # no DTD / entity expansion
             ids = [r.get("id") for r in root.iter("rule")]
             res["xml_ok"] = True
             res["rule_ids"] = ids
@@ -291,6 +294,8 @@ class ToolBox:
                         if el.get("type") in (None, "osregex") and "(" in (el.text or "") and "|" in (el.text or ""):
                             issues.append(f"rule {r.get('id')}: <{tag}> OS_Regex does not support grouping; write ^400$|^408$ or use pcre2")
             res["warnings"] = issues
+        except DefusedXmlException:
+            return {"xml_ok": False, "error": "DTDs and entities are not allowed"}
         except ET.ParseError as e:
             return {"xml_ok": False, "error": str(e)}
         if self.api and res.get("rule_ids"):

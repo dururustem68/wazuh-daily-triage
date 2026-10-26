@@ -3,6 +3,15 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] — 2026-10-27
+
+### Security
+- Rule XML is parsed with `defusedxml` (no DTDs / entity expansion — CodeQL "XML internal entity expansion").
+- Rule-draft extraction uses plain string operations instead of backtracking regular expressions
+  (CodeQL "polynomial regular expression"); input is capped at 200 KB.
+- The language cookie is written from the server's own list of codes, never from request data.
+- Dependency added: `defusedxml`.
+
 ## [0.6.0] — 2026-10-26
 
 ### Added

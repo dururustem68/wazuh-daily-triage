@@ -198,3 +198,12 @@ async def test_range_error_also_reports_collision():
     a = await R.analyse(DETECT.replace("100950", "100212"), cfg, er.api)
     assert any("outside the allowed range" in e for e in a["errors"])
     assert any("already exists" in e for e in a["errors"])
+
+
+def test_xml_entities_refused_and_extraction():
+    bomb = '<!DOCTYPE r [<!ENTITY a "aaaa"><!ENTITY b "&a;&a;&a;">]><group name="x,"><rule id="1" level="3"><description>&b;</description></rule></group>'
+    rules, errors = R.parse(bomb)
+    assert not rules and errors[0].startswith("XML error")
+    assert R.extract_xml({"body": "text\n```xml\n<rule id=\"1\"/>\n```\nmore"}) == '<rule id="1"/>'
+    assert R.extract_xml({"body": "a <group name=\"g\"><rule id=\"2\"/></group> b"}).startswith("<group")
+    assert R.extract_xml({"body": "```" * 5000}) == ""          # no catastrophic backtracking

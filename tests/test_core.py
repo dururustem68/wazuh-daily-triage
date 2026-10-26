@@ -349,7 +349,7 @@ async def test_notifications(settings, monkeypatch):
 
     def h(req):
         body = json.loads(req.content)
-        if "api.telegram.org" in str(req.url):
+        if req.url.host == "api.telegram.org":
             sent["tg"].append(body)
         else:
             sent["teams"].append(body)

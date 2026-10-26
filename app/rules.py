@@ -11,8 +11,11 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # ParseError only; parsing goes through defusedxml
 from datetime import UTC, datetime
+
+from defusedxml import ElementTree as SafeET
+from defusedxml.common import DefusedXmlException
 
 from .config import RuleDeployCfg
 from .wazuh.api import WazuhAPI, WazuhAPIError
@@ -27,21 +30,24 @@ def extract_xml(entry: dict) -> str:
     """The XML of a rule draft: the explicit `xml` field, else the <group>/<rule> elements inside the body."""
     if (entry.get("xml") or "").strip():
         return entry["xml"].strip()
-    body = entry.get("body") or ""
-    fenced = re.findall(r"```(?:xml)?\s*\n(.*?)```", body, re.S)
-    for f in fenced:
-        if "<rule" in f:
-            return f.strip()
-    m = re.search(r"<group\b.*</group>", body, re.S)
-    if m:
-        return m.group(0).strip()
-    m = re.search(r"<rule\b.*</rule>", body, re.S)
-    return m.group(0).strip() if m else ""
+    body = (entry.get("body") or "")[:200_000]
+    # fenced blocks (``` or ```xml), found with plain string operations (no backtracking on long input)
+    parts = body.split("```")
+    for block in parts[1::2]:
+        first, _, rest = block.partition("\n")
+        code = rest if first.strip() in ("", "xml") else block
+        if "<rule" in code:
+            return code.strip()
+    for tag in ("group", "rule"):
+        a, b = body.find(f"<{tag}"), body.rfind(f"</{tag}>")
+        if a != -1 and b > a:
+            return body[a:b + len(tag) + 3].strip()
+    return ""
 
 
 def _normalise(xml: str) -> str:
     """Rules must sit inside <group>; wrap bare <rule> elements."""
-    if re.match(r"\s*<group\b", xml):
+    if xml.lstrip().startswith("<group"):
         return xml
     return f'<group name="wazuh-daily-triage,">\n{xml}\n</group>'
 
@@ -55,7 +61,9 @@ def parse(xml: str) -> tuple[list[dict], list[str]]:
     if "wdt:" in xml or HEREDOC in xml:
         errors.append("XML contains reserved markers (wdt: / heredoc terminator)")
     try:
-        root = ET.fromstring(f"<root>{_normalise(xml)}</root>")
+        root = SafeET.fromstring(f"<root>{_normalise(xml)}</root>")   # no DTD / entity expansion
+    except DefusedXmlException:
+        return [], ["XML error: DTDs and entities are not allowed"]
     except ET.ParseError as e:
         return [], [f"XML error: {e}"]
     for top in root:
