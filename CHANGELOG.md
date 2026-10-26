@@ -3,6 +3,18 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Notification channels **Slack**, **Discord**, **generic JSON webhook** and **ntfy** (push), alongside
+  e-mail, Telegram and Teams — configurable per channel via `notify:` or `SLACK_WEBHOOK_URL`,
+  `DISCORD_WEBHOOK_URL`, `WEBHOOK_URL`/`WEBHOOK_TOKEN`, `NTFY_TOPIC`/`NTFY_TOKEN`.
+- **Spanish** and **German** UI (`es`, `de`), selectable from the language menu; the report language follows.
+
+### Changed
+- CI now runs **CodeQL** and a **dependency audit** (`pip-audit`); releases attach an **SPDX SBOM** artifact.
+- Added `ROADMAP.md`.
+
 ## [0.6.1] — 2026-10-27
 
 ### Security

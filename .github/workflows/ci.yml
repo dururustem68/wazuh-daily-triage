@@ -23,6 +23,9 @@ jobs:
       - run: pip install -r requirements.txt -r requirements-dev.txt
       - run: ruff check .
       - run: pytest -q
+      - uses: pypa/gh-action-pip-audit@v1.1.1
+        with:
+          inputs: requirements.txt
 
   docker:
     runs-on: ubuntu-latest

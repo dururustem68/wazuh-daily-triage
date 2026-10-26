@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, field_validator
 from .notify import NotifyCfg
 
 _ENV_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
-LANGUAGES = ("en", "tr")
+LANGUAGES = ("en", "tr", "es", "de")
 
 
 def _expand(value):
@@ -416,6 +416,10 @@ def notify_from_env() -> dict:
                   "verify_tls": _bool(E("SMTP_VERIFY_TLS"), True)},
         "telegram": {"bot_token": E("TELEGRAM_BOT_TOKEN", ""), "chat_id": E("TELEGRAM_CHAT_ID", "")},
         "teams": {"webhook_url": E("TEAMS_WEBHOOK_URL", "")},
+        "slack": {"webhook_url": E("SLACK_WEBHOOK_URL", "")},
+        "discord": {"webhook_url": E("DISCORD_WEBHOOK_URL", "")},
+        "webhook": {"url": E("WEBHOOK_URL", ""), "token": E("WEBHOOK_TOKEN", "")},
+        "ntfy": {"topic": E("NTFY_TOPIC", ""), "token": E("NTFY_TOKEN", "")},
     }
 
 

@@ -227,8 +227,9 @@ def test_settings_from_env(monkeypatch, tmp_path):
 
 
 def test_i18n_catalogs_match():
-    from app.i18n import EN, TR
-    assert set(EN) == set(TR)
+    from app.i18n import DE, EN, ES, TR
+    for lang in (TR, ES, DE):
+        assert set(EN) == set(lang)
 
 
 async def test_turkish_report_language(tmp_path):
@@ -404,6 +405,44 @@ async def test_notifications(settings, monkeypatch):
     rt.notify_transport = tr
     rec = await rt.rule_deploy("demo", k["id"], "alice")
     assert rec["state"] == "deployed" and "100990" in sent["tg"][n]["text"] and "alice" in sent["tg"][n]["text"]
+
+
+async def test_slack_discord_webhook_ntfy(settings):
+    from app import notify as N
+    seen = []
+
+    def h(req):
+        body = None
+        if req.content:
+            try:
+                body = json.loads(req.content)
+            except ValueError:
+                body = req.content.decode("utf-8", "replace")
+        seen.append({"host": req.url.host, "path": req.url.path, "auth": req.headers.get("authorization"),
+                     "title": req.headers.get("title"), "body": body})
+        return httpx.Response(200, json={"ok": True})
+    s2 = settings.model_copy(deep=True)
+    s2.notify = N.NotifyCfg(slack=N.SlackCfg(webhook_url="https://hooks.slack.com/services/x"),
+                            discord=N.DiscordCfg(webhook_url="https://discord.com/api/webhooks/y"),
+                            webhook=N.WebhookCfg(url="https://soar.example.invalid/hook", token="t"),
+                            ntfy=N.NtfyCfg(topic="wazuh-triage"))
+    rt = Runtime(s2, demo=True)
+    er = rt.get("demo")
+    er.env.liveness.enabled = False
+    run = {"run_id": "n-web", "env": "demo", "status": "done", "started_at": "2026-10-26T07:50:00.000Z",
+           "flags": [{"severity": "critical", "code": "silence", "message": "Last alert was 300 min ago"}]}
+    await er.repo.save_run(run)
+    res = await rt.notify_run(er, run, transport=httpx.MockTransport(h))
+    assert res == {"slack": "ok", "discord": "ok", "webhook": "ok", "ntfy": "ok"}, res
+    by_host = {s["host"]: s for s in seen}
+    assert {"hooks.slack.com", "discord.com", "soar.example.invalid", "ntfy.sh"} <= set(by_host)
+    slack = by_host["hooks.slack.com"]
+    assert slack["body"]["blocks"][0]["type"] == "header" and "Last alert was 300" in slack["body"]["blocks"][1]["text"]["text"]
+    assert by_host["discord.com"]["body"]["content"].startswith("[Wazuh Daily Triage]")
+    wh = by_host["soar.example.invalid"]
+    assert wh["auth"] == "Bearer t" and wh["body"]["title"] and wh["body"]["lines"]
+    nt = by_host["ntfy.sh"]
+    assert nt["path"] == "/wazuh-triage" and nt["title"] and nt["auth"] is None
 
 
 def test_empty_env_vars_fall_back(tmp_path, monkeypatch):

@@ -51,12 +51,24 @@ notify:
     chat_id: ${TELEGRAM_CHAT_ID}
   teams:
     webhook_url: ${TEAMS_WEBHOOK_URL}
+  slack:
+    webhook_url: ${SLACK_WEBHOOK_URL}
+  discord:
+    webhook_url: ${DISCORD_WEBHOOK_URL}
+  webhook:                    # generic JSON webhook (Zapier, Make, a SOAR/SIEM endpoint…)
+    url: ${WEBHOOK_URL}
+    token: ${WEBHOOK_TOKEN}   # optional: Authorization: Bearer <token>
+    headers: {}               # optional extra headers
+  ntfy:
+    topic: wazuh-triage       # or a full URL https://ntfy.sh/wazuh-triage
+    token: ${NTFY_TOKEN}      # optional
 ```
 
 Without a `notify:` block the same settings are read from environment variables:
 `NOTIFY_UI_URL`, `NOTIFY_REPEAT_HOURS`, `NOTIFY_ON_RUN_ERROR`, `NOTIFY_ON_RUN_SUMMARY`, `NOTIFY_ON_RULE_DEPLOY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`,
 `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_TO` (comma separated), `TELEGRAM_BOT_TOKEN`,
-`TELEGRAM_CHAT_ID`, `TEAMS_WEBHOOK_URL`. A channel is active when its required fields are set.
+`TELEGRAM_CHAT_ID`, `TEAMS_WEBHOOK_URL`, `SLACK_WEBHOOK_URL`, `DISCORD_WEBHOOK_URL`, `WEBHOOK_URL`,
+`WEBHOOK_TOKEN`, `NTFY_TOPIC`, `NTFY_TOKEN`. A channel is active when its required fields are set.
 
 Use **Test notifications** on the environment page to check every configured channel.
 
@@ -70,5 +82,15 @@ Use **Test notifications** on the environment page to check every configured cha
 - **Microsoft Teams:** in the channel → *Workflows* → template **"Post to a channel when a webhook request is
   received"** → copy the URL. (The old Office 365 "Incoming Webhook" connectors are retired.) Messages are sent as
   Adaptive Cards.
+- **Slack:** *Your Apps* → create an app → *Incoming Webhooks* → add to a channel → copy the Webhook URL. Messages
+  are sent as block-kit sections with a header and a link to the report.
+- **Discord:** channel → *Edit* → *Integrations* → *Webhooks* → *New Webhook* → *Copy Webhook URL*. The message body
+  is plain text (Discord webhooks do not render markdown links from an arbitrary URL).
+- **Generic webhook:** any HTTP(S) endpoint that accepts a JSON body. It receives
+  `{"title", "lines", "link", "text"}`; set `token` for a `Bearer` header or `headers` for anything else. Point it at
+  Zapier/Make to fan out to services without a dedicated channel.
+- **ntfy:** [ntfy.sh](https://ntfy.sh) (self-hostable) push notifications. Set `topic` to a full URL or just the
+  topic name; the message title becomes the notification title and `link` becomes the tap action. Add `token` for a
+  protected topic.
 - **E-mail:** any SMTP relay. Port 587 + `starttls`, or 465 + `ssl`; `security: none` only on a trusted internal
   relay.

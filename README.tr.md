@@ -6,7 +6,7 @@ geri yazar, yalnızca insan kararı gereken yerde size soru sorar ve cevapların
 
 Yapay zekâ anahtarınız sizin: Anthropic, OpenAI, Azure OpenAI ya da OpenAI uyumlu herhangi bir uç nokta (Ollama,
 vLLM, LM Studio, LiteLLM). Tek Docker konteyner; varsayılan olarak Wazuh'a karşı salt okunur. Kritik durumları ve
-koşu özetlerini e-posta, Telegram ya da Microsoft Teams ile bildirir.
+koşu özetlerini e-posta, Telegram, Microsoft Teams, Slack, Discord, ntfy ya da jenerik webhook ile bildirir.
 
 [English README](README.md) · [Yapay zekâ sağlayıcıları](docs/providers.tr.md) · [Bildirimler](docs/notifications.md) · [Yetkiler ve ağ](docs/permissions.md) · [Kural uygulama](docs/rule-deployment.md) · [Katkı](CONTRIBUTING.md) · [Güvenlik](SECURITY.md)
 
@@ -39,9 +39,9 @@ koşu özetlerini e-posta, Telegram ya da Microsoft Teams ile bildirir.
 - **Öneri kuyruğu** — bulgular tek tek ve koşular arası tekilleştirilmiş gelir; bir karar tüm tekrarlara uygulanır.
   Sunucuda bakılması gerekenler salt okunur komutlarla gelir; **Sohbette incele** ile çıktıyı yapıştırıp bir sonraki
   adımı alırsınız.
-- **E-posta, Telegram ve Microsoft Teams bildirimleri** — kritik durumlar (SIEM sessizliği, indexer red, gerçek
-  olay; aynı konu her koşuda tekrarlanmaz), isteğe bağlı her koşu sonrası kısa özet ve kural uygulamaları
-  ([docs/notifications.md](docs/notifications.md)).
+- **E-posta, Telegram, Microsoft Teams, Slack, Discord, ntfy ve jenerik webhook bildirimleri** — kritik durumlar
+  (SIEM sessizliği, indexer red, gerçek olay; aynı konu her koşuda tekrarlanmaz), isteğe bağlı her koşu sonrası
+  kısa özet ve kural uygulamaları ([docs/notifications.md](docs/notifications.md)).
 - **Canlı doğrulama** — uygulanan, onaylanan ya da kalıcı yapılan kural her rapordan sonra gerçek olaylarla
   kontrol edilir: "canlıda 12× doğrulandı (son …)" ya da "5 gündür görülmedi". Logtest'in geçmesi kanıt değildir;
   gerçek olay kanıttır.
@@ -69,7 +69,7 @@ koşu özetlerini e-posta, Telegram ya da Microsoft Teams ile bildirir.
   ([docs/eval.md](docs/eval.md)).
 - **Sohbet** — ortam hakkında soru sorun; aynı araçlarla, kanıta dayalı cevap.
 - **Kayıtlar Wazuh'un içinde** — her ortamın kendi indexer'ında `daily-triage-runs / -knowledge / -chat`.
-- **Çok ortam, çok dil** (İngilizce, Türkçe — sol menünün altından seçilir), ortam başına model (ör. düzenlemeye tabi veri
+- **Çok ortam, çok dil** (İngilizce, Türkçe, İspanyolca, Almanca — sol menünün altından seçilir), ortam başına model (ör. düzenlemeye tabi veri
   için yerel model), arayüzde ve komut satırında bağlantı testi.
 
 ## Hızlı başlangıç
@@ -128,7 +128,7 @@ Anahtar sizin. Her sağlayıcı için ayrıntılı kurulum: **[docs/providers.tr
 
 Model araç kullanımını (function calling) desteklemelidir. Her ortam kendi modelini seçebilir (`llm:` bloğu).
 
-## Bildirimler — e-posta, Telegram, Microsoft Teams
+## Bildirimler — e-posta, Telegram, Teams, Slack, Discord, ntfy, webhook
 
 | Ne zaman | Ayar (varsayılan) |
 |---|---|
@@ -152,6 +152,15 @@ TELEGRAM_CHAT_ID=-1001234567890                    # aşağıya bakın
 
 TEAMS_WEBHOOK_URL=https://...                      # kanal → Workflows → "Post to a channel when a webhook request is received"
 
+SLACK_WEBHOOK_URL=https://hooks.slack.com/...      # Your Apps → Incoming Webhooks
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...   # kanal → Edit → Integrations → Webhooks
+
+WEBHOOK_URL=https://soar.example.internal/hook     # jenerik JSON webhook (Zapier/Make/SOAR)
+WEBHOOK_TOKEN=...                                  # isteğe bağlı → Authorization: Bearer
+
+NTFY_TOPIC=wazuh-triage                            # https://ntfy.sh/wazuh-triage (ya da tam URL)
+NTFY_TOKEN=...                                     # isteğe bağlı, korumalı konu için
+
 SMTP_HOST=smtp.example.org
 SMTP_PORT=587
 SMTP_SECURITY=starttls                             # starttls | ssl | none
@@ -167,6 +176,12 @@ SMTP_TO=secops@example.org,oncall@example.org
   aynı bot token'ı ve chat id burada da çalışır.
 - **Teams:** eski Office 365 "Incoming Webhook" bağlayıcıları kaldırıldı; yukarıdaki Workflows şablonunu kullanın.
   Mesajlar rapor bağlantılı Adaptive Card olarak gelir.
+- **Slack:** bir uygulama oluşturun → *Incoming Webhooks* → kanala ekleyin → Webhook URL'ini kopyalayın. Mesajlar
+  rapor bağlantılı block-kit bölümleri olarak gelir.
+- **Discord:** kanal → *Edit* → *Integrations* → *Webhooks* → *New Webhook*. Düz metin mesajlar.
+- **Jenerik webhook:** JSON gövdesi kabul eden herhangi bir uç nokta (`{"title", "lines", "link", "text"}`);
+  `WEBHOOK_TOKEN` ile `Bearer` başlığı ekleyin.
+- **ntfy:** `https://ntfy.sh/<topic>` adresine (veya kendi sunucunuza) push; başlık bildirim başlığı olur.
 - Çok ortamlı kurulumda aynı anahtarlar `notify:` bloğuna (genel ya da ortam başına) yazılır —
   bkz. [docs/notifications.md](docs/notifications.md).
 

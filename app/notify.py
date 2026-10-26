@@ -60,6 +60,43 @@ class TeamsCfg(BaseModel):
         return bool(self.webhook_url)
 
 
+class SlackCfg(BaseModel):
+    webhook_url: str = ""        # Slack Incoming Webhook (api.slack.com → Your Apps → Incoming Webhooks)
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.webhook_url)
+
+
+class DiscordCfg(BaseModel):
+    webhook_url: str = ""        # channel → Edit → Integrations → Webhooks → Copy Webhook URL
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.webhook_url)
+
+
+class WebhookCfg(BaseModel):
+    """Generic JSON webhook: any HTTP endpoint that accepts a JSON body (Slack-compatible,
+    Zapier, Make, a custom SIEM/SOAR endpoint…)."""
+    url: str = ""
+    token: str = ""              # optional: sent as `Authorization: Bearer <token>`
+    headers: dict[str, str] = Field(default_factory=dict)   # optional extra headers
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.url)
+
+
+class NtfyCfg(BaseModel):
+    topic: str = ""              # full URL (https://ntfy.sh/mytopic) or just the topic name
+    token: str = ""              # optional: sent as `Authorization: Bearer <token>`
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.topic)
+
+
 class NotifyCfg(BaseModel):
     enabled: bool = True
     on_critical_flags: bool = True      # SIEM silent, indexer red, daemons down, disk >= 90 %
@@ -74,10 +111,16 @@ class NotifyCfg(BaseModel):
     email: EmailCfg = Field(default_factory=EmailCfg)
     telegram: TelegramCfg = Field(default_factory=TelegramCfg)
     teams: TeamsCfg = Field(default_factory=TeamsCfg)
+    slack: SlackCfg = Field(default_factory=SlackCfg)
+    discord: DiscordCfg = Field(default_factory=DiscordCfg)
+    webhook: WebhookCfg = Field(default_factory=WebhookCfg)
+    ntfy: NtfyCfg = Field(default_factory=NtfyCfg)
 
     @property
     def channels(self) -> list[str]:
-        return [n for n, c in (("email", self.email), ("telegram", self.telegram), ("teams", self.teams)) if c.enabled]
+        return [n for n, c in (("email", self.email), ("telegram", self.telegram), ("teams", self.teams),
+                               ("slack", self.slack), ("discord", self.discord), ("webhook", self.webhook),
+                               ("ntfy", self.ntfy)) if c.enabled]
 
 
 # ----------------------------------------------------------------------------- selection
@@ -196,6 +239,46 @@ async def _send_teams(cfg: TeamsCfg, msg: dict, client: httpx.AsyncClient):
         raise RuntimeError(f"Teams {r.status_code}: {r.text[:200]}")
 
 
+async def _send_slack(cfg: SlackCfg, msg: dict, client: httpx.AsyncClient):
+    blocks = [{"type": "header", "text": {"type": "plain_text", "text": msg["title"][:150]}},
+              {"type": "section", "text": {"type": "mrkdwn",
+                                           "text": "\n".join(f"• {x}" for x in msg["lines"][:30])[:2900]}}]
+    if msg["link"]:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"<{msg['link']}|Open report>"}})
+    r = await client.post(cfg.webhook_url, json={"blocks": blocks})
+    if r.status_code >= 400:
+        raise RuntimeError(f"Slack {r.status_code}: {r.text[:200]}")
+
+
+async def _send_discord(cfg: DiscordCfg, msg: dict, client: httpx.AsyncClient):
+    r = await client.post(cfg.webhook_url, json={"username": "Wazuh Daily Triage", "content": msg["text"][:1900]})
+    if r.status_code >= 400:
+        raise RuntimeError(f"Discord {r.status_code}: {r.text[:200]}")
+
+
+async def _send_webhook(cfg: WebhookCfg, msg: dict, client: httpx.AsyncClient):
+    headers = dict(cfg.headers)
+    if cfg.token:
+        headers["Authorization"] = f"Bearer {cfg.token}"
+    r = await client.post(cfg.url, json={"title": msg["title"], "lines": msg["lines"], "link": msg["link"],
+                                         "text": msg["text"]}, headers=headers)
+    if r.status_code >= 400:
+        raise RuntimeError(f"Webhook {r.status_code}: {r.text[:200]}")
+
+
+async def _send_ntfy(cfg: NtfyCfg, msg: dict, client: httpx.AsyncClient):
+    url = cfg.topic if cfg.topic.startswith(("http://", "https://")) else f"https://ntfy.sh/{cfg.topic}"
+    # HTTP headers are latin-1; ntfy decodes the title as UTF-8, so send it as raw bytes.
+    headers: dict = {"Title": msg["title"][:128].encode("utf-8")}
+    if cfg.token:
+        headers["Authorization"] = f"Bearer {cfg.token}"
+    if msg["link"]:
+        headers["Click"] = msg["link"]
+    r = await client.post(url, content=msg["text"].encode("utf-8"), headers=headers)
+    if r.status_code >= 400:
+        raise RuntimeError(f"ntfy {r.status_code}: {r.text[:200]}")
+
+
 async def send(cfg: NotifyCfg, msg: dict, transport: httpx.AsyncBaseTransport | None = None) -> dict[str, str]:
     """Send to every configured channel; returns {channel: "ok" | error}."""
     res: dict[str, str] = {}
@@ -208,6 +291,14 @@ async def send(cfg: NotifyCfg, msg: dict, transport: httpx.AsyncBaseTransport | 
                     await _send_telegram(cfg.telegram, msg, client)
                 elif name == "teams":
                     await _send_teams(cfg.teams, msg, client)
+                elif name == "slack":
+                    await _send_slack(cfg.slack, msg, client)
+                elif name == "discord":
+                    await _send_discord(cfg.discord, msg, client)
+                elif name == "webhook":
+                    await _send_webhook(cfg.webhook, msg, client)
+                elif name == "ntfy":
+                    await _send_ntfy(cfg.ntfy, msg, client)
                 res[name] = "ok"
             except Exception as e:  # noqa: BLE001
                 log.warning("notification via %s failed: %s", name, e)

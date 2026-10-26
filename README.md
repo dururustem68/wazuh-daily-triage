@@ -6,7 +6,7 @@ Indexer, asks you only what needs a human decision — and remembers your answer
 
 Bring your own AI: Anthropic, OpenAI, Azure OpenAI or any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio,
 LiteLLM). One Docker container, read-only towards Wazuh by default. Critical alerts and run summaries go to
-e-mail, Telegram or Microsoft Teams.
+e-mail, Telegram, Microsoft Teams, Slack, Discord, ntfy or a generic webhook.
 
 [Türkçe README](README.tr.md) · [AI providers](docs/providers.md) · [Notifications](docs/notifications.md) · [Permissions & network](docs/permissions.md) · [Rule deployment](docs/rule-deployment.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
@@ -49,9 +49,9 @@ of silencing.
 - **Recommendation inbox** — findings one at a time, de-duplicated across runs; one decision settles every
   occurrence. Findings that need a look on a server carry exact read-only commands, and **Investigate in chat**
   opens a conversation where you paste the output and get the next step.
-- **Notifications by e-mail, Telegram or Microsoft Teams** — critical situations (SIEM silent, indexer red, real
-  incidents) without repeating the same item every run, an optional short summary after every run, and rule
-  deployments ([docs/notifications.md](docs/notifications.md)).
+- **Notifications by e-mail, Telegram, Microsoft Teams, Slack, Discord, ntfy or a generic webhook** — critical
+  situations (SIEM silent, indexer red, real incidents) without repeating the same item every run, an optional
+  short summary after every run, and rule deployments ([docs/notifications.md](docs/notifications.md)).
 - **Live verification** — a deployed, approved or promoted rule is checked against real events after every run:
   "confirmed live 12× (last …)" or "not seen for 5 days". `logtest passed` is not proof; a real event is.
 - **Make permanent** — for a tested draft, a promotion package for *your* configuration management: the rule
@@ -79,8 +79,8 @@ of silencing.
 - **Chat** — ask questions about an environment; answers use the same tools and show their tool calls.
 - **Stored in Wazuh itself** — `daily-triage-runs`, `daily-triage-knowledge`, `daily-triage-chat` indices in
   each environment's own indexer. No extra database.
-- **Multi-environment, multi-language** (English, Turkish), per-environment AI override (e.g. a local model for
-  regulated data), connection test in the UI and CLI.
+- **Multi-environment, multi-language** (English, Turkish, Spanish, German), per-environment AI override (e.g. a
+  local model for regulated data), connection test in the UI and CLI.
 
 ## Quick start
 
@@ -156,7 +156,7 @@ Bring your own key. Full setup for each provider, including model names and para
 The model must support tool (function) calling. Each environment can override the model (`llm:` block) — e.g.
 a local model for an environment whose data must not leave your network. `max_tool_steps` caps cost per run.
 
-## Notifications — e-mail, Telegram, Microsoft Teams
+## Notifications — e-mail, Telegram, Teams, Slack, Discord, ntfy, webhook
 
 | When | Setting (default) |
 |---|---|
@@ -180,6 +180,15 @@ TELEGRAM_CHAT_ID=-1001234567890                    # see below
 
 TEAMS_WEBHOOK_URL=https://...                      # channel → Workflows → "Post to a channel when a webhook request is received"
 
+SLACK_WEBHOOK_URL=https://hooks.slack.com/...      # Your Apps → Incoming Webhooks
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...   # channel → Edit → Integrations → Webhooks
+
+WEBHOOK_URL=https://soar.example.internal/hook     # generic JSON webhook (Zapier/Make/SOAR)
+WEBHOOK_TOKEN=...                                  # optional → Authorization: Bearer
+
+NTFY_TOPIC=wazuh-triage                            # https://ntfy.sh/wazuh-triage (or a full URL)
+NTFY_TOKEN=...                                     # optional, for a protected topic
+
 SMTP_HOST=smtp.example.org
 SMTP_PORT=587
 SMTP_SECURITY=starttls                             # starttls | ssl | none
@@ -195,6 +204,12 @@ SMTP_TO=secops@example.org,oncall@example.org
   bot token and chat id work here.
 - **Teams:** the old Office 365 "Incoming Webhook" connectors are retired; use the Workflows template above.
   Messages arrive as Adaptive Cards with a link to the report.
+- **Slack:** create an app → *Incoming Webhooks* → add to a channel → copy the Webhook URL. Messages arrive as
+  block-kit sections with a link to the report.
+- **Discord:** channel → *Edit* → *Integrations* → *Webhooks* → *New Webhook*. Plain-text messages.
+- **Generic webhook:** any endpoint that accepts a JSON body (`{"title", "lines", "link", "text"}`); set
+  `WEBHOOK_TOKEN` for a `Bearer` header.
+- **ntfy:** push to `https://ntfy.sh/<topic>` (or self-host); the title becomes the notification title.
 - Multi-environment setups put the same keys in a `notify:` block, globally or per environment —
   see [docs/notifications.md](docs/notifications.md).
 
@@ -267,7 +282,7 @@ schedule  │ Collector ──► deterministic summary + health flags          
           │   vulns · agent · rule · logtest · validate_rule_xml · propose        │
           │      │                                                               │
           │      ▼                                                               │
-          │ submit_report ──► daily-triage-runs ──► notify (mail/Telegram/Teams) │
+          │ submit_report ──► daily-triage-runs ──► notify (mail/Telegram/Teams/Slack/Discord/ntfy/webhook) │
           │ Web UI / chat ◄──► daily-triage-knowledge / -chat                    │
           │ Approve & deploy (opt-in, separate API user) ──► etc/rules/wdt_rules │
           └───────────┬──────────────────────────────┬───────────────────────────┘
@@ -291,9 +306,8 @@ without a cluster. Adding a UI language = adding a dictionary to `app/i18n.py`.
 
 ## Roadmap
 
-- More notification channels (Slack, generic webhook)
-- OIDC login, multiple users and an approval audit trail
-- SCA digest, streaming chat answers
+See [ROADMAP.md](ROADMAP.md) — the priority list includes a Helm chart, signed releases with SBOM, Jira and other
+ticketing, a read-only viewer role, PDF export, decoder drafts and more languages.
 
 ## Acknowledgements
 
