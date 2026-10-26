@@ -1,0 +1,26 @@
+# Example overlay. Copy this directory somewhere outside the repository, edit, then:
+#   kubectl apply -k <your-overlay>
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: wazuh-daily-triage
+resources:
+  - namespace.yaml
+  - ../base   # when copied elsewhere: https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.4.0
+images:
+  - name: ghcr.io/dururustem68/wazuh-daily-triage
+    newTag: "0.4.0"
+configMapGenerator:
+  - name: wazuh-daily-triage-config
+    files:
+      - environments.yaml
+      - context.md
+      - seed.yaml
+  - name: wazuh-daily-triage-env
+    literals:
+      - APP_LANGUAGE=en
+      - TZ=UTC
+      - COOKIE_SECURE=false
+secretGenerator:
+  - name: wazuh-daily-triage-secret
+    envs:
+      - secret.env   # never commit this file

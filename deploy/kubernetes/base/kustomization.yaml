@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Base manifests. Use an overlay (see ../example) to add your configuration and secrets.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+  - pairs:
+      app.kubernetes.io/name: wazuh-daily-triage
+      app.kubernetes.io/part-of: wazuh-daily-triage
+    includeSelectors: true
+resources:
+  - deployment.yaml
+  - service.yaml

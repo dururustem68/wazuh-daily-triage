@@ -21,6 +21,12 @@ llm:
   # extra_body: {}                       # extra fields passed to the provider verbatim
   max_tool_steps: 14            # tool-call budget per run (cost ceiling)
 
+notify:                         # critical alerts only — see docs/notifications.md
+  ui_url: ${NOTIFY_UI_URL:-}
+  email: {host: "${SMTP_HOST:-}", username: "${SMTP_USER:-}", password: "${SMTP_PASSWORD:-}", sender: "${SMTP_FROM:-}", to: []}
+  telegram: {bot_token: "${TELEGRAM_BOT_TOKEN:-}", chat_id: "${TELEGRAM_CHAT_ID:-}"}
+  teams: {webhook_url: "${TEAMS_WEBHOOK_URL:-}"}
+
 environments:
   - id: prod                    # lowercase, used in URLs
     name: Production Wazuh
@@ -44,9 +50,9 @@ environments:
     storage_prefix: daily-triage        # results: daily-triage-runs / -knowledge / -chat in THIS indexer
     schedule:
       enabled: true
-      time: "07:30"
+      times: ["07:30", "19:30"]   # or a single `time: "07:30"`
       days: [mon, tue, wed, thu, fri]
-    window_min_hours: 24        # window = since last successful run, clamped to [min, max]
+    window_min_hours: 12        # window = since last successful run, clamped to [min, max]
     window_max_hours: 96        # so Monday morning covers the weekend
     high_level: 7               # "high level" threshold
     max_silence_minutes: 60     # last alert older than this → "SIEM may be down"
@@ -57,6 +63,13 @@ environments:
     context_file: context/example.md    # free text describing the environment (given to the AI)
     seed_file: seed/example.yaml        # imported into the knowledge base once
     redact: false               # true: mask e-mails/passwords/tokens before text reaches the LLM
+    rule_deploy:                # optional "Approve and deploy" for rule drafts — docs/rule-deployment.md
+      enabled: false            # off: drafts show copy-paste commands only
+      username: ${PROD_DEPLOY_USER:-}       # SEPARATE API user: update one rules file + restart, nothing else
+      password: ${PROD_DEPLOY_PASSWORD:-}
+      file: wdt_rules.xml       # etc/rules/<file> on the manager (master in a cluster)
+      id_min: 100000            # drafts with IDs outside this range are refused
+      id_max: 119999
     # llm:                      # optional per-environment model, e.g. a local model for regulated data
     #   provider: openai
     #   base_url: http://ollama:11434/v1

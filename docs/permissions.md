@@ -1,7 +1,10 @@
 # Least-privilege accounts and network access
 
-Wazuh Daily Triage **never changes anything in Wazuh**. The only write permission it needs is to its own
+Wazuh Daily Triage is **read-only towards Wazuh** by default. The only write permission it needs is to its own
 `daily-triage-*` indices. Do not give it admin credentials — create the two accounts below.
+
+The optional "Approve and deploy" for rule drafts uses a **third, separate** API user that may only upload custom
+rules files and restart the manager — see [rule-deployment.md](rule-deployment.md).
 
 ## 1. Wazuh Indexer (OpenSearch) — user `daily-triage`
 

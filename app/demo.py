@@ -449,8 +449,14 @@ class FakeIndexer:
 
 
 class FakeAPI:
+    """Demo/test stand-in for the Wazuh API, including an in-memory custom rules directory."""
+
     def __init__(self):
         self.ep = type("E", (), {"url": "demo://api"})()
+        self.files: dict[str, str] = {}
+        self.loaded: dict[str, dict] = {}     # rules "loaded" by the last restart
+        self.restarts = 0
+        self.fail_validation = False
 
     async def close(self):
         pass
@@ -494,7 +500,9 @@ class FakeAPI:
     async def rules(self, rule_ids):
         out = []
         for r in rule_ids:
-            if r in RULES:
+            if str(r) in self.loaded:
+                out.append(self.loaded[str(r)])
+            elif r in RULES:
                 lvl, desc, groups = RULES[r]
                 out.append({"id": int(r), "level": lvl, "description": desc, "groups": groups,
                             "filename": "local_rules.xml" if r.startswith("1") and len(r) == 6 else "0xxx-rules.xml",
@@ -502,9 +510,48 @@ class FakeAPI:
         return out
 
     async def logtest(self, event, log_format="syslog", location="daily-triage"):
+        import re as _re
+        user = _re.search(r"Invalid user (\S+)", event)
+        if user:  # deployed child rules of 5710 with a <user> pattern (OS_Regex-like ^a$|^b$)
+            for content in self.files.values():
+                for m in _re.finditer(r'<rule id="(\d+)" level="(\d+)">\s*<if_sid>5710</if_sid>\s*<user>([^<]+)</user>',
+                                      content):
+                    if _re.search(m.group(3), user.group(1)):
+                        return {"output": {"rule": {"id": m.group(1), "level": int(m.group(2))},
+                                           "decoder": {"name": "sshd"}}, "alert": True, "messages": []}
         if "Invalid user" in event:
             return {"output": {"rule": {"id": "5710", "level": 5, "description": RULES["5710"][1]},
                                "decoder": {"name": "sshd"}, "data": {"srcip": "198.51.100.23"}},
                     "alert": True, "messages": []}
         return {"output": {"rule": {"id": "1002", "level": 2, "description": "Unknown problem somewhere in the system."},
                            "decoder": {"name": "syslog"}}, "alert": False, "messages": []}
+
+    # --- rule deployment -------------------------------------------------
+    def reset_token(self):
+        pass
+
+    async def cluster_running(self):
+        return False
+
+    async def rule_file_get(self, name):
+        return self.files.get(name)
+
+    async def rule_file_put(self, name, content):
+        self.files[name] = content
+        return {}
+
+    async def rule_file_delete(self, name):
+        self.files.pop(name, None)
+
+    async def config_validation(self, cluster):
+        return [{"name": "demo-manager", "status": "KO" if self.fail_validation else "OK"}]
+
+    async def restart(self, cluster):
+        import re as _re
+        self.restarts += 1
+        self.loaded = {}
+        for name, content in self.files.items():
+            for m in _re.finditer(r'<rule id="(\d+)" level="(\d+)"', content):
+                self.loaded[m.group(1)] = {"id": int(m.group(1)), "level": int(m.group(2)), "filename": name,
+                                           "description": "deployed", "groups": [], "relative_dirname": "etc/rules"}
+        return {}

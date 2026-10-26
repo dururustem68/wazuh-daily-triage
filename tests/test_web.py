@@ -68,3 +68,32 @@ def test_xss_in_markdown():
     from app.main import _md
     assert "<img" not in _md.render('<img src=x onerror=alert(1)>')
     assert 'href="javascript' not in _md.render("[x](javascript:alert(1))")
+
+
+def test_rule_draft_ui_and_deploy(c):
+    from app import rules as R
+    R.POLL_FIRST = R.POLL_EVERY = 0.01
+    c.post("/login", data={"password": "pw"})
+    k = c.post("/api/e/demo/k", json={"kind": "rule_draft", "title": "d", "status": "proposed",
+                                      "body": "```xml\n<group name=\"x,\"><rule id=\"100970\" level=\"9\"><if_sid>5710</if_sid>"
+                                              "<description>t</description></rule></group>\n```"}).json()
+    page = c.get("/e/demo/k?status=proposed").text
+    assert "data-deploy" in page and "data-cmds" in page and "100970" in page
+    v = c.get(f"/api/e/demo/k/{k['id']}/rule").json()
+    assert v["analysis"]["ok"] and "wazuh-analysisd -t" in v["commands"]
+    rec = c.post(f"/api/e/demo/k/{k['id']}/deploy", json={}).json()
+    assert rec["state"] == "deployed" and rec["by"] == "ui"
+    assert "data-undeploy" in c.get("/e/demo/k").text
+    assert c.post(f"/api/e/demo/k/{k['id']}/undeploy").json()["state"] == "removed"
+
+
+def test_kb_import_export_web(c):
+    c.post("/login", data={"password": "pw"})
+    y = "- kind: baseline\n  title: web-import\n  body: x\n"
+    assert c.post("/api/e/demo/kb/import", json={"text": y, "dry_run": True}).json()["added"] == 1
+    assert c.post("/api/e/demo/kb/import", json={"text": y}).json()["added"] == 1
+    assert c.post("/api/e/demo/kb/import", json={"text": y}).json()["skipped"] == 1
+    assert c.post("/api/e/demo/kb/import", json={"text": "- [unclosed"}).status_code == 400
+    r = c.get("/api/e/demo/kb/export?kind=baseline")
+    assert r.status_code == 200 and "web-import" in r.text and "attachment" in r.headers["content-disposition"]
+    assert "data-kimport" in c.get("/e/demo/k").text

@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 import yaml
 
+from . import rules as rulemod
 from .agent.prompts import system_prompt, triage_user_message
 from .agent.runner import run_agent
 from .agent.tools import LABELS, SEVERITIES, ToolBox
@@ -20,7 +21,9 @@ from .collector import Collector, _parse, health_status, iso
 from .config import DAYS, Environment, LLMConfig, Settings
 from .i18n import t
 from .llm.base import LLMError, make_llm
-from .store import IndexStore, MemoryStore, Repo, new_id, now_iso
+from .notify import build_message, critical_items, plain_message, recently_notified, summary_lines
+from .notify import send as notify_send
+from .store import KNOWLEDGE_KINDS, IndexStore, MemoryStore, Repo, new_id, now_iso
 from .wazuh.api import WazuhAPI
 from .wazuh.indexer import Indexer
 
@@ -36,6 +39,7 @@ class EnvRuntime:
         self.store = store
         self.repo = Repo(store, env.id)
         self.lock = asyncio.Lock()
+        self.deploy_lock = asyncio.Lock()
         self.current_run: str | None = None
 
 
@@ -51,6 +55,7 @@ class Runtime:
         self._seeded: set[str] = set()
         self._tasks: set[asyncio.Task] = set()
         self._run_locks: dict[str, asyncio.Lock] = {}
+        self.notify_transport = None       # tests inject an httpx.MockTransport here
         for e in settings.environments:
             if demo:
                 from .demo import FakeAPI, FakeIndexer
@@ -102,6 +107,70 @@ class Runtime:
         log.info("%s: imported %d seed entries into the knowledge base (%s)", rt.env.id, len(items), path.name)
         return len(items)
 
+    # ------------------------------------------------------------ knowledge import / export
+    async def kb_import(self, env_id: str, items: list, update: bool = False, dry_run: bool = False,
+                        created_by: str = "import") -> dict:
+        """Import entries in seed format. Duplicates (same `key`, else same kind + title) are skipped,
+        or updated in place with `update` (status is kept)."""
+        rt = self.get(env_id)
+        if not isinstance(items, list):
+            raise ValueError("expected a YAML/JSON list of entries")
+        existing = await rt.repo.list_knowledge(size=5000)
+        by_key = {}
+        for d in existing:
+            by_key[d.get("import_key") or f"{d['kind']}|{d['title'].strip().lower()}"] = d
+            by_key.setdefault(f"{d['kind']}|{d['title'].strip().lower()}", d)
+        res = {"added": 0, "updated": 0, "skipped": 0, "errors": []}
+        for n, it in enumerate(items, 1):
+            if not isinstance(it, dict) or not it.get("kind") or not str(it.get("title", "")).strip():
+                res["errors"].append(f"#{n}: kind and title are required")
+                continue
+            kind, title = str(it["kind"]), str(it["title"]).strip()
+            if kind not in KNOWLEDGE_KINDS:
+                res["errors"].append(f"#{n}: unknown kind {kind!r}")
+                continue
+            key = str(it.get("key") or f"{kind}|{title.lower()}")
+            body = str(it.get("body") or "")
+            rule_ids = [str(x) for x in (it.get("rule_ids") or [])]
+            old = by_key.get(key) or by_key.get(f"{kind}|{title.lower()}")
+            if old:
+                if update and (old.get("body") != body.strip() or old.get("title") != title[:300]
+                               or old.get("rule_ids") != rule_ids):
+                    if not dry_run:
+                        await rt.repo.update_knowledge(old["id"], title=title[:300], body=body.strip(),
+                                                       rule_ids=rule_ids, import_key=key)
+                    res["updated"] += 1
+                else:
+                    res["skipped"] += 1
+                continue
+            if not dry_run:
+                try:
+                    d = await rt.repo.add_knowledge(kind, title, body, status=str(it.get("status") or "active"),
+                                                    created_by=created_by, rule_ids=rule_ids,
+                                                    extra={"import_key": key, **({"xml": it["xml"]} if it.get("xml") else {})})
+                except ValueError as e:
+                    res["errors"].append(f"#{n}: {e}")
+                    continue
+                by_key[key] = d
+            res["added"] += 1
+        res["dry_run"] = dry_run
+        return res
+
+    async def kb_export(self, env_id: str, kinds: list[str] | None = None, status: list[str] | None = None) -> list[dict]:
+        rows = await self.get(env_id).repo.list_knowledge(kinds=kinds, status=status, size=5000)
+        out = []
+        for d in sorted(rows, key=lambda x: (x["kind"], x.get("created_at", ""))):
+            e = {"kind": d["kind"], "title": d["title"]}
+            for k in ("body", "rule_ids", "xml"):
+                if d.get(k):
+                    e[k] = d[k]
+            if d.get("status") != "active":
+                e["status"] = d["status"]
+            if d.get("import_key"):
+                e["key"] = d["import_key"]
+            out.append(e)
+        return out
+
     # ------------------------------------------------------------ daily run
     async def start_run(self, env_id: str, trigger: str = "manual", hours: int | None = None) -> str:
         rt = self.get(env_id)
@@ -118,7 +187,8 @@ class Runtime:
     async def _run_guarded(self, rt, run_id, trigger, hours):
         try:
             async with rt.lock:
-                await self.run_triage(rt, run_id, trigger, hours)
+                run = await self.run_triage(rt, run_id, trigger, hours)
+                await self.notify_run(rt, run)
         finally:
             if rt.current_run == run_id:
                 rt.current_run = None
@@ -175,7 +245,7 @@ class Runtime:
                        stage="analysing", collected=collected)
             await repo.save_run(run)
 
-            knowledge = await repo.list_knowledge(status=["active", "proposed"],
+            knowledge = await repo.list_knowledge(status=["active", "proposed", "rejected"],
                                                   kinds=["context", "baseline", "decision", "open_item",
                                                          "lesson", "rule_draft", "answer"])
             prev = await repo.list_runs(3, status="done", light=True)
@@ -187,8 +257,18 @@ class Runtime:
                                    [k for k in knowledge if k["kind"] != "answer"], self.settings.app.timezone, lang)
             usr = triage_user_message(_compact(collected), prev, answers, requests)
             tb = ToolBox(env, rt.ix, rt.api, repo, mode="triage", run_id=run_id)
-            res = await run_agent(self.llm_for(env), sysmsg, [{"role": "user", "content": usr}], tb,
-                                  llm_cfg.max_tool_steps, stop_on="submit_report")
+            try:
+                res = await run_agent(self.llm_for(env), sysmsg, [{"role": "user", "content": usr}], tb,
+                                      llm_cfg.max_tool_steps, stop_on="submit_report")
+            except LLMError as e:
+                # The AI is unavailable (after retries): keep the deterministic part instead of losing the run.
+                log.warning("run %s: AI analysis failed, saving deterministic report: %s", run_id, e)
+                rep = flags_only_report(flags, str(e), lang)
+                run.update(status="done", stage=None, finished_at=now_iso(), ai_error=str(e)[:500], **rep,
+                           agent={"steps": 0, "stopped": "llm_error", "trace": [],
+                                  "provider": llm_cfg.provider, "model": llm_cfg.model})
+                await repo.save_run(run)  # requests stay open for the next run
+                return run
             rep = normalize_report(tb.submitted, res.text, lang)
             run.update(
                 status="done", stage=None, finished_at=now_iso(), **rep,
@@ -215,7 +295,7 @@ class Runtime:
         await self.ensure_seed(rt)
         hist = await rt.repo.chat_history(session, 30)
         await rt.repo.chat_add(session, "user", text)
-        knowledge = await rt.repo.list_knowledge(status=["active", "proposed"])
+        knowledge = await rt.repo.list_knowledge(status=["active", "proposed", "rejected"])
         sysmsg = system_prompt("chat", rt.env, rt.env.context_text(self.settings.base_dir), knowledge,
                                self.settings.app.timezone, lang)
         last = await rt.repo.last_success()
@@ -236,6 +316,250 @@ class Runtime:
         await rt.repo.chat_add(session, "assistant", answer, trace)
         return {"session": session, "answer": answer, "trace": trace,
                 "proposals": [p["id"] for p in tb.proposals]}
+
+    # ------------------------------------------------------------ notifications
+    async def notify_run(self, rt: EnvRuntime, run: dict, transport=None) -> dict:
+        cfg = self.settings.notify_for(rt.env)
+        if not cfg.enabled or not cfg.channels:
+            return {}
+        try:
+            lang = self.lang(rt.env)
+            items = critical_items(run, cfg, self.finding_key)
+            if items:
+                prev = await rt.repo.list_runs(2 * max(1, cfg.repeat_hours // 6) + 4, light=True)
+                seen = recently_notified([r for r in prev if r.get("run_id") != run.get("run_id")], cfg.repeat_hours)
+                items = [i for i in items if i["key"] not in seen]
+            summary = []
+            if cfg.on_run_summary and run.get("status") == "done":
+                waiting = len(await self.inbox(rt.env.id))
+                summary = summary_lines(run, lang, waiting, lambda k: t(lang, "label." + k))
+            if not items and not summary:
+                return {}
+            if items:
+                msg = build_message(rt.env.name, run, items, cfg, lang, rt.env.id)
+                if summary:
+                    msg = plain_message(msg["title"], msg["lines"] + ["—"] + summary, msg["link"])
+            else:
+                link = f"{cfg.ui_url.rstrip('/')}/e/{rt.env.id}/r/{run['run_id']}" if cfg.ui_url else ""
+                msg = plain_message(t(lang, "notify.summary_title", env=rt.env.name,
+                                      health=t(lang, "health." + (run.get("health") or "ok"))), summary, link)
+            res = await notify_send(cfg, msg, transport=transport)
+            run["notified"] = [{"key": i["key"], "ts": now_iso()} for i in items] + \
+                ([{"key": "summary", "ts": now_iso()}] if summary else [])
+            run["notify_result"] = res
+            await rt.repo.save_run(run)
+            log.info("%s: notified %d item(s): %s", rt.env.id, len(items), res)
+            return res
+        except Exception:  # noqa: BLE001 — a notification problem must never break a run
+            log.exception("notification failed")
+            return {}
+
+    async def _notify_rule(self, rt: EnvRuntime, entry: dict, rec: dict, transport=None) -> dict:
+        cfg = self.settings.notify_for(rt.env)
+        if not (cfg.enabled and cfg.channels and cfg.on_rule_deploy):
+            return {}
+        try:
+            lang = self.lang(rt.env)
+            lines = [entry.get("title", ""), t(lang, "notify.rule_ids", ids=", ".join(rec.get("ids") or []),
+                                               file=rec.get("file", ""), by=rec.get("by", ""))]
+            if rec.get("error"):
+                lines.append(rec["error"][:300])
+            link = f"{cfg.ui_url.rstrip('/')}/e/{rt.env.id}/k?kind=rule_draft" if cfg.ui_url else ""
+            msg = plain_message(t(lang, "notify.rule_title", env=rt.env.name, state=t(lang, "rd.state." + rec["state"])),
+                                lines, link)
+            return await notify_send(cfg, msg, transport=transport)
+        except Exception:  # noqa: BLE001
+            log.exception("rule notification failed")
+            return {}
+
+    async def notify_test(self, env_id: str, transport=None) -> dict:
+        rt = self.get(env_id)
+        cfg = self.settings.notify_for(rt.env)
+        if not cfg.channels:
+            return {}
+        lang = self.lang(rt.env)
+        fake = {"run_id": "test"}
+        msg = build_message(rt.env.name, fake, [{"kind": "test", "text": t(lang, "notify.test_text")}], cfg, lang, env_id)
+        msg["title"] = t(lang, "notify.test_title", env=rt.env.name)
+        msg["text"] = msg["title"] + "\n\n• " + t(lang, "notify.test_text")
+        msg["link"] = cfg.ui_url or ""
+        return await notify_send(cfg, msg, transport=transport)
+
+    # ------------------------------------------------------------ recommendation inbox
+    INBOX_RUNS = 14            # look back over this many finished runs (7 days at 2 runs/day)
+    INBOX_SKIP = {"expected", "measurement"}
+
+    @staticmethod
+    def finding_key(f: dict) -> str:
+        """Groups the same finding across runs (LLM wording differs, rule ids/agents do not)."""
+        rules = ",".join(sorted(f.get("rule_ids") or []))
+        agents = ",".join(sorted(f.get("agents") or []))
+        if rules or agents:
+            return f"{f.get('label')}|{rules}|{agents}"
+        return f"{f.get('label')}|{(f.get('title') or '').strip().lower()[:80]}"
+
+    async def inbox(self, env_id: str) -> list[dict]:
+        """Unreviewed findings of recent runs, de-duplicated, most severe and newest first."""
+        rt = self.get(env_id)
+        runs = await rt.repo.list_runs(self.INBOX_RUNS, status="done", light=True)
+        groups: dict[str, dict] = {}
+        handled: set[str] = set()
+        for r in runs:  # newest first
+            for f in r.get("findings") or []:
+                if f.get("label") in self.INBOX_SKIP:
+                    continue
+                key = self.finding_key(f)
+                if f.get("user_status", "new") != "new":
+                    handled.add(key)  # a decision on any occurrence settles the group
+                    continue
+                g = groups.setdefault(key, {"key": key, "finding": f, "run_id": r["run_id"],
+                                            "run_started": r.get("started_at"), "refs": [], "seen": 0,
+                                            "first_seen": r.get("started_at")})
+                g["refs"].append({"run_id": r["run_id"], "fid": f.get("id")})
+                g["seen"] += 1
+                g["first_seen"] = r.get("started_at")
+        sev = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        lab = {"real_incident": 0, "detection_gap": 1, "baseline_increase": 2, "investigate": 3, "false_positive": 4}
+        items = [g for k, g in groups.items() if k not in handled]
+        items.sort(key=lambda g: (lab.get(g["finding"].get("label"), 5), sev.get(g["finding"].get("severity"), 5),
+                                  _neg_ts(g["run_started"])))
+        return items
+
+    async def inbox_act(self, env_id: str, refs: list[dict], status: str, note: str | None) -> int:
+        """Apply one decision to every occurrence of a finding."""
+        rt = self.get(env_id)
+        by_run: dict[str, list[str]] = {}
+        for ref in refs[:50]:
+            by_run.setdefault(ref["run_id"], []).append(ref["fid"])
+        n = 0
+        created = False
+        for run_id, fids in by_run.items():
+            async with self.run_lock(run_id):
+                run = await rt.repo.get_run(run_id)
+                if not run:
+                    continue
+                for f in run.get("findings") or []:
+                    if f.get("id") in fids:
+                        f["user_status"] = status
+                        if note:
+                            f["user_note"] = note[:2000]
+                        if status == "baseline" and not created and not f.get("knowledge_id"):
+                            k = await rt.repo.add_knowledge("baseline", f.get("title", ""),
+                                                            (f.get("detail") or "") + (f"\n\nNote: {note}" if note else ""),
+                                                            rule_ids=f.get("rule_ids"), source_run=run_id)
+                            f["knowledge_id"] = k["id"]
+                            created = True
+                        n += 1
+                await rt.repo.save_run(run)
+        return n
+
+    # ------------------------------------------------------------ rule drafts
+    def deploy_ready(self, env: Environment) -> bool:
+        """Deployment is on, the environment has an API, and a separate deploy user is configured."""
+        cfg = env.rule_deploy
+        return bool(cfg.enabled and env.api and (self.demo or cfg.username))
+
+    def _deploy_api(self, rt: EnvRuntime):
+        """Write-enabled API client (separate user) — or the demo fake. None when deployment is off."""
+        cfg = rt.env.rule_deploy
+        if not self.deploy_ready(rt.env):
+            return None
+        if self.demo:
+            return rt.api
+        ep = rt.env.api.model_copy(update={"username": cfg.username, "password": cfg.password,
+                                           "timeout": max(rt.env.api.timeout, 60)})
+        return WazuhAPI(ep)
+
+    async def _rule_entry(self, rt: EnvRuntime, kid: str) -> dict:
+        d = await rt.store.get("knowledge", kid)
+        if not d or d.get("env") != rt.env.id or d.get("kind") != "rule_draft":
+            raise KeyError(kid)
+        return d
+
+    async def rule_view(self, env_id: str, kid: str) -> dict:
+        rt = self.envs[env_id]
+        d = await self._rule_entry(rt, kid)
+        xml = rulemod.extract_xml(d)
+        an = await rulemod.analyse(xml, rt.env.rule_deploy, rt.api, rt.env.high_level)
+        return {"analysis": an, "deploy_enabled": self.deploy_ready(rt.env),
+                "file": rt.env.rule_deploy.file, "deploy": d.get("deploy"),
+                "commands": rulemod.commands(kid, xml, rt.env.rule_deploy, d.get("title", ""), an["ids"],
+                                             d.get("tests"))}
+
+    async def rule_deploy(self, env_id: str, kid: str, actor: str, confirm: str = "", remove: bool = False) -> dict:
+        rt = self.envs[env_id]
+        api = self._deploy_api(rt)
+        if api is None:
+            raise PermissionError("rule deployment is off for this environment "
+                                  "(rule_deploy.enabled with a separate username/password)")
+        if rt.deploy_lock.locked():
+            raise RuntimeError("another deployment is in progress")
+        async with rt.deploy_lock:
+            d = await self._rule_entry(rt, kid)
+            xml = rulemod.extract_xml(d)
+            an = await rulemod.analyse(xml, rt.env.rule_deploy, rt.api, rt.env.high_level)
+            ids = an["ids"]
+            if not remove:
+                if not an["ok"]:
+                    raise ValueError("; ".join(an["errors"]))
+                if an["risky"] and confirm.replace(" ", "") != ",".join(ids):
+                    raise PermissionError("this draft silences or lowers alerts; type the rule id(s) to confirm: "
+                                          + ",".join(ids))
+            rec = {"state": "running", "action": "remove" if remove else "deploy", "at": now_iso(), "by": actor,
+                   "file": rt.env.rule_deploy.file, "ids": ids, "risky": an["risky"]}
+            try:
+                rec["steps"] = await rulemod.apply(api, rt.env.rule_deploy, kid, xml, ids, d.get("title", ""),
+                                                   d.get("tests"), remove=remove)
+                rec["state"] = "removed" if remove else "deployed"
+            except rulemod.DeployError as e:
+                rec.update(state="failed", error=str(e)[:500], steps=getattr(e, "steps", None))
+            finally:
+                if api is not rt.api:
+                    await api.close()
+            async with self.run_lock(f"k:{kid}"):
+                d = await self._rule_entry(rt, kid)
+                hist = (d.get("deploy_history") or [])[-9:]
+                if d.get("deploy"):
+                    hist.append({k: v for k, v in d["deploy"].items() if k != "steps"})
+                patch = {"deploy": rec, "deploy_history": hist, "updated_at": now_iso()}
+                if rec["state"] == "deployed":
+                    patch["status"] = "active"
+                elif rec["state"] == "removed":
+                    patch["status"] = "closed"
+                d.update(patch)
+                await rt.store.put("knowledge", kid, d)
+            log.info("rule %s %s by %s: %s", kid, rec["action"], actor, rec["state"])
+            await self._notify_rule(rt, d, rec, transport=self.notify_transport)
+            return rec
+
+    async def chat_from_finding(self, env_id: str, run_id: str, fid: str, lang: str | None = None) -> str:
+        """Open a chat session pre-filled with a finding and its manual checks (no LLM call)."""
+        rt = self.get(env_id)
+        lang = lang or self.lang(rt.env)
+        run = await rt.repo.get_run(run_id)
+        f = next((x for x in (run or {}).get("findings") or [] if x.get("id") == fid), None)
+        if not f:
+            raise KeyError(fid)
+        session = uuid.uuid4().hex[:12]
+        lines = [f"### {f.get('title')}", "", f"**{t(lang, 'label.' + f.get('label', 'investigate'))}** · "
+                 f"{t(lang, 'sev.' + f.get('severity', 'medium'))} · {t(lang, 'rep.title')} {run.get('started_at', '')[:16]}",
+                 "", f.get("detail") or ""]
+        if f.get("evidence"):
+            lines += [""] + [f"- {e}" for e in f["evidence"]]
+        if f.get("recommendation"):
+            lines += ["", f"**{t(lang, 'rep.recommendation')}** {f['recommendation']}"]
+        checks = f.get("manual_checks") or []
+        if checks:
+            lines += ["", f"**{t(lang, 'inbox.checks_title')}**"]
+            for c in checks:
+                lines += ["", f"`{c.get('host')}` — {c.get('purpose') or ''}", "```sh", c.get("command", ""), "```"]
+            lines += ["", t(lang, "inbox.paste_output")]
+        else:
+            lines += ["", t(lang, "inbox.ask_next")]
+        await rt.repo.chat_add(session, "user", t(lang, "inbox.chat_open", title=f.get("title", "")))
+        await asyncio.sleep(0.005)  # chat order is by millisecond timestamp
+        await rt.repo.chat_add(session, "assistant", "\n".join(lines))
+        return session
 
     # ------------------------------------------------------------ connection test
     async def check(self, env_id: str, with_llm: bool = True) -> list[dict]:
@@ -309,11 +633,13 @@ class Runtime:
                 day = DAYS[now.weekday()]
                 for rt in self.envs.values():
                     s = rt.env.schedule
-                    key = f"{rt.env.id}:{now:%Y-%m-%d}:{s.time}"
-                    if s.enabled and day in s.days and hm == s.time and key not in self._fired:
+                    if not (s.enabled and day in s.days and hm in s.all_times):
+                        continue
+                    key = f"{rt.env.id}:{now:%Y-%m-%d}:{hm}"
+                    if key not in self._fired:
                         self._fired.add(key)
                         if not rt.current_run:
-                            log.info("scheduled run: %s", rt.env.id)
+                            log.info("scheduled run: %s (%s)", rt.env.id, hm)
                             await self.start_run(rt.env.id, trigger="schedule")
             except Exception:  # noqa: BLE001
                 log.exception("scheduler error")
@@ -324,12 +650,13 @@ class Runtime:
         if not s.enabled:
             return None
         now = datetime.now(self.tz)
-        hh, mm = map(int, s.time.split(":"))
         names = t(lang, "days").split(",")
         for i in range(8):
-            d = (now + timedelta(days=i)).replace(hour=hh, minute=mm, second=0, microsecond=0)
-            if d > now and DAYS[d.weekday()] in s.days:
-                return f"{d:%d.%m} {names[d.weekday()]} {d:%H:%M}"
+            for tm in s.all_times:
+                hh, mm = map(int, tm.split(":"))
+                d = (now + timedelta(days=i)).replace(hour=hh, minute=mm, second=0, microsecond=0)
+                if d > now and DAYS[d.weekday()] in s.days:
+                    return f"{d:%d.%m} {names[d.weekday()]} {d:%H:%M}"
         return None
 
     async def close(self):
@@ -337,6 +664,13 @@ class Runtime:
             await rt.ix.close()
             if rt.api:
                 await rt.api.close()
+
+
+def _neg_ts(ts: str | None) -> float:
+    try:
+        return -_parse(ts).timestamp()
+    except Exception:  # noqa: BLE001
+        return 0.0
 
 
 # ---------------------------------------------------------------------- report normalisation
@@ -374,6 +708,8 @@ def normalize_report(sub: dict | None, fallback_text: str = "", lang: str = "en"
              for k, v in f.items()}
         for k in ("evidence", "rule_ids", "agents"):
             f[k] = [_s(x) for x in _as_list(f.get(k))]
+        f["manual_checks"] = [{"host": _s(c.get("host")), "purpose": _s(c.get("purpose")), "command": _s(c.get("command"))}
+                              for c in _as_list(f.get("manual_checks")) if isinstance(c, dict) and c.get("command")][:8]
         if f.get("label") not in LABELS:
             f["label"] = "investigate"
         if f.get("severity") not in SEVERITIES:
@@ -395,6 +731,18 @@ def normalize_report(sub: dict | None, fallback_text: str = "", lang: str = "en"
             "findings": findings, "questions": questions,
             "open_items": [_s(x) for x in _as_list(sub.get("open_items"))],
             "closed_items": [_s(x) for x in _as_list(sub.get("closed_items"))]}
+
+
+def flags_only_report(flags: list[dict], err: str, lang: str) -> dict:
+    """Report built from deterministic flags only (used when the LLM is unavailable)."""
+    findings = []
+    for f in flags:
+        crit = f.get("severity") == "critical"
+        findings.append({"id": f"f{len(findings) + 1}", "label": "investigate", "severity": "high" if crit else "medium",
+                         "title": f.get("message", f.get("code", "")), "detail": f"`{f.get('code')}`",
+                         "evidence": [], "rule_ids": [], "agents": [], "user_status": "new"})
+    return {"summary_md": t(lang, "run.ai_failed", err=err[:300]), "health_assessment": "",
+            "findings": findings, "questions": [], "open_items": [], "closed_items": []}
 
 
 def _compact(c: dict) -> dict:

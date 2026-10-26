@@ -18,3 +18,4 @@ environments:
     context_file: context/demo.md
     seed_file: seed/example.yaml
     schedule: {enabled: false}
+    rule_deploy: {enabled: true}   # demo: deploys into the in-memory fake manager

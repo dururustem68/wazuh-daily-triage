@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ _('nav.chat') }} · {{ env.name }}{% endblock %}
 {% block body %}
+<div class="page-head"><div class="titles"><div class="eyebrow">{{ env.name }}</div><h1>{{ _('nav.chat') }}</h1></div></div>
 <div class="chat-wrap">
   <aside class="sessions">
     <a class="btn primary small" href="/e/{{ env.id }}/chat">{{ _('chat.new') }}</a>
@@ -18,7 +19,7 @@
       <div class="msg {{ m.role }}">
         {% if m.role == 'assistant' %}{{ m.content|md }}
           {% if m.trace %}<details class="small"><summary>{{ _('chat.tools', n=m.trace|length) }}</summary><ol>{% for tr in m.trace %}<li><code>{{ tr.tool }}</code> {{ tr.input|tojson }}</li>{% endfor %}</ol></details>{% endif %}
-        {% else %}{{ m.content }}{% endif %}
+        {% else %}<span class="ut">{{ m.content }}</span>{% endif %}
       </div>
       {% endfor %}
     </div>

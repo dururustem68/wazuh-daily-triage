@@ -5,29 +5,46 @@
 geri yazar, yalnızca insan kararı gereken yerde size soru sorar ve cevaplarınızı ertesi gün hatırlar.
 
 Yapay zekâ anahtarınız sizin: Anthropic, OpenAI, Azure OpenAI ya da OpenAI uyumlu herhangi bir uç nokta (Ollama,
-vLLM, LM Studio, LiteLLM). Tek Docker konteyner; Wazuh'a karşı salt okunur.
+vLLM, LM Studio, LiteLLM). Tek Docker konteyner; varsayılan olarak Wazuh'a karşı salt okunur. Kritik durumları ve
+koşu özetlerini e-posta, Telegram ya da Microsoft Teams ile bildirir.
 
-[English README](README.md) · [Yetkiler ve ağ](docs/permissions.md) · [Katkı](CONTRIBUTING.md) · [Güvenlik](SECURITY.md)
+[English README](README.md) · [Yapay zekâ sağlayıcıları](docs/providers.tr.md) · [Bildirimler](docs/notifications.md) · [Yetkiler ve ağ](docs/permissions.md) · [Kural uygulama](docs/rule-deployment.md) · [Katkı](CONTRIBUTING.md) · [Güvenlik](SECURITY.md)
 
-![Rapor](docs/screenshot-report.png)
+![Rapor](docs/screenshot-report-tr.png)
+
+| Öneri kuyruğu | Bilgi tabanı ve kural taslakları |
+|---|---|
+| ![Öneriler](docs/screenshot-inbox-tr.png) | ![Bilgi tabanı](docs/screenshot-knowledge-tr.png) |
 
 ## Ne yapar
 
-- **Zamanlanmış günlük kontrol** (ortam başına saat + gün). Pencere "son başarılı koşudan bu yana"; pazartesi
+- **Zamanlanmış kontrol** (ortam başına günde bir ya da birkaç saat + gün). Pencere "son başarılı koşudan bu yana"; pazartesi
   sabahı hafta sonunu kapsar.
 - **Önce deterministik toplama** (yapay zekâdan bağımsız): son alarm zamanı ve boş saatler (kör nokta), indexer
   sağlığı/diski, manager süreçleri, aktif olmayan ajanlar, `ossec.log` hataları, seviye dağılımı, yüksek
   seviye gruplar (kural × ajan × ilk/son × kaynak IP × örnek), önceki pencereyle kıyas, **14 günde ilk kez
   görülen kurallar**, izlenen kurallar, zafiyet özeti.
 - **Yapay zekâ teşhisi** — özeti ve bilgi tabanını okur, salt okunur araçlarla derinleşir (zaman dağılımı, IP
-  profili, ±30 dk korelasyon, logtest, kural tanımı) ve yapılandırılmış rapor teslim eder. Kural taslağı yazar
-  ama **uygulamaz**; XML, OS_Regex tuzakları ve ID çakışması için kontrol eder.
+  profili, ±30 dk korelasyon, logtest, kural tanımı) ve yapılandırılmış rapor teslim eder. Kural taslağı yazar;
+  XML, OS_Regex tuzakları ve ID çakışması için kontrol eder.
+- **Yayına alınabilir kural taslakları** — her taslakla manager'da çalıştırılacak hazır komutlar gelir (yedek,
+  `wazuh-analysisd -t`, restart, geri alma). İsteğe bağlı **Onayla ve uygula**: taslağı Wazuh API ile ayrı bir
+  kural dosyasına yazar, doğrular, yeniden başlatır, yüklendiğini kontrol eder, iki yönlü logtest yapar, hata
+  olursa geri alır; alarm susturan/seviye düşüren taslaklar ID yazarak ikinci onay ister
+  ([docs/rule-deployment.md](docs/rule-deployment.md)). Varsayılan kapalı.
 - **Size sorar** — "Bu SSH girişi sizin miydi?" Cevap bilgi tabanına yazılır, sonraki koşuya bağlam olur.
 - **Bilgi tabanı** — bilinen gürültü, kararlar, açık maddeler, dersler, "yarın şuna bak" istekleri. Yapay zekâ
-  önerileri **siz onaylayana kadar etkisizdir**.
+  önerileri **siz onaylayana kadar etkisizdir**. Mevcut notlarınızı YAML ile içe/dışa aktarın (arayüz ya da
+  `python -m app.kb`); tekrar çalıştırmak çift kayıt oluşturmaz.
+- **Öneri kuyruğu** — bulgular tek tek ve koşular arası tekilleştirilmiş gelir; bir karar tüm tekrarlara uygulanır.
+  Sunucuda bakılması gerekenler salt okunur komutlarla gelir; **Sohbette incele** ile çıktıyı yapıştırıp bir sonraki
+  adımı alırsınız.
+- **E-posta, Telegram ve Microsoft Teams bildirimleri** — kritik durumlar (SIEM sessizliği, indexer red, gerçek
+  olay; aynı konu her koşuda tekrarlanmaz), isteğe bağlı her koşu sonrası kısa özet ve kural uygulamaları
+  ([docs/notifications.md](docs/notifications.md)).
 - **Sohbet** — ortam hakkında soru sorun; aynı araçlarla, kanıta dayalı cevap.
 - **Kayıtlar Wazuh'un içinde** — her ortamın kendi indexer'ında `daily-triage-runs / -knowledge / -chat`.
-- **Çok ortam, çok dil** (İngilizce, Türkçe — sağ üstten seçilir), ortam başına model (ör. düzenlemeye tabi veri
+- **Çok ortam, çok dil** (İngilizce, Türkçe — sol menünün altından seçilir), ortam başına model (ör. düzenlemeye tabi veri
   için yerel model), arayüzde ve komut satırında bağlantı testi.
 
 ## Hızlı başlangıç
@@ -63,9 +80,104 @@ vi config/context/<ortam>.md       # ortamı anlatan birkaç satır
 
 `config/environments.yaml`, `config/context/*`, `config/seed/*`, `config/certs/` ve `.env` git'e girmez.
 
+### Kubernetes
+
+Kustomize tabanı ve örnek overlay: **[deploy/kubernetes](deploy/kubernetes/README.md)** — tek replika, root olmayan
+kullanıcı, salt okunur dosya sistemi, PVC gerekmez (durum Wazuh Indexer'da).
+
+## Yapay zekâ sağlayıcıları
+
+Anahtar sizin. Her sağlayıcı için ayrıntılı kurulum: **[docs/providers.tr.md](docs/providers.tr.md)**.
+
+| Sağlayıcı | `LLM_PROVIDER` | `LLM_BASE_URL` | Örnek `LLM_MODEL` |
+|---|---|---|---|
+| Claude (Anthropic) | `anthropic` | — | `claude-sonnet-5-5` |
+| OpenAI | `openai` | `https://api.openai.com/v1` | `gpt-6.1-sol` ¹ |
+| Google Gemini | `openai` | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.8-flash` |
+| DeepSeek | `openai` | `https://api.deepseek.com` | `deepseek-flash` |
+| Azure OpenAI | `openai` | `?api-version=` içeren tam deployment adresi | deployment adınız |
+| Ollama / vLLM / LM Studio / LiteLLM | `openai` | ör. `http://ollama:11434/v1` | ör. `qwen3:14b` |
+
+¹ OpenAI akıl yürütme modelleri ayrıca `LLM_TOKEN_PARAM=max_completion_tokens` ve `LLM_TEMPERATURE=none` ister.
+
+Model araç kullanımını (function calling) desteklemelidir. Her ortam kendi modelini seçebilir (`llm:` bloğu).
+
+## Bildirimler — e-posta, Telegram, Microsoft Teams
+
+| Ne zaman | Ayar (varsayılan) |
+|---|---|
+| SIEM sessiz, indexer red, manager süreci durmuş, indexer diski ≥ %90 | `on_critical_flags: true` |
+| *Gerçek olay* etiketli ya da *kritik* önemde bulgu | `on_real_incident: true`, `on_critical_findings: true` |
+| Koşunun kendisi başarısız | `on_run_error: false` |
+| **Her** koşudan sonra kısa özet (sağlık, sayılar, bekleyen öneriler) | `on_run_summary: false` |
+| Kural taslağı uygulandı, geri alındı ya da kaldırıldı | `on_rule_deploy: true` |
+
+Aynı kritik konu `repeat_hours` (24) içinde tekrar gönderilmez. Bir kanal, alanları dolu olduğu anda etkinleşir;
+ortam sayfasındaki **Bildirim testi** hepsini dener.
+
+```sh
+# .env — kanalları istediğiniz gibi birleştirin
+NOTIFY_UI_URL=https://triage.example.internal      # mesajlardaki bağlantı
+NOTIFY_ON_RUN_SUMMARY=true
+
+TELEGRAM_BOT_TOKEN=123456789:AA...                 # @BotFather → /newbot
+TELEGRAM_CHAT_ID=-1001234567890                    # aşağıya bakın
+
+TEAMS_WEBHOOK_URL=https://...                      # kanal → Workflows → "Post to a channel when a webhook request is received"
+
+SMTP_HOST=smtp.example.org
+SMTP_PORT=587
+SMTP_SECURITY=starttls                             # starttls | ssl | none
+SMTP_USER=...
+SMTP_PASSWORD=...
+SMTP_FROM=wazuh-triage@example.org
+SMTP_TO=secops@example.org,oncall@example.org
+```
+
+- **Telegram chat id:** botu gruba ekleyin (ya da bota mesaj yazın), `/start@<botunuz>` gönderin, sonra
+  `https://api.telegram.org/bot<token>/getUpdates` adresinde `"chat":{"id":...}` değerini alın; grup id'leri
+  eksidir (`-100…`). Wazuh alarmlarını zaten Dashboard'un Notifications eklentisiyle Telegram'a gönderiyorsanız
+  aynı bot token'ı ve chat id burada da çalışır.
+- **Teams:** eski Office 365 "Incoming Webhook" bağlayıcıları kaldırıldı; yukarıdaki Workflows şablonunu kullanın.
+  Mesajlar rapor bağlantılı Adaptive Card olarak gelir.
+- Çok ortamlı kurulumda aynı anahtarlar `notify:` bloğuna (genel ya da ortam başına) yazılır —
+  bkz. [docs/notifications.md](docs/notifications.md).
+
+Mesajlarda ortam adı, bulgu başlıkları, sunucu adları ve IP'ler bulunur; kanalı buna göre seçin.
+
+## Kural taslakları — komutlar ya da tek tıkla uygulama
+
+Bilgi tabanındaki her kural taslağında üç düğme vardır:
+
+- **Komutlar** — manager'da yapıştırılacak blok: yedek, `etc/rules/wdt_rules.xml`'e ekleme, `wazuh-analysisd -t`
+  (hata olursa yedeği geri yükler), restart, kontrol, geri alma. Her ortamda çalışır.
+- **Onayla ve uygula** — ortam başına isteğe bağlı (`rule_deploy`). Taslağı ayrı, en az yetkili bir API
+  kullanıcısıyla yazar, doğrular, manager'ı ya da cluster'ı yeniden başlatır, kural ID'lerinin yüklendiğini
+  kontrol eder, iki yönlü logtest yapar ve herhangi bir hatada **kendiliğinden geri alır**. Alarm susturan ya da
+  seviye düşüren taslaklar, kural ID'leri yazılarak ikinci kez onaylanır.
+- **Wazuh'tan kaldır** — uygulanmış taslağı aynı güvenceyle geri çeker.
+
+Kurulum ve gereken API yetkileri: [docs/rule-deployment.md](docs/rule-deployment.md).
+
+## Bilgi tabanı içe / dışa aktarma
+
+Elinizdeki notları (bilinen gürültü, kararlar, dersler) YAML listesi olarak getirin — biçim
+[`config/seed/example.yaml`](config/seed/example.yaml) ile aynı:
+
+```sh
+python -m app.kb import gurultu.yaml -e prod --dry-run   # önizleme
+python -m app.kb import gurultu.yaml -e prod --update    # yenileri ekle, değişenleri güncelle (key ya da tür+başlık)
+kubectl exec -i deploy/wazuh-daily-triage -- python -m app.kb import - -e prod --update < gurultu.yaml
+python -m app.kb export -e prod --kind baseline > baseline.yaml
+```
+
+Ya da bilgi tabanı sayfasındaki **İçe / dışa aktar** kutusunu kullanın. Tekrar çalıştırmak çift kayıt oluşturmaz.
+
 ## Güvenlik
 
-- Wazuh'a karşı **salt okunur**: Active Response, kural/konfig yazma, ajan komutu yok.
+- Wazuh'a karşı varsayılan olarak **salt okunur**: Active Response, konfig yazma, ajan komutu yok. İsteğe bağlı
+  kural uygulama ayrı bir API kullanıcısı kullanır (yalnız özel kural dosyası yükleme + restart); uygulama tek bir
+  ayrılmış dosyaya yazar.
 - Alarm içerikleri saldırgan kontrolündedir (prompt injection); kandırılmış bir model en fazla bilgi tabanına
   *öneri* ekleyebilir, siz onaylamadan etkisizdir.
 - Harici bir LLM kullanıyorsanız alarm özetleri o sağlayıcıya gider. Düzenlemeye tabi ortamlarda (BDDK, KVKK,
