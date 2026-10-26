@@ -18,13 +18,28 @@ secret:
   API_PASSWORD: "..."
 EOF
 
-# 2. Install
-helm repo add wazuh-daily-triage https://dururustem68.github.io/wazuh-daily-triage   # once published
+# 2. Install from the published Helm repository
+helm repo add wazuh-daily-triage https://dururustem68.github.io/wazuh-daily-triage
+helm repo update
 helm install wazuh-daily-triage wazuh-daily-triage/wazuh-daily-triage -f my-values.yaml
 
-# …or install straight from the repository:
+# …or install straight from the repository (no repo add needed):
 helm install wazuh-daily-triage ./deploy/helm/wazuh-daily-triage -f my-values.yaml
 ```
+
+## Publishing & Artifact Hub
+
+The chart is published to GitHub Pages (branch `gh-pages`) by the
+[`release-chart` workflow](../../.github/workflows/release-chart.yml) whenever the chart in `deploy/helm/` changes —
+it runs [chart-releaser](https://github.com/helm/chart-releaser), which builds the `.tgz`, tags the chart
+(`wazuh-daily-triage-<version>`) and updates `index.yaml`. To turn this on:
+
+1. Enable **GitHub Pages** on the repository, source = the `gh-pages` branch (Settings → Pages).
+2. Bump `version:` in `Chart.yaml` for each release; push to `main`.
+
+To list the chart on [Artifact Hub](https://artifacthub.io), add the repository there (the
+`artifacthub.io/*` annotations in `Chart.yaml` are already set). CI also installs the chart on a `kind`
+cluster on every PR/push, so a broken chart cannot merge.
 
 ## What you must configure
 
