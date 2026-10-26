@@ -21,6 +21,7 @@ class OpenAICompatLLM:
         # A full endpoint URL is accepted too (Azure: .../chat/completions?api-version=...)
         self.url = base if ("/chat/completions" in base) else base + "/chat/completions"
         self.client = httpx.AsyncClient(timeout=cfg.timeout)
+        self._no_force = False
 
     @staticmethod
     def _convert(system: str, messages: list[dict]) -> list[dict]:
@@ -40,7 +41,7 @@ class OpenAICompatLLM:
                 out.append({"role": "tool", "tool_call_id": m["tool_call_id"], "content": m["content"]})
         return out
 
-    async def complete(self, system, messages, tools):
+    async def complete(self, system, messages, tools, force_tool=None):
         body = {"model": self.cfg.model, "messages": self._convert(system, messages),
                 self.cfg.token_param: self.cfg.max_tokens}
         if self.cfg.temperature is not None:
@@ -49,6 +50,8 @@ class OpenAICompatLLM:
         if tools:
             body["tools"] = [{"type": "function", "function": {"name": t["name"], "description": t["description"],
                                                               "parameters": t["parameters"]}} for t in tools]
+            if force_tool and not self._no_force:
+                body["tool_choice"] = {"type": "function", "function": {"name": force_tool}}
         headers = {"content-type": "application/json"}
         if self.cfg.api_key:
             headers["authorization"] = f"Bearer {self.cfg.api_key}"
@@ -58,6 +61,9 @@ class OpenAICompatLLM:
                                       retries=self.cfg.max_retries, label="LLM endpoint")
         except httpx.HTTPError as e:
             raise LLMError(f"cannot reach LLM endpoint ({self.url}): {e}") from e
+        if r.status_code == 400 and "tool_choice" in body and "tool_choice" in r.text:
+            self._no_force = True     # backend does not support a forced tool: ask without it
+            return await self.complete(system, messages, tools)
         if r.status_code >= 400:
             raise LLMError(f"LLM {r.status_code}: {r.text[:500]}")
         d = r.json()

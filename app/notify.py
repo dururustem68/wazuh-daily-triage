@@ -124,7 +124,7 @@ def build_message(env_name: str, run: dict, items: list[dict], cfg: NotifyCfg, l
             "text": "\n".join([title, ""] + [f"• {x}" for x in lines] + ([f"\n{link}"] if link else []))}
 
 
-def summary_lines(run: dict, lang: str, inbox_waiting: int | None, label_name) -> list[str]:
+def summary_lines(run: dict, lang: str, inbox_waiting: int | None, label_name, top: list[dict] | None = None) -> list[str]:
     m = run.get("metrics") or {}
     lvl = ((run.get("collected") or {}).get("env") or {}).get("high_level", "")
     out = [t(lang, "notify.sum_counts", total=f"{m.get('total', 0):,}", high=f"{m.get('high', 0):,}", lvl=lvl)]
@@ -136,6 +136,8 @@ def summary_lines(run: dict, lang: str, inbox_waiting: int | None, label_name) -
                      labels=", ".join(f"{n} {label_name(k)}" for k, n in sorted(counts.items(), key=lambda x: -x[1]))))
     if inbox_waiting:
         out.append(t(lang, "notify.sum_inbox", n=inbox_waiting))
+        for f in (top or [])[:5]:   # most important waiting items across recent runs, not only this run
+            out.append(f"  ↳ [{label_name(f.get('label', ''))}] {str(f.get('title', ''))[:120]}")
     if run.get("ai_error"):
         out.append(t(lang, "notify.sum_ai_error"))
     return out

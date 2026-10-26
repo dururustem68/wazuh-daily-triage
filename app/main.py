@@ -240,8 +240,12 @@ async def dashboard(request: Request):
         new_f = sum(1 for f in (last or {}).get("findings") or []
                     if f.get("user_status") == "new" and f.get("label") in ("real_incident", "investigate", "detection_gap"))
         inbox = await _safe(rt.inbox(er.env.id), [])
+        top = [dict(it, idx=i) for i, it in enumerate(inbox)][:8]
+        urgent = sum(1 for it in inbox if it["finding"].get("label") in ("real_incident", "detection_gap")
+                     or it["finding"].get("severity") in ("critical", "high"))
         cards.append({"env": er.env, "last": last, "running": er.current_run, "next": rt.next_run(er.env, lang),
-                      "proposals": len(props), "open_q": open_q, "new_f": new_f, "inbox": len(inbox)})
+                      "proposals": len(props), "open_q": open_q, "new_f": new_f, "inbox": len(inbox),
+                      "top": top, "urgent": urgent, "props": props[:5]})
     return tpl.TemplateResponse(request, "dashboard.html", _ctx(request, cards=cards))
 
 

@@ -91,6 +91,7 @@ class ToolBox:
         self.mode = mode
         self.run_id = run_id
         self.submitted: dict | None = None
+        self.rejected_submits = 0
         self.proposals: list[dict] = []
         self._handlers: dict[str, Callable[[dict], Awaitable[Any]]] = {
             "search_alerts": self.search_alerts,
@@ -335,6 +336,15 @@ class ToolBox:
                  "body": r["body"][:600], "rule_ids": r.get("rule_ids")} for r in rows]
 
     async def submit_report(self, a):
+        """Accept only a usable report; otherwise tell the model what to fix so it can resubmit."""
+        if "_raw" in a:
+            self.rejected_submits += 1
+            return {"error": "The report arguments were not valid JSON (probably cut off by the output limit). "
+                             "Submit again, shorter: at most 8 findings, `detail` under 600 characters, "
+                             "omit `evidence` lists longer than 5 items."}
+        if not str(a.get("summary_md") or "").strip() or not isinstance(a.get("findings", []), list):
+            self.rejected_submits += 1
+            return {"error": "`summary_md` (non-empty) and `findings` (array) are required. Submit again."}
         self.submitted = a
         return {"ok": True}
 
@@ -430,7 +440,8 @@ SPECS: dict[str, dict] = {
         "parameters": _obj({"kinds": {"type": "array", "items": {"type": "string"}},
                             "status": {"type": "array", "items": {"type": "string"}}})},
     "submit_report": {"name": "submit_report", "description":
-        "Submit the daily diagnostic report. The LAST step of the run; call it exactly once.",
+        "Submit the daily diagnostic report. The LAST step of the run. Keep it compact so it fits the output "
+        "limit: at most 10 findings, each `detail` a few sentences.",
         "parameters": _obj({
             "summary_md": {"type": "string", "description": "2-6 sentence executive summary (markdown): volume, is there real risk, what awaits approval."},
             "health_assessment": {"type": "string", "description": "One paragraph on infrastructure health (SIEM flow, agents, disk)."},

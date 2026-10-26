@@ -39,7 +39,7 @@ TXT = {
 class MockLLM:
     name = "mock"
 
-    async def complete(self, system, messages, tools):
+    async def complete(self, system, messages, tools, force_tool=None):
         L = TXT["tr" if "in Turkish" in (system or "") else "en"]
         if not tools:
             return LLMResponse(text="OK")

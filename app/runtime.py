@@ -24,7 +24,7 @@ from .llm.base import LLMError, make_llm
 from .notify import build_message, critical_items, plain_message, recently_notified, summary_lines
 from .notify import send as notify_send
 from .store import KNOWLEDGE_KINDS, IndexStore, MemoryStore, Repo, new_id, now_iso
-from .wazuh.api import WazuhAPI
+from .wazuh.api import WazuhAPI, WazuhAPIError
 from .wazuh.indexer import Indexer
 
 log = logging.getLogger("wdt")
@@ -269,11 +269,18 @@ class Runtime:
                                   "provider": llm_cfg.provider, "model": llm_cfg.model})
                 await repo.save_run(run)  # requests stay open for the next run
                 return run
-            rep = normalize_report(tb.submitted, res.text, lang)
+            if tb.submitted is not None:
+                rep = normalize_report(tb.submitted, res.text, lang)
+            else:
+                # No usable report (text only, truncated/invalid JSON): keep the deterministic findings.
+                why = "; ".join(res.notes[-3:]) or res.stopped
+                log.warning("run %s: model did not submit a valid report (%s)", run_id, why)
+                rep = flags_only_report(flags, t(lang, "run.no_valid_report", why=why), lang, key="run.ai_no_report")
+                run["ai_error"] = f"no valid report: {why}"[:500]
             run.update(
                 status="done", stage=None, finished_at=now_iso(), **rep,
                 proposals=[p["id"] for p in tb.proposals],
-                agent={"steps": res.steps, "stopped": res.stopped, "trace": res.trace,
+                agent={"steps": res.steps, "stopped": res.stopped, "trace": res.trace, "notes": res.notes,
                        "input_tokens": res.input_tokens, "output_tokens": res.output_tokens,
                        "provider": llm_cfg.provider, "model": llm_cfg.model},
             )
@@ -331,8 +338,9 @@ class Runtime:
                 items = [i for i in items if i["key"] not in seen]
             summary = []
             if cfg.on_run_summary and run.get("status") == "done":
-                waiting = len(await self.inbox(rt.env.id))
-                summary = summary_lines(run, lang, waiting, lambda k: t(lang, "label." + k))
+                waiting = await self.inbox(rt.env.id)
+                summary = summary_lines(run, lang, len(waiting), lambda k: t(lang, "label." + k),
+                                        [w["finding"] for w in waiting])
             if not items and not summary:
                 return {}
             if items:
@@ -513,6 +521,10 @@ class Runtime:
                 rec["state"] = "removed" if remove else "deployed"
             except rulemod.DeployError as e:
                 rec.update(state="failed", error=str(e)[:500], steps=getattr(e, "steps", None))
+            except WazuhAPIError as e:  # e.g. wrong deploy credentials — nothing was written
+                rec.update(state="failed", error=f"{e}"[:500],
+                           steps=[{"step": "connect as " + (rt.env.rule_deploy.username or "?"), "ok": False,
+                                   "detail": "nothing was changed"}])
             finally:
                 if api is not rt.api:
                     await api.close()
@@ -733,7 +745,7 @@ def normalize_report(sub: dict | None, fallback_text: str = "", lang: str = "en"
             "closed_items": [_s(x) for x in _as_list(sub.get("closed_items"))]}
 
 
-def flags_only_report(flags: list[dict], err: str, lang: str) -> dict:
+def flags_only_report(flags: list[dict], err: str, lang: str, key: str = "run.ai_failed") -> dict:
     """Report built from deterministic flags only (used when the LLM is unavailable)."""
     findings = []
     for f in flags:
@@ -741,7 +753,7 @@ def flags_only_report(flags: list[dict], err: str, lang: str) -> dict:
         findings.append({"id": f"f{len(findings) + 1}", "label": "investigate", "severity": "high" if crit else "medium",
                          "title": f.get("message", f.get("code", "")), "detail": f"`{f.get('code')}`",
                          "evidence": [], "rule_ids": [], "agents": [], "user_status": "new"})
-    return {"summary_md": t(lang, "run.ai_failed", err=err[:300]), "health_assessment": "",
+    return {"summary_md": t(lang, key, err=err[:300]), "health_assessment": "",
             "findings": findings, "questions": [], "open_items": [], "closed_items": []}
 
 

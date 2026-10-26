@@ -416,3 +416,47 @@ def test_empty_env_vars_fall_back(tmp_path, monkeypatch):
     s = load_settings(p)
     n = s.notify_for(s.environments[0])
     assert n.email.port == 587 and n.email.to == ["a@example.org", "b@example.org"] and n.channels == ["email"]
+
+
+async def test_agent_resubmits_after_truncated_report(settings):
+    from app.agent.runner import run_agent
+    from app.agent.tools import ToolBox
+    from app.llm.base import LLMResponse, ToolCall
+    calls = []
+
+    class FakeLLM:
+        name = "fake"
+
+        async def complete(self, system, messages, tools, force_tool=None):
+            calls.append(force_tool)
+            if len(calls) == 1:
+                return LLMResponse(text="I'll dig into it.", tool_calls=[ToolCall("1", "submit_report", {"_raw": '{"summ'})],
+                                   stop_reason="length")
+            return LLMResponse(tool_calls=[ToolCall("2", "submit_report", {"summary_md": "ok", "findings": []})])
+    rt = Runtime(settings, demo=True)
+    er = rt.get("demo")
+    tb = ToolBox(er.env, er.ix, er.api, er.repo, mode="triage", run_id="x")
+    res = await run_agent(FakeLLM(), "s", [{"role": "user", "content": "u"}], tb, 3, stop_on="submit_report")
+    assert tb.submitted == {"summary_md": "ok", "findings": []} and res.stopped == "submit_report"
+    assert any("rejected" in n for n in res.notes) and any("output limit" in n for n in res.notes)
+
+
+async def test_agent_forced_final_and_fallback(settings):
+    from app.agent.runner import FINAL_ATTEMPTS, run_agent
+    from app.agent.tools import ToolBox
+    from app.llm.base import LLMResponse
+    forced = []
+
+    class Chatty:
+        name = "chatty"
+
+        async def complete(self, system, messages, tools, force_tool=None):
+            forced.append(force_tool)
+            return LLMResponse(text="thinking out loud")
+    rt = Runtime(settings, demo=True)
+    er = rt.get("demo")
+    tb = ToolBox(er.env, er.ix, er.api, er.repo, mode="triage", run_id="y")
+    res = await run_agent(Chatty(), "s", [{"role": "user", "content": "u"}], tb, 3, stop_on="submit_report")
+    assert tb.submitted is None and len(forced) == 3 + FINAL_ATTEMPTS
+    assert forced[:2] == [None, None] and all(f == "submit_report" for f in forced[2:])
+    assert res.stopped in ("text", "max_steps")

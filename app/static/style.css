@@ -73,7 +73,7 @@ footer { text-align: center; padding: 18px; color: var(--muted); font-size: 12px
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .muted { color: var(--muted); } .small { font-size: 12.5px; } .r { text-align: right; font-variant-numeric: tabular-nums; }
 .grid { display: grid; gap: 16px; }
-.grid.cards { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
+.grid.cards { grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); }
 .grid.two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px;
   margin-bottom: 14px; box-shadow: var(--shadow); }
@@ -279,3 +279,15 @@ form.inline { display: inline; margin: 0; }
   .tbl { display: block; overflow-x: auto; } .env-card .stats { grid-template-columns: repeat(2, 1fr); }
 }
 a.callout { color: var(--ink); } a.callout:hover { text-decoration: none; box-shadow: 0 0 0 2px var(--accent) inset; }
+
+/* watch board: waiting items */
+.waiting { margin: 14px 0 4px; }
+.waiting h3 { margin: 0; }
+.wlist { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 4px; }
+.wlist li a { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--ink);
+  border: 1px solid var(--line-2); border-left: 3px solid var(--line); background: var(--panel-2); }
+.wlist li a:hover { text-decoration: none; border-color: var(--accent); }
+.wlist li.sev-critical a { border-left-color: var(--red); } .wlist li.sev-high a { border-left-color: #f97316; }
+.wlist li.sev-medium a { border-left-color: #f5a524; }
+.wlist .wt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.env-card details { margin-top: 10px; }

@@ -3,6 +3,24 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] — 2026-10-26
+
+### Fixed
+- **"The model did not submit a report" / empty findings:** a report cut off by the output limit (invalid JSON) or
+  missing its summary used to be accepted as an empty report. `submit_report` now rejects it with instructions,
+  the model resubmits a compact version; after the tool budget up to two extra calls force `submit_report`
+  (`tool_choice`, skipped automatically where unsupported). If there is still no valid report, the run keeps
+  the deterministic findings and says why.
+- A failed login of the rule-deployment user is shown as a failed deployment ("nothing was changed").
+- Rule deployment refuses drafts whose parent rule sits in a custom file that loads later (alphabetical
+  `etc/rules` order) and suggests a file name.
+
+### Added
+- **Watch board:** per environment, the recommendations waiting for a decision (across recent runs, urgent
+  first) and pending knowledge proposals — each links straight to the item. Critical health flags on top.
+- Run summary notifications list the most important waiting items, not only this run's counts.
+- Knowledge base: the environment context file is shown under "Context".
+
 ## [0.4.0] — 2026-10-26
 
 ### Changed

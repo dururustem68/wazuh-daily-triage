@@ -44,7 +44,7 @@ class AnthropicLLM:
                     out.append({"role": "user", "content": [block]})
         return out
 
-    async def complete(self, system, messages, tools):
+    async def complete(self, system, messages, tools, force_tool=None):
         body = {
             "model": self.cfg.model,
             "max_tokens": self.cfg.max_tokens,
@@ -58,6 +58,8 @@ class AnthropicLLM:
         if tools:
             body["tools"] = [{"name": t["name"], "description": t["description"],
                               "input_schema": t["parameters"]} for t in tools]
+            if force_tool:
+                body["tool_choice"] = {"type": "tool", "name": force_tool}
         try:
             r = await post_with_retry(self.client, self.url, content=json.dumps(body), headers={
                 "x-api-key": self.cfg.api_key, "anthropic-version": "2023-06-01",

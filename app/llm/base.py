@@ -77,7 +77,8 @@ async def post_with_retry(client: httpx.AsyncClient, url: str, *, content: str, 
 class LLM(Protocol):
     name: str
 
-    async def complete(self, system: str, messages: list[dict], tools: list[dict]) -> LLMResponse: ...
+    async def complete(self, system: str, messages: list[dict], tools: list[dict],
+                       force_tool: str | None = None) -> LLMResponse: ...
 
 
 def make_llm(cfg) -> LLM:

@@ -20,17 +20,42 @@
         <div><b>{{ (last.findings or [])|selectattr('label','equalto','real_incident')|list|length }}</b><span>{{ _('dash.real') }}</span></div>
         <div><b>{{ c.new_f }}</b><span>{{ _('dash.unreviewed') }}</span></div>
       </div>
-      {% if c.inbox %}
-      <a class="callout" href="/e/{{ c.env.id }}/inbox"><b>{{ c.inbox }}</b><span>{{ _('inbox.waiting', n=c.inbox) }}</span><span class="spacer"></span>→</a>
+      {% set crit = (last.flags or [])|selectattr('severity','equalto','critical')|list %}
+      {% if crit %}<div class="flags">{% for f in crit %}<div class="flag red">{{ f.message }}</div>{% endfor %}</div>{% endif %}
+
+      {% if c.top %}
+      <div class="waiting">
+        <div class="row"><h3>{{ _('dash.waiting_title') }}</h3><span class="spacer"></span>
+          {% if c.urgent %}<span class="pill red">{{ _('dash.urgent', n=c.urgent) }}</span>{% endif %}
+          <a class="small" href="/e/{{ c.env.id }}/inbox">{{ _('inbox.waiting', n=c.inbox) }} →</a></div>
+        <ul class="wlist">
+        {% for it in c.top %}{% set f = it.finding %}
+          <li class="sev-{{ f.severity }}"><a href="/e/{{ c.env.id }}/inbox?i={{ it.idx }}">
+            <span class="pill {{ LABEL_COLORS.get(f.label, 'gray') }}">{{ _('label.' ~ f.label) }}</span>
+            <span class="wt">{{ f.title|truncate(90) }}</span>
+            {% if it.seen > 1 %}<span class="muted small">×{{ it.seen }}</span>{% endif %}
+            <span class="pill outline">{{ _('sev.' ~ f.severity) }}</span></a></li>
+        {% endfor %}
+        </ul>
+      </div>
       {% endif %}
-      <div class="summary">{{ last.summary_md|md }}</div>
+
+      {% if c.props %}
+      <div class="waiting">
+        <div class="row"><h3>{{ _('dash.props_title') }}</h3><span class="spacer"></span>
+          <a class="small" href="/e/{{ c.env.id }}/k?status=proposed">{{ _('dash.proposals', n=c.proposals) }} →</a></div>
+        <ul class="wlist">
+        {% for p in c.props %}<li><a href="/e/{{ c.env.id }}/k?status=proposed">
+          <span class="pill purple">{{ _('kind.' ~ p.kind) }}</span><span class="wt">{{ p.title|truncate(90) }}</span></a></li>{% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <details class="small"><summary class="muted">{{ _('dash.last_summary') }}</summary><div class="summary">{{ last.summary_md|md }}</div></details>
       <p class="small muted">{{ _('dash.last_report') }}: <a href="/e/{{ c.env.id }}/r/{{ last.run_id }}">{{ last.started_at|ts }}</a>
         · {{ _('dash.window', h=last.window.hours) }}</p>
-      {% if c.open_q or c.proposals %}
-      <p class="row small">
-        {% if c.open_q %}<a class="pill blue" href="/e/{{ c.env.id }}/r/{{ last.run_id }}#questions">{{ _('dash.questions_waiting', n=c.open_q) }}</a>{% endif %}
-        {% if c.proposals %}<a class="pill purple" href="/e/{{ c.env.id }}/k?status=proposed">{{ _('dash.proposals', n=c.proposals) }}</a>{% endif %}
-      </p>
+      {% if c.open_q %}
+      <p class="row small"><a class="pill blue" href="/e/{{ c.env.id }}/r/{{ last.run_id }}#questions">{{ _('dash.questions_waiting', n=c.open_q) }}</a></p>
       {% endif %}
     {% else %}
       <div class="empty"><b>{{ _('dash.no_report') }}</b></div>
