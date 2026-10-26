@@ -7,7 +7,7 @@ geri yazar, yalnızca insan kararı gereken yerde size soru sorar ve cevapların
 Yapay zekâ anahtarınız sizin: Anthropic, OpenAI, Azure OpenAI ya da OpenAI uyumlu herhangi bir uç nokta (Ollama,
 vLLM, LM Studio, LiteLLM). Tek Docker konteyner; Wazuh'a karşı salt okunur.
 
-[English README](README.md) · [Yapay zekâ sağlayıcıları](docs/providers.tr.md) · [Yetkiler ve ağ](docs/permissions.md) · [Katkı](CONTRIBUTING.md) · [Güvenlik](SECURITY.md)
+[English README](README.md) · [Yapay zekâ sağlayıcıları](docs/providers.tr.md) · [Yetkiler ve ağ](docs/permissions.md) · [Kural uygulama](docs/rule-deployment.md) · [Katkı](CONTRIBUTING.md) · [Güvenlik](SECURITY.md)
 
 ![Rapor](docs/screenshot-report.png)
 
@@ -20,8 +20,13 @@ vLLM, LM Studio, LiteLLM). Tek Docker konteyner; Wazuh'a karşı salt okunur.
   seviye gruplar (kural × ajan × ilk/son × kaynak IP × örnek), önceki pencereyle kıyas, **14 günde ilk kez
   görülen kurallar**, izlenen kurallar, zafiyet özeti.
 - **Yapay zekâ teşhisi** — özeti ve bilgi tabanını okur, salt okunur araçlarla derinleşir (zaman dağılımı, IP
-  profili, ±30 dk korelasyon, logtest, kural tanımı) ve yapılandırılmış rapor teslim eder. Kural taslağı yazar
-  ama **uygulamaz**; XML, OS_Regex tuzakları ve ID çakışması için kontrol eder.
+  profili, ±30 dk korelasyon, logtest, kural tanımı) ve yapılandırılmış rapor teslim eder. Kural taslağı yazar;
+  XML, OS_Regex tuzakları ve ID çakışması için kontrol eder.
+- **Yayına alınabilir kural taslakları** — her taslakla manager'da çalıştırılacak hazır komutlar gelir (yedek,
+  `wazuh-analysisd -t`, restart, geri alma). İsteğe bağlı **Onayla ve uygula**: taslağı Wazuh API ile ayrı bir
+  kural dosyasına yazar, doğrular, yeniden başlatır, yüklendiğini kontrol eder, iki yönlü logtest yapar, hata
+  olursa geri alır; alarm susturan/seviye düşüren taslaklar ID yazarak ikinci onay ister
+  ([docs/rule-deployment.md](docs/rule-deployment.md)). Varsayılan kapalı.
 - **Size sorar** — "Bu SSH girişi sizin miydi?" Cevap bilgi tabanına yazılır, sonraki koşuya bağlam olur.
 - **Bilgi tabanı** — bilinen gürültü, kararlar, açık maddeler, dersler, "yarın şuna bak" istekleri. Yapay zekâ
   önerileri **siz onaylayana kadar etkisizdir**.
@@ -92,7 +97,8 @@ Model araç kullanımını (function calling) desteklemelidir. Her ortam kendi m
 
 ## Güvenlik
 
-- Wazuh'a karşı **salt okunur**: Active Response, kural/konfig yazma, ajan komutu yok.
+- Wazuh'a karşı varsayılan olarak **salt okunur**: Active Response, konfig yazma, ajan komutu yok. İsteğe bağlı
+  kural uygulama ayrı bir API kullanıcısıyla yalnız tek bir kural dosyasını günceller ve manager'ı yeniden başlatır.
 - Alarm içerikleri saldırgan kontrolündedir (prompt injection); kandırılmış bir model en fazla bilgi tabanına
   *öneri* ekleyebilir, siz onaylamadan etkisizdir.
 - Harici bir LLM kullanıyorsanız alarm özetleri o sağlayıcıya gider. Düzenlemeye tabi ortamlarda (BDDK, KVKK,

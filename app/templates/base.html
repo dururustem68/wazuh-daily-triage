@@ -10,9 +10,12 @@
   "running": _('run.running'), "now": _('run.now'), "done": _('run.done'), "open": _('run.open'),
   "failed_start": _('run.failed_start'), "status_fail": _('run.status_fail'), "error": _('run.error'),
   "starting": _('run.starting'), "saved": _('rep.saved'), "saved_baseline": _('rep.saved_baseline'),
-  "copied": _('rep.copied'), "sure": _('kb.sure'), "save": _('rep.save'), "thinking": _('chat.thinking'),
+  "copied": _('rep.copied'), "copy": _('rep.copy'), "sure": _('kb.sure'), "save": _('rep.save'), "thinking": _('chat.thinking'),
   "tools": _('chat.tools', n='{n}'), "proposals": _('chat.proposals', n='{n}'), "testing": _('env.testing'),
-  "test": _('env.test'), "ok": _('chk.ok'), "fail": _('chk.fail')
+  "test": _('env.test'), "ok": _('chk.ok'), "fail": _('chk.fail'),
+  "rd_confirm": _('rd.confirm'), "rd_type_ids": _('rd.type_ids'), "rd_working": _('rd.working'),
+  "rd_unconfirm": _('rd.unconfirm'), "rd_errors": _('rd.errors'), "rd_risky": _('rd.risky'),
+  "rd_cmds_note": _('rd.cmds_note'), "rd_disabled": _('rd.disabled')
 } | tojson }}</script>
 <script src="/static/app.js?v={{ version }}" defer></script>
 </head>
@@ -39,6 +42,6 @@
 </div>
 {% endif %}
 <main>{% block body %}{% endblock %}</main>
-<footer class="muted small">Wazuh Daily Triage {{ version }} · {{ _('footer') }} · <a href="{{ SOURCE_URL }}" rel="noopener">{{ _('nav.source') }}</a> (AGPL-3.0)</footer>
+<footer class="muted small">Wazuh Daily Triage {{ version }} · {{ _('footer.deploy') if deploy_any else _('footer') }} · <a href="{{ SOURCE_URL }}" rel="noopener">{{ _('nav.source') }}</a> (AGPL-3.0)</footer>
 </body>
 </html>

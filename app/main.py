@@ -25,6 +25,7 @@ from .agent.tools import LABELS, SEVERITIES
 from .collector import _parse
 from .config import LANGUAGES, load_settings
 from .i18n import LANG_NAMES, t
+from .rules import extract_xml
 from .runtime import Runtime, demo_enabled
 from .store import KNOWLEDGE_KINDS, now_iso
 
@@ -149,7 +150,8 @@ def _ctx(request: Request, **kw):
     lang = ui_lang(request)
     rt = request.app.state.rt
     return {"envs": [r.env for r in rt.envs.values()], "demo": rt.demo, "app_title": rt.settings.app.title,
-            "auth": not AUTH_DISABLED, "lang": lang, "_": lambda key, **a: t(lang, key, **a), **kw}
+            "auth": not AUTH_DISABLED, "lang": lang, "_": lambda key, **a: t(lang, key, **a),
+            "deploy_any": any(rt.deploy_ready(r.env) for r in rt.envs.values()), **kw}
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -284,8 +286,12 @@ async def knowledge_page(request: Request, env_id: str, kind: str | None = None,
     rows = await _safe(er.repo.list_knowledge(kinds=[kind] if kind else None, status=status or None, size=500), [])
     order = {"proposed": 0, "active": 1, "closed": 2, "rejected": 3}
     rows.sort(key=lambda r: (order.get(r["status"], 9), r["kind"]))
+    for r in rows:
+        if r.get("kind") == "rule_draft":
+            r["_xml"] = extract_xml(r)
     return tpl.TemplateResponse(request, "knowledge.html", _ctx(request, er=er, env=er.env, rows=rows,
-                                                                kind=kind, status=status))
+                                                                kind=kind, status=status,
+                                                                deploy_on=_rt(request).deploy_ready(er.env)))
 
 
 @app.get("/e/{env_id}/chat", response_class=HTMLResponse)
@@ -462,6 +468,60 @@ async def api_k_delete(request: Request, env_id: str, kid: str):
     er = _env(request, env_id)
     await er.repo.delete_knowledge(kid)
     return {"ok": True}
+
+
+# ----------------------------------------------------------------------- rule drafts
+USER_HEADERS = [h.strip() for h in os.environ.get(
+    "USER_HEADER", "X-authentik-username,X-Forwarded-User,Remote-User,X-Auth-Request-User").split(",") if h.strip()]
+
+
+def actor(request: Request) -> str:
+    """Who clicked: the SSO proxy's user header when auth is delegated to it, else the shared UI login."""
+    if AUTH_DISABLED:
+        for h in USER_HEADERS:
+            v = request.headers.get(h)
+            if v:
+                return v[:120]
+        return "proxy-user"
+    return "ui"
+
+
+@app.get("/api/e/{env_id}/k/{kid}/rule")
+async def api_rule_view(request: Request, env_id: str, kid: str):
+    _env(request, env_id)
+    try:
+        return await _rt(request).rule_view(env_id, kid)
+    except KeyError as e:
+        raise HTTPException(404) from e
+
+
+class DeployReq(BaseModel):
+    confirm: str = ""
+
+
+async def _deploy(request: Request, env_id: str, kid: str, confirm: str, remove: bool):
+    _env(request, env_id)
+    try:
+        rec = await _rt(request).rule_deploy(env_id, kid, actor(request), confirm, remove=remove)
+    except KeyError as e:
+        raise HTTPException(404) from e
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(409, str(e)) from e
+    return rec
+
+
+@app.post("/api/e/{env_id}/k/{kid}/deploy")
+async def api_rule_deploy(request: Request, env_id: str, kid: str, body: DeployReq):
+    return await _deploy(request, env_id, kid, body.confirm, remove=False)
+
+
+@app.post("/api/e/{env_id}/k/{kid}/undeploy")
+async def api_rule_undeploy(request: Request, env_id: str, kid: str):
+    return await _deploy(request, env_id, kid, "", remove=True)
 
 
 class ChatReq(BaseModel):

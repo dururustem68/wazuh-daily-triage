@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 import yaml
 
+from . import rules as rulemod
 from .agent.prompts import system_prompt, triage_user_message
 from .agent.runner import run_agent
 from .agent.tools import LABELS, SEVERITIES, ToolBox
@@ -38,6 +39,7 @@ class EnvRuntime:
         self.store = store
         self.repo = Repo(store, env.id)
         self.lock = asyncio.Lock()
+        self.deploy_lock = asyncio.Lock()
         self.current_run: str | None = None
 
 
@@ -178,7 +180,7 @@ class Runtime:
                        stage="analysing", collected=collected)
             await repo.save_run(run)
 
-            knowledge = await repo.list_knowledge(status=["active", "proposed"],
+            knowledge = await repo.list_knowledge(status=["active", "proposed", "rejected"],
                                                   kinds=["context", "baseline", "decision", "open_item",
                                                          "lesson", "rule_draft", "answer"])
             prev = await repo.list_runs(3, status="done", light=True)
@@ -228,7 +230,7 @@ class Runtime:
         await self.ensure_seed(rt)
         hist = await rt.repo.chat_history(session, 30)
         await rt.repo.chat_add(session, "user", text)
-        knowledge = await rt.repo.list_knowledge(status=["active", "proposed"])
+        knowledge = await rt.repo.list_knowledge(status=["active", "proposed", "rejected"])
         sysmsg = system_prompt("chat", rt.env, rt.env.context_text(self.settings.base_dir), knowledge,
                                self.settings.app.timezone, lang)
         last = await rt.repo.last_success()
@@ -355,6 +357,84 @@ class Runtime:
                         n += 1
                 await rt.repo.save_run(run)
         return n
+
+    # ------------------------------------------------------------ rule drafts
+    def deploy_ready(self, env: Environment) -> bool:
+        """Deployment is on, the environment has an API, and a separate deploy user is configured."""
+        cfg = env.rule_deploy
+        return bool(cfg.enabled and env.api and (self.demo or cfg.username))
+
+    def _deploy_api(self, rt: EnvRuntime):
+        """Write-enabled API client (separate user) — or the demo fake. None when deployment is off."""
+        cfg = rt.env.rule_deploy
+        if not self.deploy_ready(rt.env):
+            return None
+        if self.demo:
+            return rt.api
+        ep = rt.env.api.model_copy(update={"username": cfg.username, "password": cfg.password,
+                                           "timeout": max(rt.env.api.timeout, 60)})
+        return WazuhAPI(ep)
+
+    async def _rule_entry(self, rt: EnvRuntime, kid: str) -> dict:
+        d = await rt.store.get("knowledge", kid)
+        if not d or d.get("env") != rt.env.id or d.get("kind") != "rule_draft":
+            raise KeyError(kid)
+        return d
+
+    async def rule_view(self, env_id: str, kid: str) -> dict:
+        rt = self.envs[env_id]
+        d = await self._rule_entry(rt, kid)
+        xml = rulemod.extract_xml(d)
+        an = await rulemod.analyse(xml, rt.env.rule_deploy, rt.api, rt.env.high_level)
+        return {"analysis": an, "deploy_enabled": self.deploy_ready(rt.env),
+                "file": rt.env.rule_deploy.file, "deploy": d.get("deploy"),
+                "commands": rulemod.commands(kid, xml, rt.env.rule_deploy, d.get("title", ""), an["ids"],
+                                             d.get("tests"))}
+
+    async def rule_deploy(self, env_id: str, kid: str, actor: str, confirm: str = "", remove: bool = False) -> dict:
+        rt = self.envs[env_id]
+        api = self._deploy_api(rt)
+        if api is None:
+            raise PermissionError("rule deployment is off for this environment "
+                                  "(rule_deploy.enabled with a separate username/password)")
+        if rt.deploy_lock.locked():
+            raise RuntimeError("another deployment is in progress")
+        async with rt.deploy_lock:
+            d = await self._rule_entry(rt, kid)
+            xml = rulemod.extract_xml(d)
+            an = await rulemod.analyse(xml, rt.env.rule_deploy, rt.api, rt.env.high_level)
+            ids = an["ids"]
+            if not remove:
+                if not an["ok"]:
+                    raise ValueError("; ".join(an["errors"]))
+                if an["risky"] and confirm.replace(" ", "") != ",".join(ids):
+                    raise PermissionError("this draft silences or lowers alerts; type the rule id(s) to confirm: "
+                                          + ",".join(ids))
+            rec = {"state": "running", "action": "remove" if remove else "deploy", "at": now_iso(), "by": actor,
+                   "file": rt.env.rule_deploy.file, "ids": ids, "risky": an["risky"]}
+            try:
+                rec["steps"] = await rulemod.apply(api, rt.env.rule_deploy, kid, xml, ids, d.get("title", ""),
+                                                   d.get("tests"), remove=remove)
+                rec["state"] = "removed" if remove else "deployed"
+            except rulemod.DeployError as e:
+                rec.update(state="failed", error=str(e)[:500], steps=getattr(e, "steps", None))
+            finally:
+                if api is not rt.api:
+                    await api.close()
+            async with self.run_lock(f"k:{kid}"):
+                d = await self._rule_entry(rt, kid)
+                hist = (d.get("deploy_history") or [])[-9:]
+                if d.get("deploy"):
+                    hist.append({k: v for k, v in d["deploy"].items() if k != "steps"})
+                patch = {"deploy": rec, "deploy_history": hist, "updated_at": now_iso()}
+                if rec["state"] == "deployed":
+                    patch["status"] = "active"
+                elif rec["state"] == "removed":
+                    patch["status"] = "closed"
+                d.update(patch)
+                await rt.store.put("knowledge", kid, d)
+            log.info("rule %s %s by %s: %s", kid, rec["action"], actor, rec["state"])
+            return rec
 
     async def chat_from_finding(self, env_id: str, run_id: str, fid: str, lang: str | None = None) -> str:
         """Open a chat session pre-filled with a finding and its manual checks (no LLM call)."""

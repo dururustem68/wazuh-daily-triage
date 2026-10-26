@@ -123,3 +123,10 @@ form.inline { display: inline; margin: 0; }
 .check { margin: 8px 0; } .check pre { margin: 4px 0; }
 .inbox-list { margin-top: 18px; padding-left: 22px; } .inbox-list li { margin: 4px 0; }
 .inbox-list li.on a { font-weight: 600; color: var(--ink); }
+
+/* rule drafts */
+.rd-out { margin: .5rem 0; }
+.rd-out .bad, .steps .bad { color: var(--red, #b42318); }
+.rd-out .warn { color: var(--amber, #b54708); }
+.steps { list-style: none; padding-left: 0; }
+.steps .ok { color: var(--green, #067647); }

@@ -18,7 +18,9 @@ TXT = {
            "top": "*(demo answer)* Most frequent level 7+ rules in the last 24 hours:\n{rows}",
            "ip": "*(demo answer)* This IP produced {total} alerts; rules: {rules}; {paths} distinct path(s), status codes {codes}.",
            "got": "*(demo answer)* Tool result received.",
-           "check_purpose": "how many invalid-user attempts sshd logged locally"},
+           "check_purpose": "how many invalid-user attempts sshd logged locally",
+           "draft_title": "100960: invalid-user SSH attempts as root/admin (demo draft)",
+           "draft_body": "*(demo)* Child rule of 5710 that raises attempts with privileged user names to level 10."},
     "tr": {"demo": "**[DEMO / sahte LLM]** Pencerede {total} alarm, seviye {lvl}+ {high}. Bu rapor gerçek bir model "
                    "tarafından yazılmadı; yalnızca akışı gösterir.",
            "health": "Deterministik bayraklara bakınız.", "flag": "Deterministik bayrak `{code}`.", "check": "Kontrol et.",
@@ -28,7 +30,9 @@ TXT = {
            "top": "*(demo yanıtı)* Son 24 saatte seviye 7+ en sık kurallar:\n{rows}",
            "ip": "*(demo yanıtı)* Bu IP {total} alarm üretmiş; kurallar: {rules}; {paths} farklı yol, durum kodları {codes}.",
            "got": "*(demo yanıtı)* Araç sonucu alındı.",
-           "check_purpose": "sshd'nin yerelde kaydettiği geçersiz kullanıcı denemesi sayısı"},
+           "check_purpose": "sshd'nin yerelde kaydettiği geçersiz kullanıcı denemesi sayısı",
+           "draft_title": "100960: root/admin adıyla geçersiz kullanıcı SSH denemeleri (demo taslak)",
+           "draft_body": "*(demo)* 5710'un çocuk kuralı; ayrıcalıklı kullanıcı adlarıyla denemeleri seviye 10'a çıkarır."},
 }
 
 
@@ -61,6 +65,19 @@ class MockLLM:
                                                     {"rule_ids": [top["id"]], "from": c["window"]["from"],
                                                      "to": c["window"]["to"], "interval": "10m"})],
                                input_tokens=1000, output_tokens=50)
+        if len(tool_msgs) == 1 and "propose_knowledge" in names:
+            xml = ('<group name="sshd,authentication_failed,">\n'
+                   '  <rule id="100960" level="10">\n    <if_sid>5710</if_sid>\n'
+                   '    <user>^root$|^admin$</user>\n'
+                   '    <description>sshd: login attempt as a privileged non-existent user</description>\n'
+                   '  </rule>\n</group>')
+            return LLMResponse(tool_calls=[ToolCall("t3", "propose_knowledge", {
+                "kind": "rule_draft", "title": L.get("draft_title", "Demo rule draft"), "rule_ids": ["100960", "5710"],
+                "body": L.get("draft_body", "Demo draft."), "xml": xml,
+                "tests": [{"event": "Oct 26 10:00:00 web01 sshd[1]: Invalid user admin from 198.51.100.23 port 4242",
+                           "log_format": "syslog", "expect": "match"},
+                          {"event": "Oct 26 10:00:00 web01 sshd[1]: Invalid user bob from 198.51.100.23 port 4242",
+                           "log_format": "syslog", "expect": "no_match"}]})], input_tokens=1200, output_tokens=120)
         findings = []
         for f in c.get("flags") or []:
             crit = f["severity"] == "critical"

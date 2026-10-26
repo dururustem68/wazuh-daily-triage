@@ -3,6 +3,22 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-10-26
+
+### Added
+- **Rule drafts you can ship.** Every rule draft shows copy-paste commands for the manager (backup, append,
+  `wazuh-analysisd -t` with automatic restore, restart, verify, roll back).
+- **Approve and deploy** (opt-in per environment, `rule_deploy`): writes the draft to one dedicated rules file
+  through the Wazuh API with a separate least-privilege user, validates the configuration, restarts the manager
+  or cluster, verifies the rule IDs are loaded, runs the draft's two-way logtest events and rolls back on any
+  failure. Drafts that silence or lower alerts (level 0, `overwrite`, `no_log`…, lower than the parent) need the
+  rule IDs typed as a second confirmation. "Remove from Wazuh" undoes a deployed draft. Who/when/steps are kept
+  on the knowledge entry (SSO user header when behind a proxy).
+- `propose_knowledge` takes `xml` and `tests` for rule drafts; the demo proposes and deploys one.
+
+### Changed
+- The AI sees which drafts are deployed (to measure them), removed, or rejected (not to propose them again).
+
 ## [0.2.0] — 2026-10-26
 
 ### Added

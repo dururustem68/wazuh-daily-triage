@@ -104,6 +104,58 @@ document.addEventListener("DOMContentLoaded", () => {
     card.querySelectorAll("[data-set]").forEach(b => b.addEventListener("click", async () => {
       await api(url, "POST", { status: b.dataset.set }); location.reload();
     }));
+    // rule drafts: commands / deploy / remove
+    const out = card.querySelector(".rd-out");
+    const show = html => { out.hidden = false; out.innerHTML = html; };
+    const listHtml = (cls, title, items) => items && items.length
+      ? `<div class="${cls}"><b>${escapeHtml(title)}</b><ul>${items.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>` : "";
+    const stepsHtml = rec => `<ul class="steps">${(rec.steps || []).map(s =>
+      `<li class="${s.ok ? "ok" : "bad"}">${s.ok ? "✓" : "✗"} ${escapeHtml(s.step)} ${escapeHtml(s.detail || "")}</li>`).join("")}</ul>`
+      + (rec.error ? `<p class="bad">${escapeHtml(rec.error)}</p>` : "");
+    const cmds = card.querySelector("[data-cmds]");
+    if (cmds) cmds.addEventListener("click", async () => {
+      cmds.disabled = true;
+      try {
+        const v = await api(url + "/rule", "GET");
+        show(listHtml("bad", tr("rd_errors"), v.analysis.errors) + listHtml("warn", tr("rd_risky"), v.analysis.risky)
+          + (v.deploy_enabled ? "" : `<p class="muted">${escapeHtml(tr("rd_disabled"))}</p>`)
+          + `<p class="muted">${escapeHtml(tr("rd_cmds_note"))}</p><pre class="code">${escapeHtml(v.commands)}</pre>`
+          + `<button class="btn small" data-copy-out>${escapeHtml(tr("copy"))}</button>`);
+        out.querySelector("[data-copy-out]").addEventListener("click", ev => {
+          navigator.clipboard.writeText(v.commands); ev.target.textContent = tr("copied"); });
+      } catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); }
+      cmds.disabled = false;
+    });
+    const dep = card.querySelector("[data-deploy]");
+    if (dep) dep.addEventListener("click", async () => {
+      let v;
+      try { v = await api(url + "/rule", "GET"); } catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); return; }
+      const a = v.analysis;
+      if (a.errors.length) { show(listHtml("bad", tr("rd_errors"), a.errors)); return; }
+      let confirmText = "";
+      if (a.risky.length) {
+        confirmText = prompt(tr("rd_type_ids").replace("{reasons}", a.risky.join("\n")).replace("{ids}", a.ids.join(",")));
+        if (confirmText === null) return;
+      } else if (!confirm(tr("rd_confirm").replace("{file}", v.file))) return;
+      card.querySelectorAll("button").forEach(b => b.disabled = true);
+      show(`<p>⏳ ${escapeHtml(tr("rd_working"))}</p>`);
+      try {
+        const rec = await api(url + "/deploy", "POST", { confirm: confirmText });
+        show(stepsHtml(rec));
+        setTimeout(() => location.reload(), rec.state === "deployed" ? 2500 : 8000);
+      } catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); card.querySelectorAll("button").forEach(b => b.disabled = false); }
+    });
+    const und = card.querySelector("[data-undeploy]");
+    if (und) und.addEventListener("click", async () => {
+      let v;
+      try { v = await api(url + "/rule", "GET"); } catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); return; }
+      if (!confirm(tr("rd_unconfirm").replace("{file}", v.file))) return;
+      card.querySelectorAll("button").forEach(b => b.disabled = true);
+      show(`<p>⏳ ${escapeHtml(tr("rd_working"))}</p>`);
+      try { const rec = await api(url + "/undeploy", "POST"); show(stepsHtml(rec)); setTimeout(() => location.reload(), 2500); }
+      catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); card.querySelectorAll("button").forEach(b => b.disabled = false); }
+    });
+
     const del = card.querySelector("[data-del]");
     if (del) del.addEventListener("click", async () => {
       if (del.dataset.confirm !== "1") { del.dataset.confirm = "1"; del.textContent = tr("sure"); return; }

@@ -7,7 +7,7 @@ Indexer, asks you only what needs a human decision — and remembers your answer
 Bring your own AI: Anthropic, OpenAI, Azure OpenAI or any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio,
 LiteLLM). One Docker container, read-only towards Wazuh.
 
-[Türkçe README](README.tr.md) · [AI providers](docs/providers.md) · [Permissions & network](docs/permissions.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[Türkçe README](README.tr.md) · [AI providers](docs/providers.md) · [Permissions & network](docs/permissions.md) · [Rule deployment](docs/rule-deployment.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ![Report](docs/screenshot-report.png)
 
@@ -29,8 +29,13 @@ of silencing.
   **seen for the first time in 14 days**, watched rules, vulnerability summary.
 - **AI diagnosis** — the model reads the summary plus your knowledge base, digs deeper with read-only tools
   (time distribution, IP profile, ±30 min correlation, logtest, rule definitions) and submits a structured
-  report: *real incident, investigate, detection gap, false positive, baseline increase…* It can draft Wazuh
-  rules (never applies them) and checks them for XML errors, OS_Regex pitfalls and ID collisions.
+  report: *real incident, investigate, detection gap, false positive, baseline increase…* It drafts Wazuh
+  rules and checks them for XML errors, OS_Regex pitfalls and ID collisions.
+- **Rule drafts you can ship** — every draft comes with copy-paste commands for the manager (backup,
+  `wazuh-analysisd -t`, restart, roll back). Optionally, **Approve and deploy** writes it to one dedicated rules
+  file through the Wazuh API, validates, restarts, checks it loaded, runs a two-way logtest and rolls back on any
+  failure; drafts that silence or lower alerts need a typed second confirmation
+  ([docs/rule-deployment.md](docs/rule-deployment.md)). Off by default.
 - **It asks you** — "Was this SSH login yours?" Your answer goes into the knowledge base and is context for the
   next run.
 - **Knowledge base** — known noise, decisions ("don't suggest X"), open items, lessons, "look at this tomorrow"
@@ -128,8 +133,9 @@ a local model for an environment whose data must not leave your network. `max_to
 
 ## Security model
 
-- **Read-only towards Wazuh.** No active response, no rule/config writes, no agent commands. The only index
-  writes go to its own `daily-triage-*` indices.
+- **Read-only towards Wazuh by default.** No active response, no config writes, no agent commands. The only
+  index writes go to its own `daily-triage-*` indices. The opt-in rule deployment uses a separate API user that
+  can update exactly one rules file and restart the manager — nothing else.
 - **Prompt injection.** Alert content (URLs, `full_log`, user agents, user names) is attacker-controlled. The
   prompt marks it as data, and even a fooled model can at most add a *proposal* to the knowledge base, which
   does nothing until you approve it.
@@ -180,7 +186,6 @@ without a cluster. Adding a UI language = adding a dictionary to `app/i18n.py`.
 
 - Expose the tools as an **MCP server** (use them from Claude Desktop and other MCP clients)
 - More notification channels (Slack, generic webhook)
-- Rule lifecycle: draft → approval → `analysisd -t` + logtest + apply, in a separate privileged component
 - OIDC login, multiple users and an approval audit trail
 - Weekly vulnerability/SCA digest, streaming chat answers
 

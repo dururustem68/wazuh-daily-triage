@@ -63,6 +63,13 @@ environments:
     context_file: context/example.md    # free text describing the environment (given to the AI)
     seed_file: seed/example.yaml        # imported into the knowledge base once
     redact: false               # true: mask e-mails/passwords/tokens before text reaches the LLM
+    rule_deploy:                # optional "Approve and deploy" for rule drafts — docs/rule-deployment.md
+      enabled: false            # off: drafts show copy-paste commands only
+      username: ${PROD_DEPLOY_USER:-}       # SEPARATE API user: update one rules file + restart, nothing else
+      password: ${PROD_DEPLOY_PASSWORD:-}
+      file: wdt_rules.xml       # etc/rules/<file> on the manager (master in a cluster)
+      id_min: 100000            # drafts with IDs outside this range are refused
+      id_max: 119999
     # llm:                      # optional per-environment model, e.g. a local model for regulated data
     #   provider: openai
     #   base_url: http://ollama:11434/v1

@@ -66,6 +66,28 @@ class Endpoint(BaseModel):
 DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
 
+class RuleDeployCfg(BaseModel):
+    """Optional: let "Approve and deploy" write approved rule drafts to the manager.
+
+    Off by default. Uses a SEPARATE Wazuh API user whose only write rights are the one rules file below and
+    manager/cluster restart (docs/permissions.md). The read-only user stays read-only.
+    """
+    enabled: bool = False
+    username: str = ""
+    password: str = ""
+    file: str = "wdt_rules.xml"          # in etc/rules on the manager (master node in a cluster)
+    id_min: int = 100000                 # drafts outside this ID range are refused
+    id_max: int = 119999
+    restart_timeout: int = 180           # seconds to wait for the manager to come back
+
+    @field_validator("file")
+    @classmethod
+    def _file(cls, v):
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}\.xml", v):
+            raise ValueError("rule_deploy.file must be a plain file name ending in .xml")
+        return v
+
+
 _HM = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
 
 
@@ -150,6 +172,7 @@ class Environment(BaseModel):
     language: str | None = None       # report language override (en|tr)
     llm: LLMConfig | None = None      # per-environment model override (e.g. local model for regulated data)
     notify: NotifyCfg | None = None   # per-environment notification override
+    rule_deploy: RuleDeployCfg = Field(default_factory=RuleDeployCfg)
 
     @field_validator("id")
     @classmethod
@@ -292,6 +315,12 @@ def settings_from_env() -> dict:
                       "password": E("WAZUH_API_PASSWORD", ""), "verify_tls": verify, "ca_file": E("WAZUH_CA_FILE") or None}
     if E("WAZUH_ALERTS_INDEX"):
         env["alerts_index"] = E("WAZUH_ALERTS_INDEX")
+    if _bool(E("RULE_DEPLOY_ENABLED"), False):
+        env["rule_deploy"] = {"enabled": True, "username": E("WAZUH_DEPLOY_USER", ""),
+                              "password": E("WAZUH_DEPLOY_PASSWORD", ""),
+                              "file": E("RULE_DEPLOY_FILE") or "wdt_rules.xml",
+                              "id_min": int(E("RULE_DEPLOY_ID_MIN") or 100000),
+                              "id_max": int(E("RULE_DEPLOY_ID_MAX") or 119999)}
     return {
         "app": {"timezone": E("TZ", "UTC"), "language": E("APP_LANGUAGE", "en")},
         "llm": llm_from_env(),
