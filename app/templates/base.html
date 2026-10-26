@@ -32,6 +32,7 @@
 {% if env is defined %}
 <div class="subnav">
   <strong>{{ env.name }}</strong>
+  <a href="/e/{{ env.id }}/inbox">{{ _('nav.inbox') }}</a>
   <a href="/e/{{ env.id }}">{{ _('nav.reports') }}</a>
   <a href="/e/{{ env.id }}/chat">{{ _('nav.chat') }}</a>
   <a href="/e/{{ env.id }}/k">{{ _('nav.knowledge') }}</a>

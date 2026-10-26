@@ -309,3 +309,89 @@ async def test_llm_failure_keeps_deterministic_report(settings, monkeypatch):
     assert run["status"] == "done" and run["ai_error"].startswith("LLM 503")
     assert run["findings"] and run["collected"]["volume"]["total"] > 0
     assert "AI analysis unavailable" in run["summary_md"]
+
+
+def test_schedule_times(tmp_path):
+    from app.config import Schedule
+    s = Schedule(times=["19:50", "07:50"], days=["mon"])
+    assert s.all_times == ["07:50", "19:50"]
+    assert Schedule(time="06:00").all_times == ["06:00"]
+    with pytest.raises(ValueError):
+        Schedule(times=["7:5"])
+
+
+async def test_inbox_dedupe_act_and_chat(settings):
+    rt = Runtime(settings, demo=True)
+    er = rt.get("demo")
+    await rt.run_triage(er, "ib-1")
+    await rt.run_triage(er, "ib-2")
+    items = await rt.inbox("demo")
+    assert items and all(it["seen"] == 2 for it in items)          # same findings in both runs → grouped
+    first = items[0]
+    assert len(first["refs"]) == 2
+    checks = [it for it in items if it["finding"].get("manual_checks")]
+    assert checks and checks[0]["finding"]["manual_checks"][0]["command"]
+    n = await rt.inbox_act("demo", first["refs"], "false_positive", "known scanner")
+    assert n == 2
+    after = await rt.inbox("demo")
+    assert len(after) == len(items) - 1 and first["key"] not in {i["key"] for i in after}
+    it = checks[0] if checks[0]["key"] != first["key"] else checks[-1]
+    sess = await rt.chat_from_finding("demo", it["run_id"], it["finding"]["id"], "en")
+    hist = await er.repo.chat_history(sess)
+    assert [m["role"] for m in hist] == ["user", "assistant"] and "```sh" in hist[1]["content"]
+    r = await rt.chat("demo", sess, "output: 240")          # conversation continues with the context
+    assert r["session"] == sess
+
+
+async def test_notifications(settings, monkeypatch):
+    from app import notify as N
+    sent = {"tg": [], "teams": [], "mail": []}
+
+    def h(req):
+        body = json.loads(req.content)
+        if "api.telegram.org" in str(req.url):
+            sent["tg"].append(body)
+        else:
+            sent["teams"].append(body)
+        return httpx.Response(200, json={"ok": True})
+    monkeypatch.setattr(N, "_send_email", lambda cfg, msg: sent["mail"].append(msg))
+    settings2 = settings.model_copy(deep=True)
+    settings2.notify = N.NotifyCfg(ui_url="http://127.0.0.1:18080",
+                                   email=N.EmailCfg(host="smtp.example", sender="a@example.org", to=["b@example.org"]),
+                                   telegram=N.TelegramCfg(bot_token="123:abc", chat_id="42"),
+                                   teams=N.TeamsCfg(webhook_url="https://example.invalid/workflows/hook"))
+    rt = Runtime(settings2, demo=True)
+    er = rt.get("demo")
+    run = {"run_id": "n-1", "env": "demo", "status": "done", "started_at": "2026-10-26T07:50:00.000Z",
+           "flags": [{"severity": "critical", "code": "silence", "message": "Last alert was 300 min ago"},
+                     {"severity": "warn", "code": "agents", "message": "1 agent not active"}],
+           "findings": [{"id": "f1", "label": "real_incident", "severity": "high", "title": "SSH brute force succeeded",
+                         "rule_ids": ["5715"], "agents": ["db01"]},
+                        {"id": "f2", "label": "investigate", "severity": "medium", "title": "noise"}]}
+    await er.repo.save_run(run)
+    tr = httpx.MockTransport(h)
+    res = await rt.notify_run(er, run, transport=tr)
+    assert res == {"email": "ok", "telegram": "ok", "teams": "ok"}
+    txt = sent["tg"][0]["text"]
+    assert "Last alert was 300" in txt and "SSH brute force" in txt and "noise" not in txt and "/e/demo/r/n-1" in txt
+    assert sent["teams"][0]["attachments"][0]["contentType"] == "application/vnd.microsoft.card.adaptive"
+    assert sent["mail"][0]["title"].endswith("CRITICAL")
+    # same items again 12 h later → suppressed
+    run2 = dict(run, run_id="n-2", notified=None)
+    await er.repo.save_run(run2)
+    assert await rt.notify_run(er, run2, transport=tr) == {}
+    assert len(sent["tg"]) == 1
+    assert (await rt.notify_test("demo", transport=tr))["telegram"] == "ok"
+
+
+def test_empty_env_vars_fall_back(tmp_path, monkeypatch):
+    from app.config import load_settings, notify_from_env
+    monkeypatch.setenv("SMTP_PORT", "")
+    monkeypatch.setenv("SMTP_TO", "a@example.org, b@example.org")
+    assert notify_from_env()["email"]["port"] == 587
+    p = tmp_path / "environments.yaml"
+    p.write_text('llm: {provider: mock}\nnotify:\n  email: {host: h, port: "${SMTP_PORT:-587}", sender: s@example.org, '
+                 'to: ["${SMTP_TO:-}"]}\nenvironments:\n  - id: x\n    name: X\n    indexer: {url: "https://192.0.2.1:9200"}\n')
+    s = load_settings(p)
+    n = s.notify_for(s.environments[0])
+    assert n.email.port == 587 and n.email.to == ["a@example.org", "b@example.org"] and n.channels == ["email"]

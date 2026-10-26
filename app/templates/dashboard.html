@@ -21,6 +21,7 @@
       <div class="summary">{{ last.summary_md|md }}</div>
       <p class="small muted">{{ _('dash.last_report') }}: <a href="/e/{{ c.env.id }}/r/{{ last.run_id }}">{{ last.started_at|ts }}</a>
         · {{ _('dash.window', h=last.window.hours) }}</p>
+      {% if c.inbox %}<p><a class="btn primary" href="/e/{{ c.env.id }}/inbox">{{ _('inbox.waiting', n=c.inbox) }} →</a></p>{% endif %}
       {% if c.open_q or c.proposals %}
       <p class="small">
         {% if c.open_q %}<a class="pill blue" href="/e/{{ c.env.id }}/r/{{ last.run_id }}#questions">{{ _('dash.questions_waiting', n=c.open_q) }}</a>{% endif %}

@@ -16,13 +16,16 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
+from .notify import NotifyCfg
+
 _ENV_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 LANGUAGES = ("en", "tr")
 
 
 def _expand(value):
     if isinstance(value, str):
-        return _ENV_RE.sub(lambda m: os.environ.get(m.group(1), m.group(2) or ""), value)
+        # like the shell's ${VAR:-default}: an empty variable also falls back to the default
+        return _ENV_RE.sub(lambda m: os.environ.get(m.group(1)) or (m.group(2) or ""), value)
     if isinstance(value, list):
         return [_expand(v) for v in value]
     if isinstance(value, dict):
@@ -63,10 +66,26 @@ class Endpoint(BaseModel):
 DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
 
+_HM = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
+
+
 class Schedule(BaseModel):
     enabled: bool = True
-    time: str = "07:30"  # HH:MM in app.timezone
+    time: str = "07:30"  # HH:MM in app.timezone (single run per day)
+    times: list[str] = Field(default_factory=list)  # several runs per day, e.g. ["07:50", "19:50"]; overrides `time`
     days: list[str] = Field(default_factory=lambda: list(DAYS))
+
+    @property
+    def all_times(self) -> list[str]:
+        return sorted(set(self.times)) if self.times else [self.time]
+
+    @field_validator("times")
+    @classmethod
+    def _times(cls, v):
+        bad = [x for x in v if not _HM.fullmatch(x)]
+        if bad:
+            raise ValueError(f"times must be HH:MM: {bad}")
+        return v
 
     @field_validator("days")
     @classmethod
@@ -80,7 +99,7 @@ class Schedule(BaseModel):
     @field_validator("time")
     @classmethod
     def _time(cls, v):
-        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v):
+        if not _HM.fullmatch(v):
             raise ValueError("time must be HH:MM")
         return v
 
@@ -130,6 +149,7 @@ class Environment(BaseModel):
     redact: bool = False
     language: str | None = None       # report language override (en|tr)
     llm: LLMConfig | None = None      # per-environment model override (e.g. local model for regulated data)
+    notify: NotifyCfg | None = None   # per-environment notification override
 
     @field_validator("id")
     @classmethod
@@ -180,6 +200,7 @@ class AppConfig(BaseModel):
 class Settings(BaseModel):
     app: AppConfig = Field(default_factory=AppConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    notify: NotifyCfg = Field(default_factory=NotifyCfg)
     environments: list[Environment]
     base_dir: Path = Path(".")
 
@@ -191,6 +212,9 @@ class Settings(BaseModel):
 
     def llm_for(self, env: Environment) -> LLMConfig:
         return env.llm or self.llm
+
+    def notify_for(self, env: Environment) -> NotifyCfg:
+        return env.notify or self.notify
 
     def lang_for(self, env: Environment) -> str:
         return env.language if env.language in LANGUAGES else self.app.language
@@ -223,6 +247,29 @@ def llm_from_env() -> dict:
     return llm
 
 
+def _env(name: str, default: str | None = None) -> str | None:
+    """Environment variable; an empty value counts as unset."""
+    v = os.environ.get(name)
+    return v if v not in (None, "") else default
+
+
+def notify_from_env() -> dict:
+    """NOTIFY_* / SMTP_* / TELEGRAM_* / TEAMS_* variables (also used when the YAML has no notify block)."""
+    E = _env
+    return {
+        "enabled": _bool(E("NOTIFY_ENABLED"), True),
+        "on_run_error": _bool(E("NOTIFY_ON_RUN_ERROR"), False),
+        "repeat_hours": int(E("NOTIFY_REPEAT_HOURS", "24")),
+        "ui_url": E("NOTIFY_UI_URL", ""),
+        "email": {"host": E("SMTP_HOST", ""), "port": int(E("SMTP_PORT", "587")), "security": E("SMTP_SECURITY", "starttls"),
+                  "username": E("SMTP_USER", ""), "password": E("SMTP_PASSWORD", ""), "sender": E("SMTP_FROM", ""),
+                  "to": [x.strip() for x in E("SMTP_TO", "").split(",") if x.strip()],
+                  "verify_tls": _bool(E("SMTP_VERIFY_TLS"), True)},
+        "telegram": {"bot_token": E("TELEGRAM_BOT_TOKEN", ""), "chat_id": E("TELEGRAM_CHAT_ID", "")},
+        "teams": {"webhook_url": E("TEAMS_WEBHOOK_URL", "")},
+    }
+
+
 def settings_from_env() -> dict:
     """Single-environment configuration from plain environment variables (no YAML needed)."""
     E = os.environ.get
@@ -233,9 +280,11 @@ def settings_from_env() -> dict:
         "id": E("WAZUH_ENV_ID", "default"), "name": E("WAZUH_ENV_NAME", "Wazuh"),
         "indexer": {"url": E("WAZUH_INDEXER_URL"), "username": E("WAZUH_INDEXER_USER", ""),
                     "password": E("WAZUH_INDEXER_PASSWORD", ""), "verify_tls": verify, "ca_file": E("WAZUH_CA_FILE") or None},
-        "schedule": {"enabled": _bool(E("SCHEDULE_ENABLED"), True), "time": E("SCHEDULE_TIME", "07:30"),
+        "schedule": {"enabled": _bool(E("SCHEDULE_ENABLED"), True), "time": E("SCHEDULE_TIME", "07:30").split(",")[0],
+                     "times": [x.strip() for x in E("SCHEDULE_TIME", "").split(",") if x.strip()] if "," in E("SCHEDULE_TIME", "") else [],
                      "days": [d for d in E("SCHEDULE_DAYS", "mon,tue,wed,thu,fri").split(",") if d]},
         "high_level": int(E("HIGH_LEVEL", "7")),
+        "window_min_hours": int(E("WINDOW_MIN_HOURS", "24")),
         "redact": _bool(E("REDACT"), False),
     }
     if E("WAZUH_API_URL"):
@@ -246,6 +295,7 @@ def settings_from_env() -> dict:
     return {
         "app": {"timezone": E("TZ", "UTC"), "language": E("APP_LANGUAGE", "en")},
         "llm": llm_from_env(),
+        "notify": notify_from_env(),
         "environments": [env],
     }
 
@@ -254,7 +304,10 @@ def load_settings(path: str | os.PathLike | None = None) -> Settings:
     path = Path(path or os.environ.get("WDT_CONFIG", "config/environments.yaml"))
     if path.exists():
         raw = _expand(yaml.safe_load(path.read_text(encoding="utf-8")) or {})
-        raw.setdefault("llm", llm_from_env())  # no llm block → LLM_* variables
+        if "llm" not in raw:  # no llm block → LLM_* variables
+            raw["llm"] = llm_from_env()
+        if "notify" not in raw:  # no notify block → NOTIFY_*/SMTP_*/TELEGRAM_*/TEAMS_*
+            raw["notify"] = notify_from_env()
         base = path.parent
     else:
         raw = settings_from_env()

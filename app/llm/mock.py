@@ -17,7 +17,8 @@ TXT = {
            "why": "The server looks internal.", "open": "Measure the effect of an IP allow-list on Jenkins /manage",
            "top": "*(demo answer)* Most frequent level 7+ rules in the last 24 hours:\n{rows}",
            "ip": "*(demo answer)* This IP produced {total} alerts; rules: {rules}; {paths} distinct path(s), status codes {codes}.",
-           "got": "*(demo answer)* Tool result received."},
+           "got": "*(demo answer)* Tool result received.",
+           "check_purpose": "how many invalid-user attempts sshd logged locally"},
     "tr": {"demo": "**[DEMO / sahte LLM]** Pencerede {total} alarm, seviye {lvl}+ {high}. Bu rapor gerçek bir model "
                    "tarafından yazılmadı; yalnızca akışı gösterir.",
            "health": "Deterministik bayraklara bakınız.", "flag": "Deterministik bayrak `{code}`.", "check": "Kontrol et.",
@@ -26,7 +27,8 @@ TXT = {
            "why": "Sunucu iç ağda görünüyor.", "open": "Jenkins /manage için IP kısıtının etkisini ölç",
            "top": "*(demo yanıtı)* Son 24 saatte seviye 7+ en sık kurallar:\n{rows}",
            "ip": "*(demo yanıtı)* Bu IP {total} alarm üretmiş; kurallar: {rules}; {paths} farklı yol, durum kodları {codes}.",
-           "got": "*(demo yanıtı)* Araç sonucu alındı."},
+           "got": "*(demo yanıtı)* Araç sonucu alındı.",
+           "check_purpose": "sshd'nin yerelde kaydettiği geçersiz kullanıcı denemesi sayısı"},
 }
 
 
@@ -72,7 +74,10 @@ class MockLLM:
                              "detail": L["detail"].format(level=r["level"], agents=ags, ips=r.get("srcips")),
                              "evidence": [f"{a['name']}: {a['n']} ({a['first']} → {a['last']})" for a in r["agents"]],
                              "rule_ids": [r["id"]], "agents": [a["name"] for a in r["agents"]],
-                             "recommendation": L["dig"]})
+                             "recommendation": L["dig"],
+                             "manual_checks": [{"host": r["agents"][0]["name"], "purpose": L["check_purpose"],
+                                                "command": "sudo journalctl -u ssh --since '-12h' | grep -c 'Invalid user'"}]
+                             if r["agents"] else []})
         v = c.get("volume") or {}
         report = {"summary_md": L["demo"].format(total=v.get("total", 0), high=v.get("high_level_total", 0),
                                                  lvl=c.get("env", {}).get("high_level")),

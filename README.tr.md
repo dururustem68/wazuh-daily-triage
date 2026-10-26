@@ -13,7 +13,7 @@ vLLM, LM Studio, LiteLLM). Tek Docker konteyner; Wazuh'a karşı salt okunur.
 
 ## Ne yapar
 
-- **Zamanlanmış günlük kontrol** (ortam başına saat + gün). Pencere "son başarılı koşudan bu yana"; pazartesi
+- **Zamanlanmış kontrol** (ortam başına günde bir ya da birkaç saat + gün). Pencere "son başarılı koşudan bu yana"; pazartesi
   sabahı hafta sonunu kapsar.
 - **Önce deterministik toplama** (yapay zekâdan bağımsız): son alarm zamanı ve boş saatler (kör nokta), indexer
   sağlığı/diski, manager süreçleri, aktif olmayan ajanlar, `ossec.log` hataları, seviye dağılımı, yüksek
@@ -25,6 +25,11 @@ vLLM, LM Studio, LiteLLM). Tek Docker konteyner; Wazuh'a karşı salt okunur.
 - **Size sorar** — "Bu SSH girişi sizin miydi?" Cevap bilgi tabanına yazılır, sonraki koşuya bağlam olur.
 - **Bilgi tabanı** — bilinen gürültü, kararlar, açık maddeler, dersler, "yarın şuna bak" istekleri. Yapay zekâ
   önerileri **siz onaylayana kadar etkisizdir**.
+- **Öneri kuyruğu** — bulgular tek tek ve koşular arası tekilleştirilmiş gelir; bir karar tüm tekrarlara uygulanır.
+  Sunucuda bakılması gerekenler salt okunur komutlarla gelir; **Sohbette incele** ile çıktıyı yapıştırıp bir sonraki
+  adımı alırsınız.
+- **Kritik bildirimler** — e-posta, Telegram ya da Microsoft Teams; SIEM sessizliği, indexer red, gerçek olaylar;
+  aynı konu her koşuda tekrarlanmaz ([docs/notifications.md](docs/notifications.md)).
 - **Sohbet** — ortam hakkında soru sorun; aynı araçlarla, kanıta dayalı cevap.
 - **Kayıtlar Wazuh'un içinde** — her ortamın kendi indexer'ında `daily-triage-runs / -knowledge / -chat`.
 - **Çok ortam, çok dil** (İngilizce, Türkçe — sağ üstten seçilir), ortam başına model (ör. düzenlemeye tabi veri

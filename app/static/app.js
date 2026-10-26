@@ -125,6 +125,25 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // open a chat about a finding
+  document.querySelectorAll("[data-chat-finding]").forEach(b => b.addEventListener("click", async () => {
+    b.disabled = true;
+    try { const r = await api(b.dataset.chatFinding, "POST"); location.href = r.url; }
+    catch (e) { b.disabled = false; alert(e.message); }
+  }));
+
+  // recommendation inbox: one decision applies to every occurrence, then the next item
+  const card = document.getElementById("inbox");
+  if (card) card.querySelectorAll("[data-status]").forEach(b => b.addEventListener("click", async () => {
+    const out = card.querySelector(".saved");
+    card.querySelectorAll("button").forEach(x => x.disabled = true);
+    try {
+      await api(card.dataset.act, "POST", { refs: JSON.parse(card.dataset.refs), user_status: b.dataset.status,
+                                            user_note: card.querySelector("[data-note]").value });
+      location.href = card.dataset.next;   // the same index now shows the next item
+    } catch (e) { out.textContent = tr("error") + " " + e.message; card.querySelectorAll("button").forEach(x => x.disabled = false); }
+  }));
+
   // connection test
   document.querySelectorAll("[data-check]").forEach(btn => btn.addEventListener("click", async () => {
     const box = document.getElementById("checks");
@@ -135,6 +154,19 @@ document.addEventListener("DOMContentLoaded", () => {
         `<li class="${x.ok ? "ok" : "bad"}"><b>${escapeHtml(x.ok ? tr("ok") : tr("fail"))}</b> ${escapeHtml(x.label)} — <span class="small">${escapeHtml(x.detail)}</span></li>`).join("") + "</ul>";
     } catch (e) { box.textContent = tr("error") + " " + e.message; }
     btn.disabled = false; btn.textContent = tr("test");
+  }));
+
+  // notification test
+  document.querySelectorAll("[data-notify-test]").forEach(btn => btn.addEventListener("click", async () => {
+    const box = document.getElementById("checks");
+    btn.disabled = true; box.hidden = false; box.textContent = tr("testing");
+    try {
+      const r = await api(`/api/e/${btn.dataset.notifyTest}/notify-test`, "POST");
+      box.innerHTML = r.results.length ? "<ul class='checklist'>" + r.results.map(x =>
+        `<li class="${x.ok ? "ok" : "bad"}"><b>${escapeHtml(x.ok ? tr("ok") : tr("fail"))}</b> ${escapeHtml(x.channel)} — <span class="small">${escapeHtml(x.detail)}</span></li>`).join("") + "</ul>"
+        : escapeHtml(r.message || "");
+    } catch (e) { box.textContent = tr("error") + " " + e.message; }
+    btn.disabled = false;
   }));
 
   // chat
@@ -163,7 +195,7 @@ function initChat(chat) {
     const text = ta.value.trim();
     if (!text) return;
     const hint = msgs.querySelector(".hint"); if (hint) hint.remove();
-    add("user", escapeHtml(text));
+    add("user", `<span class="ut">${escapeHtml(text)}</span>`);
     ta.value = ""; form.querySelector("button").disabled = true;
     const pend = add("assistant pending", escapeHtml(tr("thinking")));
     try {

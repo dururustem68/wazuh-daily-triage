@@ -21,7 +21,7 @@ of silencing.
 
 ## Features
 
-- **Scheduled daily run** per environment (time + weekdays). The window is "since the last successful run", so
+- **Scheduled runs** per environment (one or more times a day + weekdays). The window is "since the last successful run", so
   Monday morning covers the weekend.
 - **Deterministic collection first** — independent of the AI: last alert time and empty hours (blind spots),
   indexer health and disk, manager daemons, inactive agents, `ossec.log` errors, level distribution, high-level
@@ -35,6 +35,11 @@ of silencing.
   next run.
 - **Knowledge base** — known noise, decisions ("don't suggest X"), open items, lessons, "look at this tomorrow"
   requests. AI proposals have **no effect until you approve them**.
+- **Recommendation inbox** — findings one at a time, de-duplicated across runs; one decision settles every
+  occurrence. Findings that need a look on a server carry exact read-only commands, and **Investigate in chat**
+  opens a conversation where you paste the output and get the next step.
+- **Critical alerts** by e-mail, Telegram or Microsoft Teams — SIEM silent, indexer red, real incidents — without
+  repeating the same item every run ([docs/notifications.md](docs/notifications.md)).
 - **Chat** — ask questions about an environment; answers use the same tools and show their tool calls.
 - **Stored in Wazuh itself** — `daily-triage-runs`, `daily-triage-knowledge`, `daily-triage-chat` indices in
   each environment's own indexer. No extra database.
@@ -174,7 +179,7 @@ without a cluster. Adding a UI language = adding a dictionary to `app/i18n.py`.
 ## Roadmap
 
 - Expose the tools as an **MCP server** (use them from Claude Desktop and other MCP clients)
-- Notifications on critical flags (e-mail, Slack, Teams, webhook)
+- More notification channels (Slack, generic webhook)
 - Rule lifecycle: draft → approval → `analysisd -t` + logtest + apply, in a separate privileged component
 - OIDC login, multiple users and an approval audit trail
 - Weekly vulnerability/SCA digest, streaming chat answers

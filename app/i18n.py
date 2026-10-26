@@ -4,6 +4,19 @@
 from __future__ import annotations
 
 EN: dict[str, str] = {
+    "notify.title": "[Wazuh Daily Triage] {env} — CRITICAL", "notify.kind.flag": "Health", "notify.kind.finding": "Finding",
+    "notify.kind.error": "Run failed", "notify.kind.test": "Test",
+    "notify.test_title": "[Wazuh Daily Triage] {env} — notification test", "notify.test_text": "If you can read this, the channel works.",
+    "env.notify_test": "Test notifications", "env.notify_none": "No notification channel configured.",
+    "nav.inbox": "Recommendations",
+    "inbox.title": "Recommendations", "inbox.empty": "Nothing waiting — every recent finding has a decision.",
+    "inbox.position": "{i} of {n}", "inbox.seen": "Seen in {n} run(s) since {t}",
+    "inbox.checks_title": "Checks to run on the servers", "inbox.paste_output": "Run these commands and paste the output here; I will interpret it and tell you the next step.",
+    "inbox.ask_next": "Ask me anything about this finding, or tell me what you found on the servers.",
+    "inbox.chat_open": "Let's investigate this finding: {title}", "inbox.chat_btn": "Investigate in chat",
+    "inbox.later": "Later", "inbox.prev": "Previous", "inbox.note_ph": "Note (optional; the next run reads it)",
+    "inbox.waiting": "{n} recommendation(s) waiting", "inbox.decide": "Decision:", "inbox.open_report": "Open report",
+    "rep.manual_checks": "Checks only you can run",
     # navigation / chrome
     "nav.reports": "Reports", "nav.chat": "Chat", "nav.knowledge": "Knowledge base", "nav.logout": "Log out",
     "nav.source": "Source code", "footer": "read-only · verify AI output before acting",
@@ -102,6 +115,19 @@ EN: dict[str, str] = {
 }
 
 TR: dict[str, str] = {
+    "notify.title": "[Wazuh Daily Triage] {env} — KRİTİK", "notify.kind.flag": "Sağlık", "notify.kind.finding": "Bulgu",
+    "notify.kind.error": "Koşu başarısız", "notify.kind.test": "Test",
+    "notify.test_title": "[Wazuh Daily Triage] {env} — bildirim testi", "notify.test_text": "Bunu okuyabiliyorsanız kanal çalışıyor.",
+    "env.notify_test": "Bildirim testi", "env.notify_none": "Yapılandırılmış bildirim kanalı yok.",
+    "nav.inbox": "Öneriler",
+    "inbox.title": "Öneriler", "inbox.empty": "Bekleyen öneri yok — son bulguların hepsine karar verilmiş.",
+    "inbox.position": "{i} / {n}", "inbox.seen": "{t} tarihinden beri {n} koşuda görüldü",
+    "inbox.checks_title": "Sunucularda çalıştırılacak kontroller", "inbox.paste_output": "Bu komutları çalıştırıp çıktıyı buraya yapıştırın; yorumlayıp bir sonraki adımı söyleyeceğim.",
+    "inbox.ask_next": "Bu bulguyla ilgili sorunu yazın ya da sunucularda gördüğünüzü anlatın.",
+    "inbox.chat_open": "Bu bulguyu inceleyelim: {title}", "inbox.chat_btn": "Sohbette incele",
+    "inbox.later": "Sonra", "inbox.prev": "Önceki", "inbox.note_ph": "Not (isteğe bağlı; sonraki koşu okur)",
+    "inbox.waiting": "{n} öneri bekliyor", "inbox.decide": "Karar:", "inbox.open_report": "Raporu aç",
+    "rep.manual_checks": "Yalnız sizin çalıştırabileceğiniz kontroller",
     "nav.reports": "Raporlar", "nav.chat": "Sohbet", "nav.knowledge": "Bilgi tabanı", "nav.logout": "Çıkış",
     "nav.source": "Kaynak kod", "footer": "salt okunur · yapay zekâ çıktısını uygulamadan önce doğrulayın",
     "login.title": "Giriş", "login.subtitle": "Wazuh günlük kontrol asistanı", "login.password": "Parola",

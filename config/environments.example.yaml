@@ -21,6 +21,12 @@ llm:
   # extra_body: {}                       # extra fields passed to the provider verbatim
   max_tool_steps: 14            # tool-call budget per run (cost ceiling)
 
+notify:                         # critical alerts only — see docs/notifications.md
+  ui_url: ${NOTIFY_UI_URL:-}
+  email: {host: "${SMTP_HOST:-}", username: "${SMTP_USER:-}", password: "${SMTP_PASSWORD:-}", sender: "${SMTP_FROM:-}", to: []}
+  telegram: {bot_token: "${TELEGRAM_BOT_TOKEN:-}", chat_id: "${TELEGRAM_CHAT_ID:-}"}
+  teams: {webhook_url: "${TEAMS_WEBHOOK_URL:-}"}
+
 environments:
   - id: prod                    # lowercase, used in URLs
     name: Production Wazuh
@@ -44,9 +50,9 @@ environments:
     storage_prefix: daily-triage        # results: daily-triage-runs / -knowledge / -chat in THIS indexer
     schedule:
       enabled: true
-      time: "07:30"
+      times: ["07:30", "19:30"]   # or a single `time: "07:30"`
       days: [mon, tue, wed, thu, fri]
-    window_min_hours: 24        # window = since last successful run, clamped to [min, max]
+    window_min_hours: 12        # window = since last successful run, clamped to [min, max]
     window_max_hours: 96        # so Monday morning covers the weekend
     high_level: 7               # "high level" threshold
     max_silence_minutes: 60     # last alert older than this → "SIEM may be down"

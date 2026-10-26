@@ -236,8 +236,9 @@ async def dashboard(request: Request):
         open_q = sum(1 for q in (last or {}).get("questions") or [] if not q.get("answer"))
         new_f = sum(1 for f in (last or {}).get("findings") or []
                     if f.get("user_status") == "new" and f.get("label") in ("real_incident", "investigate", "detection_gap"))
+        inbox = await _safe(rt.inbox(er.env.id), [])
         cards.append({"env": er.env, "last": last, "running": er.current_run, "next": rt.next_run(er.env, lang),
-                      "proposals": len(props), "open_q": open_q, "new_f": new_f})
+                      "proposals": len(props), "open_q": open_q, "new_f": new_f, "inbox": len(inbox)})
     return tpl.TemplateResponse(request, "dashboard.html", _ctx(request, cards=cards))
 
 
@@ -265,6 +266,15 @@ async def report_page(request: Request, env_id: str, run_id: str):
             props.append(d)
     return tpl.TemplateResponse(request, "report.html", _ctx(request, er=er, env=er.env, run=run, c=c,
                                                              hourly=hourly, hmax=mx, proposals=props))
+
+
+@app.get("/e/{env_id}/inbox", response_class=HTMLResponse)
+async def inbox_page(request: Request, env_id: str, i: int = 0):
+    er = _env(request, env_id)
+    items = await _safe(_rt(request).inbox(env_id), [])
+    i = max(0, min(i, len(items) - 1)) if items else 0
+    return tpl.TemplateResponse(request, "inbox.html", _ctx(request, er=er, env=er.env, items=items, i=i,
+                                                            item=items[i] if items else None))
 
 
 @app.get("/e/{env_id}/k", response_class=HTMLResponse)
@@ -325,6 +335,15 @@ async def api_check(request: Request, env_id: str):
     return {"results": res}
 
 
+@app.post("/api/e/{env_id}/notify-test")
+async def api_notify_test(request: Request, env_id: str):
+    _env(request, env_id)
+    res = await _rt(request).notify_test(env_id)
+    if not res:
+        return {"results": [], "message": t(ui_lang(request), "env.notify_none")}
+    return {"results": [{"channel": k, "ok": v == "ok", "detail": v} for k, v in res.items()]}
+
+
 class FindingReq(BaseModel):
     user_status: str | None = None
     user_note: str | None = None
@@ -352,6 +371,32 @@ async def api_finding(request: Request, env_id: str, run_id: str, fid: str, body
             f["knowledge_id"] = created = k["id"]
         await er.repo.save_run(run)
     return {"ok": True, "knowledge_id": created}
+
+
+class InboxActReq(BaseModel):
+    refs: list[dict]
+    user_status: str
+    user_note: str | None = None
+
+
+@app.post("/api/e/{env_id}/inbox/act")
+async def api_inbox_act(request: Request, env_id: str, body: InboxActReq):
+    _env(request, env_id)
+    if body.user_status not in USER_STATUSES:
+        raise HTTPException(400, t(ui_lang(request), "err.bad_status"))
+    refs = [r for r in body.refs if isinstance(r.get("run_id"), str) and isinstance(r.get("fid"), str)]
+    n = await _rt(request).inbox_act(env_id, refs, body.user_status, (body.user_note or "").strip() or None)
+    return {"ok": True, "updated": n}
+
+
+@app.post("/api/e/{env_id}/r/{run_id}/f/{fid}/chat")
+async def api_finding_chat(request: Request, env_id: str, run_id: str, fid: str):
+    _env(request, env_id)
+    try:
+        session = await _rt(request).chat_from_finding(env_id, run_id, fid, ui_lang(request))
+    except KeyError:
+        raise HTTPException(404) from None
+    return {"session": session, "url": f"/e/{env_id}/chat?s={session}"}
 
 
 class AnswerReq(BaseModel):

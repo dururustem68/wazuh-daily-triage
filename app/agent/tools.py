@@ -353,6 +353,13 @@ FINDING = _obj({
     "agents": {"type": "array", "items": {"type": "string"}},
     "recommendation": {"type": "string", "description": "Recommended manual action or next step"},
     "rule_draft_xml": {"type": "string", "description": "Optional Wazuh rule draft (XML). Never applied, suggestion only."},
+    "manual_checks": {"type": "array", "description":
+        "Checks only a human can do on hosts you cannot reach (log greps, config/service state, who logged in). "
+        "Exact READ-ONLY commands, one host each. Omit when the indexer data is enough.",
+        "items": _obj({"host": {"type": "string", "description": "agent/host name"},
+                       "purpose": {"type": "string", "description": "what the output will tell us"},
+                       "command": {"type": "string", "description": "read-only shell command (sudo allowed)"}},
+                      ["host", "command"])},
 }, ["label", "severity", "title", "detail"])
 
 SPECS: dict[str, dict] = {

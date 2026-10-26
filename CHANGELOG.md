@@ -3,6 +3,25 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] — 2026-10-26
+
+### Added
+- **Recommendation inbox:** unreviewed findings of recent runs, one at a time, de-duplicated across runs;
+  one decision (acknowledged / false positive / known noise / closed) applies to every occurrence.
+- **Manual checks:** findings can carry exact read-only commands to run on hosts the tool cannot reach.
+- **"Investigate in chat":** opens a chat pre-filled with the finding and its commands; paste the output and the
+  assistant interprets it and gives the next step.
+- **Several runs per day:** `schedule.times: ["07:50", "19:50"]` (or `SCHEDULE_TIME=07:50,19:50`).
+- **Notifications for critical situations** via e-mail (SMTP), Telegram and Microsoft Teams (Workflows
+  webhook); critical health flags, real incidents, critical findings, optionally failed runs; the same item is
+  not repeated within `repeat_hours`; "Test notifications" button.
+
+### Changed
+- The triage prompt no longer repeats findings the user closed, marked false positive or known noise.
+
+### Fixed
+- An empty environment variable (e.g. `SMTP_PORT=`) now falls back to its default instead of failing startup.
+
 ## [0.1.2] — 2026-10-26
 
 ### Fixed

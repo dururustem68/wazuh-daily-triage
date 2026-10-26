@@ -20,6 +20,8 @@ from .collector import Collector, _parse, health_status, iso
 from .config import DAYS, Environment, LLMConfig, Settings
 from .i18n import t
 from .llm.base import LLMError, make_llm
+from .notify import build_message, critical_items, recently_notified
+from .notify import send as notify_send
 from .store import IndexStore, MemoryStore, Repo, new_id, now_iso
 from .wazuh.api import WazuhAPI
 from .wazuh.indexer import Indexer
@@ -118,7 +120,8 @@ class Runtime:
     async def _run_guarded(self, rt, run_id, trigger, hours):
         try:
             async with rt.lock:
-                await self.run_triage(rt, run_id, trigger, hours)
+                run = await self.run_triage(rt, run_id, trigger, hours)
+                await self.notify_run(rt, run)
         finally:
             if rt.current_run == run_id:
                 rt.current_run = None
@@ -247,6 +250,141 @@ class Runtime:
         return {"session": session, "answer": answer, "trace": trace,
                 "proposals": [p["id"] for p in tb.proposals]}
 
+    # ------------------------------------------------------------ notifications
+    async def notify_run(self, rt: EnvRuntime, run: dict, transport=None) -> dict:
+        cfg = self.settings.notify_for(rt.env)
+        if not cfg.enabled or not cfg.channels:
+            return {}
+        try:
+            items = critical_items(run, cfg, self.finding_key)
+            if not items:
+                return {}
+            prev = await rt.repo.list_runs(2 * max(1, cfg.repeat_hours // 6) + 4, light=True)
+            seen = recently_notified([r for r in prev if r.get("run_id") != run.get("run_id")], cfg.repeat_hours)
+            items = [i for i in items if i["key"] not in seen]
+            if not items:
+                return {}
+            msg = build_message(rt.env.name, run, items, cfg, self.lang(rt.env), rt.env.id)
+            res = await notify_send(cfg, msg, transport=transport)
+            run["notified"] = [{"key": i["key"], "ts": now_iso()} for i in items]
+            run["notify_result"] = res
+            await rt.repo.save_run(run)
+            log.info("%s: notified %d item(s): %s", rt.env.id, len(items), res)
+            return res
+        except Exception:  # noqa: BLE001 — a notification problem must never break a run
+            log.exception("notification failed")
+            return {}
+
+    async def notify_test(self, env_id: str, transport=None) -> dict:
+        rt = self.get(env_id)
+        cfg = self.settings.notify_for(rt.env)
+        if not cfg.channels:
+            return {}
+        lang = self.lang(rt.env)
+        fake = {"run_id": "test"}
+        msg = build_message(rt.env.name, fake, [{"kind": "test", "text": t(lang, "notify.test_text")}], cfg, lang, env_id)
+        msg["title"] = t(lang, "notify.test_title", env=rt.env.name)
+        msg["text"] = msg["title"] + "\n\n• " + t(lang, "notify.test_text")
+        msg["link"] = cfg.ui_url or ""
+        return await notify_send(cfg, msg, transport=transport)
+
+    # ------------------------------------------------------------ recommendation inbox
+    INBOX_RUNS = 14            # look back over this many finished runs (7 days at 2 runs/day)
+    INBOX_SKIP = {"expected", "measurement"}
+
+    @staticmethod
+    def finding_key(f: dict) -> str:
+        """Groups the same finding across runs (LLM wording differs, rule ids/agents do not)."""
+        rules = ",".join(sorted(f.get("rule_ids") or []))
+        agents = ",".join(sorted(f.get("agents") or []))
+        if rules or agents:
+            return f"{f.get('label')}|{rules}|{agents}"
+        return f"{f.get('label')}|{(f.get('title') or '').strip().lower()[:80]}"
+
+    async def inbox(self, env_id: str) -> list[dict]:
+        """Unreviewed findings of recent runs, de-duplicated, most severe and newest first."""
+        rt = self.get(env_id)
+        runs = await rt.repo.list_runs(self.INBOX_RUNS, status="done", light=True)
+        groups: dict[str, dict] = {}
+        handled: set[str] = set()
+        for r in runs:  # newest first
+            for f in r.get("findings") or []:
+                if f.get("label") in self.INBOX_SKIP:
+                    continue
+                key = self.finding_key(f)
+                if f.get("user_status", "new") != "new":
+                    handled.add(key)  # a decision on any occurrence settles the group
+                    continue
+                g = groups.setdefault(key, {"key": key, "finding": f, "run_id": r["run_id"],
+                                            "run_started": r.get("started_at"), "refs": [], "seen": 0,
+                                            "first_seen": r.get("started_at")})
+                g["refs"].append({"run_id": r["run_id"], "fid": f.get("id")})
+                g["seen"] += 1
+                g["first_seen"] = r.get("started_at")
+        sev = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        lab = {"real_incident": 0, "detection_gap": 1, "baseline_increase": 2, "investigate": 3, "false_positive": 4}
+        items = [g for k, g in groups.items() if k not in handled]
+        items.sort(key=lambda g: (lab.get(g["finding"].get("label"), 5), sev.get(g["finding"].get("severity"), 5),
+                                  _neg_ts(g["run_started"])))
+        return items
+
+    async def inbox_act(self, env_id: str, refs: list[dict], status: str, note: str | None) -> int:
+        """Apply one decision to every occurrence of a finding."""
+        rt = self.get(env_id)
+        by_run: dict[str, list[str]] = {}
+        for ref in refs[:50]:
+            by_run.setdefault(ref["run_id"], []).append(ref["fid"])
+        n = 0
+        created = False
+        for run_id, fids in by_run.items():
+            async with self.run_lock(run_id):
+                run = await rt.repo.get_run(run_id)
+                if not run:
+                    continue
+                for f in run.get("findings") or []:
+                    if f.get("id") in fids:
+                        f["user_status"] = status
+                        if note:
+                            f["user_note"] = note[:2000]
+                        if status == "baseline" and not created and not f.get("knowledge_id"):
+                            k = await rt.repo.add_knowledge("baseline", f.get("title", ""),
+                                                            (f.get("detail") or "") + (f"\n\nNote: {note}" if note else ""),
+                                                            rule_ids=f.get("rule_ids"), source_run=run_id)
+                            f["knowledge_id"] = k["id"]
+                            created = True
+                        n += 1
+                await rt.repo.save_run(run)
+        return n
+
+    async def chat_from_finding(self, env_id: str, run_id: str, fid: str, lang: str | None = None) -> str:
+        """Open a chat session pre-filled with a finding and its manual checks (no LLM call)."""
+        rt = self.get(env_id)
+        lang = lang or self.lang(rt.env)
+        run = await rt.repo.get_run(run_id)
+        f = next((x for x in (run or {}).get("findings") or [] if x.get("id") == fid), None)
+        if not f:
+            raise KeyError(fid)
+        session = uuid.uuid4().hex[:12]
+        lines = [f"### {f.get('title')}", "", f"**{t(lang, 'label.' + f.get('label', 'investigate'))}** · "
+                 f"{t(lang, 'sev.' + f.get('severity', 'medium'))} · {t(lang, 'rep.title')} {run.get('started_at', '')[:16]}",
+                 "", f.get("detail") or ""]
+        if f.get("evidence"):
+            lines += [""] + [f"- {e}" for e in f["evidence"]]
+        if f.get("recommendation"):
+            lines += ["", f"**{t(lang, 'rep.recommendation')}** {f['recommendation']}"]
+        checks = f.get("manual_checks") or []
+        if checks:
+            lines += ["", f"**{t(lang, 'inbox.checks_title')}**"]
+            for c in checks:
+                lines += ["", f"`{c.get('host')}` — {c.get('purpose') or ''}", "```sh", c.get("command", ""), "```"]
+            lines += ["", t(lang, "inbox.paste_output")]
+        else:
+            lines += ["", t(lang, "inbox.ask_next")]
+        await rt.repo.chat_add(session, "user", t(lang, "inbox.chat_open", title=f.get("title", "")))
+        await asyncio.sleep(0.005)  # chat order is by millisecond timestamp
+        await rt.repo.chat_add(session, "assistant", "\n".join(lines))
+        return session
+
     # ------------------------------------------------------------ connection test
     async def check(self, env_id: str, with_llm: bool = True) -> list[dict]:
         """Checks every dependency of one environment; used by the UI button and `python -m app.check`."""
@@ -319,11 +457,13 @@ class Runtime:
                 day = DAYS[now.weekday()]
                 for rt in self.envs.values():
                     s = rt.env.schedule
-                    key = f"{rt.env.id}:{now:%Y-%m-%d}:{s.time}"
-                    if s.enabled and day in s.days and hm == s.time and key not in self._fired:
+                    if not (s.enabled and day in s.days and hm in s.all_times):
+                        continue
+                    key = f"{rt.env.id}:{now:%Y-%m-%d}:{hm}"
+                    if key not in self._fired:
                         self._fired.add(key)
                         if not rt.current_run:
-                            log.info("scheduled run: %s", rt.env.id)
+                            log.info("scheduled run: %s (%s)", rt.env.id, hm)
                             await self.start_run(rt.env.id, trigger="schedule")
             except Exception:  # noqa: BLE001
                 log.exception("scheduler error")
@@ -334,12 +474,13 @@ class Runtime:
         if not s.enabled:
             return None
         now = datetime.now(self.tz)
-        hh, mm = map(int, s.time.split(":"))
         names = t(lang, "days").split(",")
         for i in range(8):
-            d = (now + timedelta(days=i)).replace(hour=hh, minute=mm, second=0, microsecond=0)
-            if d > now and DAYS[d.weekday()] in s.days:
-                return f"{d:%d.%m} {names[d.weekday()]} {d:%H:%M}"
+            for tm in s.all_times:
+                hh, mm = map(int, tm.split(":"))
+                d = (now + timedelta(days=i)).replace(hour=hh, minute=mm, second=0, microsecond=0)
+                if d > now and DAYS[d.weekday()] in s.days:
+                    return f"{d:%d.%m} {names[d.weekday()]} {d:%H:%M}"
         return None
 
     async def close(self):
@@ -347,6 +488,13 @@ class Runtime:
             await rt.ix.close()
             if rt.api:
                 await rt.api.close()
+
+
+def _neg_ts(ts: str | None) -> float:
+    try:
+        return -_parse(ts).timestamp()
+    except Exception:  # noqa: BLE001
+        return 0.0
 
 
 # ---------------------------------------------------------------------- report normalisation
@@ -384,6 +532,8 @@ def normalize_report(sub: dict | None, fallback_text: str = "", lang: str = "en"
              for k, v in f.items()}
         for k in ("evidence", "rule_ids", "agents"):
             f[k] = [_s(x) for x in _as_list(f.get(k))]
+        f["manual_checks"] = [{"host": _s(c.get("host")), "purpose": _s(c.get("purpose")), "command": _s(c.get("command"))}
+                              for c in _as_list(f.get("manual_checks")) if isinstance(c, dict) and c.get("command")][:8]
         if f.get("label") not in LABELS:
             f["label"] = "investigate"
         if f.get("severity") not in SEVERITIES:

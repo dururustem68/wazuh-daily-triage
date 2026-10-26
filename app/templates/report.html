@@ -44,6 +44,10 @@
     <p class="small muted">{% if f.rule_ids %}{{ _('rep.rules') }}: {{ f.rule_ids|join(', ') }}{% endif %}
       {% if f.agents %} · {{ _('rep.agents') }}: {{ f.agents|join(', ') }}{% endif %}</p>
     {% if f.recommendation %}<div class="reco"><b>{{ _('rep.recommendation') }}</b> {{ f.recommendation|md }}</div>{% endif %}
+    {% if f.manual_checks %}<details open><summary>{{ _('rep.manual_checks') }} ({{ f.manual_checks|length }})</summary>
+      {% for c in f.manual_checks %}<div class="check"><div class="small"><code>{{ c.host }}</code> {{ c.purpose }}</div>
+        <pre class="code">{{ c.command }}</pre><button class="btn small" data-copy-prev>{{ _('rep.copy') }}</button></div>{% endfor %}
+    </details>{% endif %}
     {% if f.rule_draft_xml %}<details><summary>{{ _('rep.rule_draft') }}</summary>
       <pre class="code">{{ f.rule_draft_xml }}</pre>
       <button class="btn small" data-copy-prev>{{ _('rep.copy') }}</button>
@@ -55,6 +59,8 @@
       </select>
       <input data-k="user_note" placeholder="{{ _('rep.note_ph') }}" value="{{ f.user_note or '' }}">
       <button class="btn small" data-save>{{ _('rep.save') }}</button><span class="saved small muted"></span>
+      <span class="spacer"></span>
+      <button class="btn small" data-chat-finding="/api/e/{{ env.id }}/r/{{ run.run_id }}/f/{{ f.id }}/chat">{{ _('inbox.chat_btn') }}</button>
     </div>
   </article>
   {% endfor %}
