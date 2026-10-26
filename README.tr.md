@@ -54,7 +54,7 @@ koşu özetlerini e-posta, Telegram, Microsoft Teams, Slack, Discord, ntfy ya da
   ajanlar ve şiddet başına SLA süresini aşan açık zafiyetler.
 - **Aylık denetim raporu** — alarm hacmi, raporlar, bulgular ve kararlarınız, kural değişiklikleri (kim, ne zaman,
   neyi düşürdü), canlılık kontrolünden SIEM kesintileri, kapsam ve zafiyet SLA'sı. Deterministik (yapay zekâ yok),
-  PDF olarak yazdırılabilir ya da Markdown indirilebilir — ISO 27001 / ISMS gözden geçirmeleri için kanıt.
+  PDF ya da Markdown olarak indirilebilir — ISO 27001 / ISMS gözden geçirmeleri için kanıt.
 - **Yapay zekâsız anomali** — her rapor kural × ajan sayılarını önceki 14 günle karşılaştırır: sıçramalar
   (z-skoru) ve bir ajanda ilk kez görülen kurallar; yapay zekâ işe buradan başlar.
 - **Wazuh'un ötesi (isteğe bağlı)** — salt-okunur Prometheus, Loki ve Kubernetes araçları (pod'lar, yeniden

@@ -31,7 +31,7 @@ Where the project is going, roughly ordered by impact. This is a living document
 | ✅ | Rule drafts with validation, rollback and two-way logtest (opt-in deployment). | the differentiator. |
 | ✅ | Live verification of deployed/promoted rules on real events. | "logtest passed" is not proof; real events are. |
 | ✅ | Monthly audit report (ISMS evidence) + agent coverage + vulnerability SLA + mail saturation + anomalies. | regulatory story. |
-| ⬜ | **PDF export** of the report and monthly audit (logo, signature block). | regulated customers want a printable artefact. |
+| ✅ | **PDF export** of the monthly audit report (reportlab, Unicode-safe) | regulated customers want a printable artefact. |
 | ⬜ | **Decoder drafts** next to rule drafts (validate + logtest + rollback). | onboarding new log sources. |
 | ⬜ | **Read-only viewer role** (vs. approver/deployer) and per-environment ACLs. | team deployments need role separation. |
 | ⬜ | Embedded SVG time-series charts in reports. | readability + "wow" factor without a JS build step. |

@@ -666,6 +666,18 @@ async def audit_md(request: Request, env_id: str, month: str | None = None):
                     headers={"Content-Disposition": f'attachment; filename="wazuh-audit-{er.env.id}-{d["month"]}.md"'})
 
 
+@app.get("/api/e/{env_id}/audit.pdf")
+async def audit_pdf(request: Request, env_id: str, month: str | None = None):
+    from .pdf import audit_pdf as build_pdf
+    er = _env(request, env_id)
+    if month and not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(400, "month must be YYYY-MM")
+    d = await _rt(request).audit(env_id, month)
+    data = build_pdf(d, ui_lang(request))
+    return Response(data, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="wazuh-audit-{er.env.id}-{d["month"]}.pdf"'})
+
+
 @app.post("/api/e/{env_id}/liveness")
 async def api_liveness(request: Request, env_id: str):
     _env(request, env_id)

@@ -62,8 +62,8 @@ of silencing.
 - **Coverage and vulnerability SLA** — agents per status/version/node, expected-but-missing agents from an
   inventory list, and active vulnerabilities open longer than the SLA per severity.
 - **Monthly audit report** — alert volume, runs, findings and your decisions, rule changes (who, when, what was
-  lowered), SIEM outages from the liveness check, coverage and vulnerability SLA. Deterministic (no AI), printable
-  as PDF or downloadable as Markdown — evidence for ISO 27001 / ISMS reviews.
+  lowered), SIEM outages from the liveness check, coverage and vulnerability SLA. Deterministic (no AI), downloadable
+  as PDF or Markdown — evidence for ISO 27001 / ISMS reviews.
 - **Anomalies without AI** — every run compares rule × agent counts with the previous 14 days: spikes (z-score)
   and rules firing on an agent for the first time; the AI starts from there.
 - **Beyond Wazuh (optional)** — read-only Prometheus, Loki and Kubernetes tools (pods, restarts, OOM kills, node

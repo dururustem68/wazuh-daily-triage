@@ -123,3 +123,6 @@ def test_audit_pages():
         assert "data-print" in page and "abar" in page
         r = c.get("/api/e/demo/audit.md")
         assert r.status_code == 200 and r.text.startswith("# ")
+        p = c.get("/api/e/demo/audit.pdf")
+        assert p.status_code == 200 and p.content[:5] == b"%PDF-"
+        assert p.headers["content-type"] == "application/pdf"

@@ -13,6 +13,8 @@ All notable changes to this project are documented here. The format follows
 - **Helm chart** in `deploy/helm/wazuh-daily-triage` (hardened deployment, optional read-only RBAC, ingress and
   network policy), linted and rendered in CI.
 - **Jira ticketing** next to Zammad for incident record drafts (`incident.jira`, basic auth + ADF description).
+- **PDF export** of the monthly audit report (`/api/e/{env}/audit.pdf`, reportlab, pure Python) with a bundled
+  Unicode font so Turkish/Spanish/German render correctly.
 
 ### Changed
 - CI now runs **CodeQL** and a **dependency audit** (`pip-audit`); releases attach an **SPDX SBOM** artifact.
