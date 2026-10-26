@@ -107,3 +107,23 @@ async def test_deploy_disabled_by_default(tmp_path):
     with pytest.raises(PermissionError):
         await rt.rule_deploy("x", k["id"], "bob")
     assert not (await rt.rule_view("x", k["id"]))["deploy_enabled"]
+
+
+async def test_kb_import_export():
+    s = load_settings(os.path.join(ROOT, "config/demo.yaml"))
+    rt = Runtime(s, demo=True)
+    items = [{"kind": "baseline", "title": "31101 scanner noise", "body": "a", "rule_ids": [31101], "key": "n-31101"},
+             {"kind": "baseline", "title": "60106 DC machine logon", "body": "b"},
+             {"kind": "nope", "title": "x"}, {"title": "no kind"}]
+    r = await rt.kb_import("demo", items, dry_run=True)
+    assert r["added"] == 2 and len(r["errors"]) == 2 and not (await rt.kb_export("demo", kinds=["baseline"]))[2:]
+    r = await rt.kb_import("demo", items)
+    assert r["added"] == 2
+    r = await rt.kb_import("demo", items)                       # idempotent
+    assert r["added"] == 0 and r["skipped"] == 2
+    items[0]["title"], items[0]["body"] = "31101 scanner noise (~10k/day)", "changed"
+    r = await rt.kb_import("demo", items, update=True)           # same key → updated, not duplicated
+    assert r["updated"] == 1 and r["added"] == 0
+    out = await rt.kb_export("demo", kinds=["baseline"])
+    e = next(x for x in out if x.get("key") == "n-31101")
+    assert e["body"] == "changed" and e["rule_ids"] == ["31101"]

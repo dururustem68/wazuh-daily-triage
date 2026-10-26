@@ -62,7 +62,7 @@ Keep the read-only `daily-triage` user for everything else.
 | Action | Resource | Used for |
 |---|---|---|
 | `rules:read` | `rule:file:*` | read the file, check IDs and parent rules |
-| `rules:update` | `rule:file:wdt_rules.xml` | write **only** this file |
+| `rules:update` | `*:*:*` | upload the rules file (Wazuh only accepts `*:*:*` for this action) |
 | `rules:delete` | `rule:file:wdt_rules.xml` | remove the file again if the very first deploy is rolled back |
 | `manager:read` | `*:*:*` | status, configuration validation |
 | `manager:restart` | `*:*:*` | restart a standalone manager |
@@ -79,8 +79,8 @@ F=wdt_rules.xml   # same as rule_deploy.file
 
 pol() { curl -sk -H "$H" -H "$J" -X POST "$API/security/policies" -d "$1" | jq -r '.data.affected_items[0].id'; }
 D1=$(pol '{"name":"wdt_deploy_rules_read","policy":{"actions":["rules:read"],"resources":["rule:file:*"],"effect":"allow"}}')
-D2=$(pol "{\"name\":\"wdt_deploy_rules_file\",\"policy\":{\"actions\":[\"rules:update\",\"rules:delete\"],\"resources\":[\"rule:file:$F\"],\"effect\":\"allow\"}}")
-D3=$(pol '{"name":"wdt_deploy_manager","policy":{"actions":["manager:read","manager:restart","cluster:status","logtest:run"],"resources":["*:*:*"],"effect":"allow"}}')
+D2=$(pol "{\"name\":\"wdt_deploy_rules_delete\",\"policy\":{\"actions\":[\"rules:delete\"],\"resources\":[\"rule:file:$F\"],\"effect\":\"allow\"}}")
+D3=$(pol '{"name":"wdt_deploy_manager","policy":{"actions":["rules:update","manager:read","manager:restart","cluster:status","logtest:run"],"resources":["*:*:*"],"effect":"allow"}}')
 D4=$(pol '{"name":"wdt_deploy_cluster","policy":{"actions":["cluster:read","cluster:restart"],"resources":["node:id:*"],"effect":"allow"}}')
 
 ROLE=$(curl -sk -H "$H" -H "$J" -X POST "$API/security/roles" -d '{"name":"wdt_rule_deploy"}' | jq -r '.data.affected_items[0].id')
@@ -91,6 +91,11 @@ curl -sk -H "$H" -X POST "$API/security/users/$USR/roles?role_ids=$ROLE"
 ```
 
 If an identical policy already exists under another name, Wazuh answers `4009`; reuse that policy's ID.
+
+> **Limit of Wazuh RBAC:** `rules:update` cannot be scoped to one file — the API rejects `rule:file:<name>` with
+> `Permission denied: Resource type: *:*`. So this user *could* overwrite any custom rules file through the API.
+> The application itself only ever writes `rule_deploy.file`; keep the credentials in a secret and do not reuse
+> the user elsewhere. Ruleset files shipped by Wazuh (`ruleset/rules`) are not writable through this endpoint.
 
 ## Deployment types
 

@@ -39,7 +39,8 @@ of silencing.
 - **It asks you** — "Was this SSH login yours?" Your answer goes into the knowledge base and is context for the
   next run.
 - **Knowledge base** — known noise, decisions ("don't suggest X"), open items, lessons, "look at this tomorrow"
-  requests. AI proposals have **no effect until you approve them**.
+  requests. AI proposals have **no effect until you approve them**. Bring your existing notes with YAML
+  import/export (UI or `python -m app.kb`), repeatable without duplicates.
 - **Recommendation inbox** — findings one at a time, de-duplicated across runs; one decision settles every
   occurrence. Findings that need a look on a server carry exact read-only commands, and **Investigate in chat**
   opens a conversation where you paste the output and get the next step.
@@ -135,7 +136,7 @@ a local model for an environment whose data must not leave your network. `max_to
 
 - **Read-only towards Wazuh by default.** No active response, no config writes, no agent commands. The only
   index writes go to its own `daily-triage-*` indices. The opt-in rule deployment uses a separate API user that
-  can update exactly one rules file and restart the manager — nothing else.
+  can only upload custom rules files and restart the manager; the application writes one dedicated file.
 - **Prompt injection.** Alert content (URLs, `full_log`, user agents, user names) is attacker-controlled. The
   prompt marks it as data, and even a fooled model can at most add a *proposal* to the knowledge base, which
   does nothing until you approve it.

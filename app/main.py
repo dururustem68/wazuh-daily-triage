@@ -12,8 +12,9 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import yaml
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markdown_it import MarkdownIt
@@ -522,6 +523,37 @@ async def api_rule_deploy(request: Request, env_id: str, kid: str, body: DeployR
 @app.post("/api/e/{env_id}/k/{kid}/undeploy")
 async def api_rule_undeploy(request: Request, env_id: str, kid: str):
     return await _deploy(request, env_id, kid, "", remove=True)
+
+
+class ImportReq(BaseModel):
+    text: str
+    update: bool = False
+    dry_run: bool = False
+
+
+@app.post("/api/e/{env_id}/kb/import")
+async def api_k_import(request: Request, env_id: str, body: ImportReq):
+    _env(request, env_id)
+    if len(body.text) > 2_000_000:
+        raise HTTPException(413, "too large")
+    try:
+        items = yaml.safe_load(body.text) or []
+    except yaml.YAMLError as e:
+        raise HTTPException(400, f"YAML: {e}") from e
+    try:
+        return await _rt(request).kb_import(env_id, items, update=body.update, dry_run=body.dry_run,
+                                            created_by=actor(request))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.get("/api/e/{env_id}/kb/export")
+async def api_k_export(request: Request, env_id: str, kind: str | None = None, status: str | None = None):
+    _env(request, env_id)
+    rows = await _rt(request).kb_export(env_id, kinds=[kind] if kind else None, status=[status] if status else None)
+    text = yaml.safe_dump(rows, allow_unicode=True, sort_keys=False, width=120)
+    return Response(text, media_type="application/yaml",
+                    headers={"Content-Disposition": f'attachment; filename="knowledge-{env_id}.yaml"'})
 
 
 class ChatReq(BaseModel):

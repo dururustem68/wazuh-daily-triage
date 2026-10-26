@@ -85,3 +85,15 @@ def test_rule_draft_ui_and_deploy(c):
     assert rec["state"] == "deployed" and rec["by"] == "ui"
     assert "data-undeploy" in c.get("/e/demo/k").text
     assert c.post(f"/api/e/demo/k/{k['id']}/undeploy").json()["state"] == "removed"
+
+
+def test_kb_import_export_web(c):
+    c.post("/login", data={"password": "pw"})
+    y = "- kind: baseline\n  title: web-import\n  body: x\n"
+    assert c.post("/api/e/demo/kb/import", json={"text": y, "dry_run": True}).json()["added"] == 1
+    assert c.post("/api/e/demo/kb/import", json={"text": y}).json()["added"] == 1
+    assert c.post("/api/e/demo/kb/import", json={"text": y}).json()["skipped"] == 1
+    assert c.post("/api/e/demo/kb/import", json={"text": "- [unclosed"}).status_code == 400
+    r = c.get("/api/e/demo/kb/export?kind=baseline")
+    assert r.status_code == 200 and "web-import" in r.text and "attachment" in r.headers["content-disposition"]
+    assert "data-kimport" in c.get("/e/demo/k").text

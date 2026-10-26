@@ -98,6 +98,28 @@ document.addEventListener("DOMContentLoaded", () => {
       location.reload();
     } catch (e) { alertInline(kf, e.message); }
   });
+  // knowledge import (YAML) — preview first, then import
+  const ki = document.querySelector("[data-kimport]");
+  if (ki) {
+    const fileIn = ki.querySelector("[data-kfile]");
+    fileIn.addEventListener("change", async () => {
+      if (fileIn.files[0]) ki.querySelector("textarea").value = await fileIn.files[0].text();
+    });
+    ki.addEventListener("submit", async ev => {
+      ev.preventDefault();
+      const f = new FormData(ki), out = ki.querySelector(".kimport-out");
+      const dry = f.get("dry_run") === "on";
+      try {
+        const r = await api(ki.dataset.kimport, "POST", { text: f.get("text"), update: f.get("update") === "on", dry_run: dry });
+        out.innerHTML = (dry ? `<b>${escapeHtml(tr("kb_io_dry"))}:</b> ` : "")
+          + escapeHtml(tr("kb_io_result").replace("{added}", r.added).replace("{updated}", r.updated)
+                       .replace("{skipped}", r.skipped).replace("{errors}", r.errors.length))
+          + (r.errors.length ? `<ul class="bad">${r.errors.map(e => `<li>${escapeHtml(e)}</li>`).join("")}</ul>` : "");
+        if (!dry && (r.added || r.updated)) setTimeout(() => location.reload(), 1500);
+      } catch (e) { out.innerHTML = `<p class="bad">${escapeHtml(e.message)}</p>`; }
+    });
+  }
+
   document.querySelectorAll("[data-k]").forEach(card => {
     if (card.tagName !== "ARTICLE") return;
     const url = card.dataset.k;

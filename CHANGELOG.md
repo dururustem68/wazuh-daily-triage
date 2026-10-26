@@ -3,6 +3,17 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] — 2026-10-26
+
+### Added
+- **Knowledge base import / export** in the seed YAML format — "Import / export" on the knowledge page (paste or
+  pick a file, preview first) and `python -m app.kb import|export` (stdin works, e.g. through `kubectl exec -i`).
+  Re-importing is idempotent: entries match by `key` (or kind + title); `--update` refreshes changed ones.
+
+### Fixed
+- docs/rule-deployment.md: `rules:update` must be granted on `*:*:*` (Wazuh rejects a per-file resource with
+  "Permission denied: Resource type: *:*").
+
 ## [0.3.0] — 2026-10-26
 
 ### Added

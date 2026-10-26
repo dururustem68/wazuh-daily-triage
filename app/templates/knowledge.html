@@ -16,6 +16,23 @@
   </form>
 </details>
 
+<details class="card">
+  <summary><b>{{ _('kb.io') }}</b></summary>
+  <p class="small muted">{{ _('kb.io_help') }}</p>
+  <form class="kform" data-kimport="/api/e/{{ env.id }}/kb/import">
+    <textarea name="text" rows="8" placeholder="- kind: baseline&#10;  title: &quot;31101 web scanner noise&quot;&#10;  body: &quot;…&quot;&#10;  rule_ids: [&quot;31101&quot;]&#10;  key: &quot;noise-31101&quot;"></textarea>
+    <div class="row small">
+      <input type="file" accept=".yaml,.yml,.json" data-kfile>
+      <label><input type="checkbox" name="update"> {{ _('kb.io_update') }}</label>
+      <label><input type="checkbox" name="dry_run" checked> {{ _('kb.io_dry') }}</label>
+      <span class="spacer"></span>
+      <a class="btn small" href="/api/e/{{ env.id }}/kb/export">{{ _('kb.io_export') }}</a>
+      <button class="btn small primary">{{ _('kb.io_import') }}</button>
+    </div>
+    <div class="small kimport-out"></div>
+  </form>
+</details>
+
 <div class="row filters small">
   <a href="?" class="{{ 'on' if not kind and not status }}">{{ _('kb.all') }}</a>
   <a href="?status=proposed" class="{{ 'on' if status == 'proposed' }}">{{ _('kb.proposed') }}</a>

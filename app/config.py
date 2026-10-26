@@ -69,8 +69,8 @@ DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 class RuleDeployCfg(BaseModel):
     """Optional: let "Approve and deploy" write approved rule drafts to the manager.
 
-    Off by default. Uses a SEPARATE Wazuh API user whose only write rights are the one rules file below and
-    manager/cluster restart (docs/permissions.md). The read-only user stays read-only.
+    Off by default. Uses a SEPARATE Wazuh API user whose only write rights are uploading custom rules files and
+    manager/cluster restart (docs/rule-deployment.md); the application writes only the file below.
     """
     enabled: bool = False
     username: str = ""

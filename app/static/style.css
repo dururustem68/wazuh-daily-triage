@@ -130,3 +130,4 @@ form.inline { display: inline; margin: 0; }
 .rd-out .warn { color: var(--amber, #b54708); }
 .steps { list-style: none; padding-left: 0; }
 .steps .ok { color: var(--green, #067647); }
+.kimport-out .bad, .kimport-out.bad { color: var(--red, #b42318); }

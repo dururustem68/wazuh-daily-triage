@@ -5,10 +5,10 @@ kind: Kustomization
 namespace: wazuh-daily-triage
 resources:
   - namespace.yaml
-  - ../base   # when copied elsewhere: https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.3.0
+  - ../base   # when copied elsewhere: https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.3.1
 images:
   - name: ghcr.io/dururustem68/wazuh-daily-triage
-    newTag: "0.3.0"
+    newTag: "0.3.1"
 configMapGenerator:
   - name: wazuh-daily-triage-config
     files:

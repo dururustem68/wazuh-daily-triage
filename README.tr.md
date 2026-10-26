@@ -29,7 +29,8 @@ vLLM, LM Studio, LiteLLM). Tek Docker konteyner; Wazuh'a karşı salt okunur.
   ([docs/rule-deployment.md](docs/rule-deployment.md)). Varsayılan kapalı.
 - **Size sorar** — "Bu SSH girişi sizin miydi?" Cevap bilgi tabanına yazılır, sonraki koşuya bağlam olur.
 - **Bilgi tabanı** — bilinen gürültü, kararlar, açık maddeler, dersler, "yarın şuna bak" istekleri. Yapay zekâ
-  önerileri **siz onaylayana kadar etkisizdir**.
+  önerileri **siz onaylayana kadar etkisizdir**. Mevcut notlarınızı YAML ile içe/dışa aktarın (arayüz ya da
+  `python -m app.kb`); tekrar çalıştırmak çift kayıt oluşturmaz.
 - **Öneri kuyruğu** — bulgular tek tek ve koşular arası tekilleştirilmiş gelir; bir karar tüm tekrarlara uygulanır.
   Sunucuda bakılması gerekenler salt okunur komutlarla gelir; **Sohbette incele** ile çıktıyı yapıştırıp bir sonraki
   adımı alırsınız.
@@ -98,7 +99,8 @@ Model araç kullanımını (function calling) desteklemelidir. Her ortam kendi m
 ## Güvenlik
 
 - Wazuh'a karşı varsayılan olarak **salt okunur**: Active Response, konfig yazma, ajan komutu yok. İsteğe bağlı
-  kural uygulama ayrı bir API kullanıcısıyla yalnız tek bir kural dosyasını günceller ve manager'ı yeniden başlatır.
+  kural uygulama ayrı bir API kullanıcısı kullanır (yalnız özel kural dosyası yükleme + restart); uygulama tek bir
+  ayrılmış dosyaya yazar.
 - Alarm içerikleri saldırgan kontrolündedir (prompt injection); kandırılmış bir model en fazla bilgi tabanına
   *öneri* ekleyebilir, siz onaylamadan etkisizdir.
 - Harici bir LLM kullanıyorsanız alarm özetleri o sağlayıcıya gider. Düzenlemeye tabi ortamlarda (BDDK, KVKK,
