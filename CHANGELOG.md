@@ -15,6 +15,8 @@ All notable changes to this project are documented here. The format follows
 - **Jira ticketing** next to Zammad for incident record drafts (`incident.jira`, basic auth + ADF description).
 - **PDF export** of the monthly audit report (`/api/e/{env}/audit.pdf`, reportlab, pure Python) with a bundled
   Unicode font so Turkish/Spanish/German render correctly.
+- **Read-only viewer role** — an optional `VIEWER_PASSWORD` signs in to view everything but change nothing; the
+  session cookie now carries the role and mutating requests are rejected for viewers.
 
 ### Changed
 - CI now runs **CodeQL** and a **dependency audit** (`pip-audit`); releases attach an **SPDX SBOM** artifact.

@@ -28,6 +28,7 @@
 <aside class="side">
   <a class="brand" href="/"><img src="/static/icon.svg" alt="" width="24" height="24"><span>{{ app_title }}</span></a>
   {% if demo %}<span class="pill amber demo">DEMO</span>{% endif %}
+  {% if viewer %}<span class="pill gray demo">{{ _('nav.viewer') }}</span>{% endif %}
   <nav class="nav">
     <a href="/" class="{{ 'on' if path == '/' }}"><svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z"/></svg>{{ _('dash.title') }}</a>
     {% for e in envs %}

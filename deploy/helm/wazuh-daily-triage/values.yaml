@@ -30,6 +30,7 @@ env: {}
 # `--set-file` or a values override from a secret store.
 secret:
   APP_PASSWORD: ""       # the web UI password (set it, or use SSO + AUTH_DISABLED)
+  VIEWER_PASSWORD: ""    # optional read-only role: view everything, change nothing
   APP_SECRET: ""         # session signing key (openssl rand -hex 32)
   LLM_API_KEY: ""
   INDEXER_USER: daily-triage

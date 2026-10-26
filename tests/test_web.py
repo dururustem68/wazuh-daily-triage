@@ -6,8 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
-os.environ.update(WDT_DEMO="true", APP_PASSWORD="pw", APP_SECRET="s", WDT_SCHEDULER="false",
-                  WDT_CONFIG=os.path.join(ROOT, "config/demo.yaml"))
+os.environ.update(WDT_DEMO="true", APP_PASSWORD="pw", VIEWER_PASSWORD="vwpw", APP_SECRET="s",
+                  WDT_SCHEDULER="false", WDT_CONFIG=os.path.join(ROOT, "config/demo.yaml"))
 
 from app.main import app  # noqa: E402
 
@@ -24,6 +24,17 @@ def test_auth_required(c):
     assert c.post("/api/e/demo/run", json={}).status_code == 401
     assert c.post("/login", data={"password": "wrong"}).status_code == 401
     assert "Source code" in c.get("/login").text  # AGPL §13 link
+
+
+def test_viewer_read_only(c):
+    r = c.post("/login", data={"password": "vwpw"}, follow_redirects=False)
+    assert r.status_code == 303
+    assert c.get("/").status_code == 200                       # GET is allowed
+    assert c.post("/api/e/demo/run", json={}).status_code == 403          # mutating API blocked
+    assert c.post("/api/e/demo/k", json={"kind": "decision", "title": "x"}).status_code == 403
+    assert c.post("/lang", data={"lang": "en"}, follow_redirects=False).status_code == 303   # lang still works
+    assert c.post("/logout", follow_redirects=False).status_code == 303                       # logout still works
+    assert c.get("/", follow_redirects=False).status_code == 303                                # now logged out
 
 
 def test_flow(c):

@@ -229,7 +229,8 @@ Ya da bilgi tabanı sayfasındaki **İçe / dışa aktar** kutusunu kullanın. T
 - Harici bir LLM kullanıyorsanız alarm özetleri o sağlayıcıya gider. Düzenlemeye tabi ortamlarda (BDDK, KVKK,
   GDPR) yerel model ya da `redact: true` kullanın.
 - Arayüz: parola + imzalı çerez, deneme sınırı, sıkı CSP; konteyner root olmayan kullanıcıyla ve salt okunur
-  dosya sistemiyle çalışır.
+  dosya sistemiyle çalışır. İsteğe bağlı salt okunur `VIEWER_PASSWORD` ile ekip hiçbir şeyi değiştirmeden her
+  şeyi görüntüleyebilir.
 
 ## Lisans
 

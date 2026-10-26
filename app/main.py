@@ -106,26 +106,43 @@ def ui_lang(request: Request) -> str:
 
 # ----------------------------------------------------------------------- authentication
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+VIEWER_PASSWORD = os.environ.get("VIEWER_PASSWORD", "")   # optional read-only role
 AUTH_DISABLED = os.environ.get("AUTH_DISABLED", "").lower() in ("1", "true", "yes")
 SECRET = (os.environ.get("APP_SECRET") or secrets.token_hex(32)).encode()
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() == "true"
 COOKIE = "wdt_session"
 TTL = 12 * 3600
+ROLES = ("admin", "viewer")
 
 
-def _sign(exp: int) -> str:
-    return f"{exp}.{hmac.new(SECRET, str(exp).encode(), hashlib.sha256).hexdigest()}"
+def _sign(exp: int, role: str = "admin") -> str:
+    msg = f"{exp}.{role}"
+    return f"{msg}.{hmac.new(SECRET, msg.encode(), hashlib.sha256).hexdigest()}"
 
 
-def _valid(tok: str | None) -> bool:
-    if not tok or "." not in tok:
-        return False
-    exp, sig = tok.split(".", 1)
+def _valid(tok: str | None) -> str | None:
+    """Return the session role ("admin" | "viewer") or None when the token is invalid/expired."""
+    if not tok:
+        return None
+    parts = tok.split(".")
+    if len(parts) != 3:
+        return None
+    exp, role, sig = parts
+    if role not in ROLES:
+        return None
     try:
-        ok = hmac.compare_digest(sig, hmac.new(SECRET, exp.encode(), hashlib.sha256).hexdigest())
-        return ok and int(exp) > time.time()
+        msg = f"{exp}.{role}"
+        ok = hmac.compare_digest(sig, hmac.new(SECRET, msg.encode(), hashlib.sha256).hexdigest())
+        return role if (ok and int(exp) > time.time()) else None
     except ValueError:
-        return False
+        return None
+
+
+def _role(request: Request) -> str | None:
+    """Session role of this request (None when auth is delegated to a proxy)."""
+    if AUTH_DISABLED:
+        return None
+    return _valid(request.cookies.get(COOKIE))
 
 
 @app.middleware("http")
@@ -135,10 +152,15 @@ async def auth_mw(request: Request, call_next):
     if not public and not AUTH_DISABLED:
         if not APP_PASSWORD:
             return HTMLResponse(f"<p>{t(ui_lang(request), 'auth.no_password')}</p>", status_code=503)
-        if not _valid(request.cookies.get(COOKIE)):
+        role = _valid(request.cookies.get(COOKIE))
+        if not role:
             if p.startswith("/api/"):
                 return JSONResponse({"error": "not authenticated"}, status_code=401)
             return RedirectResponse("/login", status_code=303)
+        if role == "viewer" and request.method not in ("GET", "HEAD") and p not in ("/lang", "/logout"):
+            if p.startswith("/api/"):
+                return JSONResponse({"error": "read-only viewer"}, status_code=403)
+            return HTMLResponse(f"<p>{t(ui_lang(request), 'auth.read_only')}</p>", status_code=403)
     resp = await call_next(request)
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "DENY"
@@ -154,7 +176,8 @@ def _ctx(request: Request, **kw):
     rt = request.app.state.rt
     return {"envs": [r.env for r in rt.envs.values()], "demo": rt.demo, "app_title": rt.settings.app.title,
             "auth": not AUTH_DISABLED, "lang": lang, "_": lambda key, **a: t(lang, key, **a),
-            "deploy_any": any(rt.deploy_ready(r.env) for r in rt.envs.values()), "path": request.url.path, **kw}
+            "deploy_any": any(rt.deploy_ready(r.env) for r in rt.envs.values()), "path": request.url.path,
+            "viewer": _role(request) == "viewer", "viewer_enabled": bool(VIEWER_PASSWORD), **kw}
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -178,11 +201,17 @@ async def login(request: Request, password: str = Form(...)):
         return tpl.TemplateResponse(request, "login.html", _ctx(request, err=t(lang, "login.throttled")), status_code=429)
     if APP_PASSWORD and hmac.compare_digest(password.encode(), APP_PASSWORD.encode()):
         _fails.pop(ip, None)
-        r = RedirectResponse("/", status_code=303)
-        r.set_cookie(COOKIE, _sign(int(now) + TTL), max_age=TTL, httponly=True, samesite="strict", secure=COOKIE_SECURE)
-        return r
-    _fails[ip] = hist + [now]
-    return tpl.TemplateResponse(request, "login.html", _ctx(request, err=t(lang, "login.wrong")), status_code=401)
+        role = "admin"
+    elif VIEWER_PASSWORD and hmac.compare_digest(password.encode(), VIEWER_PASSWORD.encode()):
+        _fails.pop(ip, None)
+        role = "viewer"
+    else:
+        _fails[ip] = hist + [now]
+        return tpl.TemplateResponse(request, "login.html", _ctx(request, err=t(lang, "login.wrong")), status_code=401)
+    r = RedirectResponse("/", status_code=303)
+    r.set_cookie(COOKIE, _sign(int(now) + TTL, role), max_age=TTL, httponly=True, samesite="strict",
+                 secure=COOKIE_SECURE)
+    return r
 
 
 @app.post("/logout")

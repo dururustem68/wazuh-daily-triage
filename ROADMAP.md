@@ -33,7 +33,7 @@ Where the project is going, roughly ordered by impact. This is a living document
 | ✅ | Monthly audit report (ISMS evidence) + agent coverage + vulnerability SLA + mail saturation + anomalies. | regulatory story. |
 | ✅ | **PDF export** of the monthly audit report (reportlab, Unicode-safe) | regulated customers want a printable artefact. |
 | ⬜ | **Decoder drafts** next to rule drafts (validate + logtest + rollback). | onboarding new log sources. |
-| ⬜ | **Read-only viewer role** (vs. approver/deployer) and per-environment ACLs. | team deployments need role separation. |
+| ✅ | **Read-only viewer role** (`VIEWER_PASSWORD`; per-environment ACLs still planned). | team deployments need role separation. |
 | ⬜ | Embedded SVG time-series charts in reports. | readability + "wow" factor without a JS build step. |
 | ⬜ | False-positive feedback loop polish: auto-baseline suggestions after N days unchanged. | turns decisions into automation. |
 

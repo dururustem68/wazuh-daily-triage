@@ -265,9 +265,9 @@ Or use **Import / export** on the knowledge base page. Re-running never creates 
   provider. For regulated data use a local model or `redact: true` (masks e-mails, passwords, tokens, card
   numbers; IP addresses are kept for analysis; not a full DLP).
 - **Web UI.** Password + signed `HttpOnly`/`SameSite=Strict` cookie, login throttling, strict CSP (no inline
-  scripts), model output rendered as markdown with HTML disabled. The container runs as non-root with a
-  read-only filesystem and all capabilities dropped. Put it behind TLS; with an SSO proxy set
-  `AUTH_DISABLED=true`.
+  scripts), model output rendered as markdown with HTML disabled. An optional read-only `VIEWER_PASSWORD` lets a
+  team view everything without changing anything. The container runs as non-root with a read-only filesystem and
+  all capabilities dropped. Put it behind TLS; with an SSO proxy set `AUTH_DISABLED=true`.
 
 Report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 
