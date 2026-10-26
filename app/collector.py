@@ -35,8 +35,10 @@ def _b(agg: dict) -> list[dict]:
 
 
 class Collector:
-    def __init__(self, env: Environment, indexer: Indexer, api: WazuhAPI | None, lang: str = "en"):
+    def __init__(self, env: Environment, indexer: Indexer, api: WazuhAPI | None, lang: str = "en",
+                 inventory: list[str] | None = None):
         self.env = env
+        self.inventory = inventory or []
         self.lang = lang
         self.ix = indexer
         self.api = api
@@ -62,8 +64,12 @@ class Collector:
             "groups": self._groups(frm, to),
             "srcips": self._srcips(frm, to),
             "watch": self._watch(frm, to),
-            "vulnerabilities": self._vulns(),
+            "vulnerabilities": self._vulns(to),
         }
+        if self.env.mail:
+            tasks["mail_pressure"] = self._mail_pressure(frm, to)
+        if self.api:
+            tasks["coverage"] = self._coverage(to)
         res = await asyncio.gather(*(self._safe(k, v) for k, v in tasks.items()))
         out = dict(zip(tasks.keys(), res, strict=True))
         out["window"] = {"from": iso(frm), "to": iso(to), "hours": hours}
@@ -328,21 +334,110 @@ class Collector:
         got = {b["key"]: b["doc_count"] for b in _b(r["aggregations"]["r"])}
         return {rid: got.get(rid, 0) for rid in self.env.watch_rules}
 
-    async def _vulns(self) -> dict | None:
-        r = await self.ix.search(self.env.vuln_index, {
-            "size": 0, "aggs": {
-                "sev": {"terms": {"field": "vulnerability.severity", "size": 10}},
-                "crit_agents": {"filter": {"term": {"vulnerability.severity": "Critical"}},
-                                "aggs": {"a": {"terms": {"field": "agent.name", "size": 15}}}},
-                "crit_pkgs": {"filter": {"term": {"vulnerability.severity": "Critical"}},
-                              "aggs": {"p": {"terms": {"field": "package.name", "size": 15}}}},
-            }})
+    async def _vulns(self, now: datetime | None = None) -> dict | None:
+        now = now or datetime.now(UTC)
+        sla = self.env.vuln_sla.days()
+        aggs: dict[str, Any] = {
+            "sev": {"terms": {"field": "vulnerability.severity", "size": 10}},
+            "crit_agents": {"filter": {"term": {"vulnerability.severity": "Critical"}},
+                            "aggs": {"a": {"terms": {"field": "agent.name", "size": 15}}}},
+            "crit_pkgs": {"filter": {"term": {"vulnerability.severity": "Critical"}},
+                          "aggs": {"p": {"terms": {"field": "package.name", "size": 15}}}},
+            "dated": {"filter": {"exists": {"field": "vulnerability.detected_at"}}},
+        }
+        for sev, days in sla.items():  # open longer than the SLA allows
+            aggs[f"over_{sev}"] = {
+                "filter": {"bool": {"filter": [
+                    {"term": {"vulnerability.severity": sev}},
+                    {"range": {"vulnerability.detected_at": {"lt": iso(now - timedelta(days=days))}}}]}},
+                "aggs": {"a": {"terms": {"field": "agent.name", "size": 10}},
+                         "p": {"terms": {"field": "package.name", "size": 8}},
+                         "oldest": {"min": {"field": "vulnerability.detected_at"}}}}
+        r = await self.ix.search(self.env.vuln_index, {"size": 0, "aggs": aggs})
         if r["hits"]["total"]["value"] == 0:
             return None
         ag = r["aggregations"]
-        return {"severity": {b["key"]: b["doc_count"] for b in _b(ag["sev"])},
-                "critical_by_agent": {b["key"]: b["doc_count"] for b in _b(ag["crit_agents"]["a"])},
-                "critical_by_package": {b["key"]: b["doc_count"] for b in _b(ag["crit_pkgs"]["p"])}}
+        out = {"severity": {b["key"]: b["doc_count"] for b in _b(ag["sev"])},
+               "critical_by_agent": {b["key"]: b["doc_count"] for b in _b(ag["crit_agents"]["a"])},
+               "critical_by_package": {b["key"]: b["doc_count"] for b in _b(ag["crit_pkgs"]["p"])}}
+        if sla:
+            if not ag["dated"]["doc_count"]:
+                out["sla"] = {"unavailable": True}
+            else:
+                out["sla"] = {sev: {"days": days, "overdue": ag[f"over_{sev}"]["doc_count"],
+                                    "by_agent": {b["key"]: b["doc_count"] for b in _b(ag[f"over_{sev}"]["a"])},
+                                    "by_package": {b["key"]: b["doc_count"] for b in _b(ag[f"over_{sev}"]["p"])},
+                                    "oldest": (ag[f"over_{sev}"]["oldest"] or {}).get("value_as_string")}
+                              for sev, days in sla.items()}
+        return out
+
+    # ------------------------------------------------------------------ e-mail channel saturation
+    async def _mail_pressure(self, frm, to) -> dict:
+        m = self.env.mail
+        r = await self.ix.search(self.env.alerts_index, {
+            "size": 0,
+            "query": {"bool": {"filter": [rng(frm, to), {"range": {"rule.level": {"gte": m.alert_level}}}]}},
+            "aggs": {"h": {"date_histogram": {"field": TS, "fixed_interval": "1h", "min_doc_count": 1},
+                           "aggs": {"r": {"terms": {"field": "rule.id", "size": 10},
+                                          "aggs": {"d": {"terms": {"field": "rule.description", "size": 1}},
+                                                   "l": {"max": {"field": "rule.level"}},
+                                                   "a": {"terms": {"field": "agent.name", "size": 3}}}}}}}})
+        hours, buried = [], {}
+        for b in _b(r["aggregations"]["h"]):
+            if b["doc_count"] <= m.max_per_hour:
+                continue
+            rules = []
+            for x in _b(b["r"]):
+                d = _b(x["d"])
+                rules.append({"id": x["key"], "n": x["doc_count"], "level": int(x["l"]["value"] or 0),
+                              "desc": d[0]["key"] if d else "", "agents": [a["key"] for a in _b(x["a"])]})
+            hours.append({"t": b["key_as_string"], "n": b["doc_count"], "over": b["doc_count"] - m.max_per_hour,
+                          "flood": rules[:1]})
+            # everything except the dominant rule competed for the same few mails
+            for x in rules[1:]:
+                k = buried.setdefault(x["id"], {**x, "n": 0, "hours": 0})
+                k["n"] += x["n"]
+                k["hours"] += 1
+        return {"alert_level": m.alert_level, "max_per_hour": m.max_per_hour,
+                "saturated_hours": hours[-48:], "excess": sum(h["over"] for h in hours),
+                "possibly_unmailed": sorted(buried.values(), key=lambda x: (-x["level"], -x["n"]))[:25]}
+
+    # ------------------------------------------------------------------ agent coverage
+    async def _coverage(self, now: datetime) -> dict:
+        agents = [a for a in await self.api.agents(limit=5000) if str(a.get("id")) != "000"]
+        info = await self._safe("api_info", self.api.info()) or {}
+        mver = str(info.get("api_version") or "").lstrip("v")
+        by_status: dict[str, int] = {}
+        versions: dict[str, int] = {}
+        by_node: dict[str, int] = {}
+        drift, stale, never = [], [], []
+        for a in agents:
+            st = a.get("status") or "?"
+            by_status[st] = by_status.get(st, 0) + 1
+            v = str(a.get("version") or "").replace("Wazuh", "").strip().lstrip("v")
+            if v:
+                versions[v] = versions.get(v, 0) + 1
+                if mver and v != mver:
+                    drift.append({"name": a.get("name"), "version": v})
+            node = a.get("node_name") or "-"
+            if st == "active":
+                by_node[node] = by_node.get(node, 0) + 1
+            if st == "never_connected":
+                never.append(a.get("name"))
+            elif st != "active":
+                ka = a.get("lastKeepAlive")
+                try:
+                    hrs = round((now - _parse(ka)).total_seconds() / 3600, 1) if ka else None
+                except ValueError:
+                    hrs = None
+                stale.append({"name": a.get("name"), "status": st, "last_keepalive": ka, "hours": hrs})
+        out = {"total": len(agents), "by_status": by_status, "manager_version": mver, "versions": versions,
+               "version_drift": drift[:60], "active_by_node": by_node, "not_active": stale[:60], "never_connected": never}
+        if self.inventory:
+            have = {str(a.get("name")) for a in agents}
+            inv = set(self.inventory)
+            out["inventory"] = {"expected": len(inv), "missing": sorted(inv - have), "unexpected": sorted(have - inv)}
+        return out
 
     # ------------------------------------------------------------------ flags
     def _flags(self, d: dict) -> list[dict]:
@@ -381,6 +476,21 @@ class Collector:
             hi = [r for r in d["new_rules"] if r["level"] >= self.env.high_level]
             if hi:
                 add("warn", "new_high_rules", n=len(hi), l=self.env.high_level)
+        mp = d.get("mail_pressure") or {}
+        if mp.get("saturated_hours"):
+            add("warn", "mail_saturated", n=len(mp["saturated_hours"]), m=mp["max_per_hour"],
+                b=len(mp.get("possibly_unmailed") or []))
+        cov = d.get("coverage") or {}
+        if (cov.get("inventory") or {}).get("missing"):
+            miss = cov["inventory"]["missing"]
+            add("warn", "inventory_missing", n=len(miss), a=", ".join(miss[:8]))
+        if cov.get("version_drift"):
+            add("info", "version_drift", n=len(cov["version_drift"]), v=cov.get("manager_version"))
+        sla = (d.get("vulnerabilities") or {}).get("sla") or {}
+        over = {k: v["overdue"] for k, v in sla.items() if isinstance(v, dict) and v.get("overdue")}
+        if over:
+            add("warn" if over.get("Critical") else "info", "vuln_overdue",
+                s=", ".join(f"{k} {n}" for k, n in over.items()))
         if self.errors:
             add("warn", "collector_errors", n=len(self.errors))
         return f

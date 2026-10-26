@@ -44,6 +44,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // histogram bar heights (CSP forbids inline style attributes)
   document.querySelectorAll(".hist .bar[data-h]").forEach(b => { b.style.height = b.dataset.h + "%"; });
   document.querySelectorAll("[data-w]").forEach(b => { b.style.width = b.dataset.w + "%"; });
+  document.querySelectorAll("[data-ah]").forEach(b => { b.style.height = b.dataset.ah + "%"; });
+  document.querySelectorAll("[data-print]").forEach(b => b.addEventListener("click", () => window.print()));
+  document.querySelectorAll("select[data-autosubmit]").forEach(s => s.addEventListener("change", () => s.form.submit()));
 
   // start a run
   document.querySelectorAll("[data-run]").forEach(btn => btn.addEventListener("click", async () => {
@@ -85,7 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // copy code
   document.querySelectorAll("[data-copy-prev]").forEach(b => b.addEventListener("click", () => {
-    navigator.clipboard.writeText(b.previousElementSibling.textContent); b.textContent = tr("copied");
+    copyText(b.previousElementSibling.textContent, b);
   }));
 
   // knowledge base
@@ -132,6 +135,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const show = html => { out.hidden = false; out.innerHTML = html; };
     const listHtml = (cls, title, items) => items && items.length
       ? `<div class="${cls}"><b>${escapeHtml(title)}</b><ul>${items.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>` : "";
+    const rep = card.querySelector("[data-copy-report]");
+    if (rep) rep.addEventListener("click", () => copyText(cardReport(card), rep));
     const stepsHtml = rec => `<ul class="steps">${(rec.steps || []).map(s =>
       `<li class="${s.ok ? "ok" : "bad"}">${s.ok ? "✓" : "✗"} ${escapeHtml(s.step)} ${escapeHtml(s.detail || "")}</li>`).join("")}</ul>`
       + (rec.error ? `<p class="bad">${escapeHtml(rec.error)}</p>` : "");
@@ -148,6 +153,33 @@ document.addEventListener("DOMContentLoaded", () => {
           navigator.clipboard.writeText(v.commands); ev.target.textContent = tr("copied"); });
       } catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); }
       cmds.disabled = false;
+    });
+    const ver = card.querySelector("[data-verify]");
+    if (ver) ver.addEventListener("click", async () => {
+      ver.disabled = true;
+      try { await api(url + "/verify", "POST"); location.reload(); }
+      catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); ver.disabled = false; }
+    });
+    const pro = card.querySelector("[data-promote]");
+    if (pro) pro.addEventListener("click", async () => {
+      pro.disabled = true;
+      let p;
+      try { p = await api(url + "/promote", "GET"); } catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); pro.disabled = false; return; }
+      const blocks = [["pr_block", p.block], ["pr_script", p.script]];
+      if (p.catalog_file) blocks.push(["pr_catalog", p.catalog_md]);
+      show(`<div class="promo">${listHtml("bad", tr("rd_errors"), p.errors)}
+        <b>${escapeHtml(tr("pr_steps"))}</b><ol>${p.steps.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ol>
+        ${blocks.map(([k, v], i) => `<details ${i === 1 ? "open" : ""}><summary>${escapeHtml(tr(k))}</summary>
+          <pre class="code">${escapeHtml(v)}</pre><button class="btn small" data-pcopy="${i}">${escapeHtml(tr("copy"))}</button></details>`).join("")}
+        <div class="row"><button class="btn small primary" data-pdone ${p.still_deployed ? "disabled" : ""}>${escapeHtml(tr("pr_mark"))}</button>
+        ${p.still_deployed ? `<span class="small muted">${escapeHtml(tr("pr_remove_first"))}</span>` : ""}</div></div>`);
+      out.querySelectorAll("[data-pcopy]").forEach(b => b.addEventListener("click", () => copyText(blocks[+b.dataset.pcopy][1], b)));
+      const done = out.querySelector("[data-pdone]");
+      done.addEventListener("click", async () => {
+        if (!confirm(tr("pr_mark_confirm"))) return;
+        try { await api(url + "/promoted", "POST"); location.reload(); } catch (e) { alertInline(out, e.message); }
+      });
+      pro.disabled = false;
     });
     const dep = card.querySelector("[data-deploy]");
     if (dep) dep.addEventListener("click", async () => {
@@ -189,13 +221,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const t = card.querySelector(".ktitle");
       const form = document.createElement("div");
       form.className = "kform";
-      form.innerHTML = `<input value="${escapeHtml(t.textContent)}"><textarea rows="5"></textarea>
-        <div class="row"><button class="btn small primary">${escapeHtml(tr("save"))}</button></div>`;
-      fetchBody(card, form.querySelector("textarea"));
+      const xmlPre = card.querySelector("pre.code"), isDraft = !!card.querySelector(".rd-out");
+      form.innerHTML = `<input value="${escapeHtml(t.textContent)}"><textarea rows="5" data-body></textarea>`
+        + (isDraft ? `<label class="small muted">Rule XML</label><textarea rows="10" class="mono" data-xml></textarea>` : "")
+        + `<div class="row"><button class="btn small primary">${escapeHtml(tr("save"))}</button></div>`;
+      fetchBody(card, form.querySelector("[data-body]"));
+      if (isDraft) form.querySelector("[data-xml]").value = xmlPre ? xmlPre.textContent.trim() : "";
       card.appendChild(form); ed.disabled = true;
       form.querySelector("button").addEventListener("click", async () => {
-        await api(url, "POST", { title: form.querySelector("input").value, body: form.querySelector("textarea").value });
-        location.reload();
+        const data = { title: form.querySelector("input").value, body: form.querySelector("[data-body]").value };
+        if (isDraft) data.xml = form.querySelector("[data-xml]").value;
+        try { await api(url, "POST", data); location.reload(); } catch (e) { alertInline(form, e.message); }
       });
     });
   });
@@ -292,4 +328,25 @@ function initChat(chat) {
     const d = document.createElement("div"); d.className = "msg " + cls; d.innerHTML = html; msgs.appendChild(d);
     msgs.scrollTop = msgs.scrollHeight; return d;
   }
+}
+
+// plain-text report of a knowledge card (to paste into a chat / ticket)
+function cardReport(card) {
+  const t = sel => { const e = card.querySelector(sel); return e ? e.innerText.trim() : ""; };
+  const lines = [t(".ktitle"), Array.from(card.querySelectorAll(".row .pill")).map(p => p.innerText.trim()).join(" · ")];
+  const body = card.querySelector(".kraw"); if (body && body.value.trim()) lines.push("", body.value.trim());
+  card.querySelectorAll(":scope > p.small").forEach(p => lines.push("", p.innerText.trim()));
+  const steps = Array.from(card.querySelectorAll("ul.steps li")).map(li => li.innerText.trim());
+  const out = card.querySelector(".rd-out");
+  if (out && !out.hidden && out.innerText.trim()) lines.push("", out.innerText.trim());
+  else if (steps.length) lines.push("", ...steps);
+  const xml = card.querySelector("pre.code"); if (xml) lines.push("", "```xml", xml.textContent.trim(), "```");
+  return lines.filter((x, i) => x || lines[i - 1]).join("\n");
+}
+
+function copyText(text, btn) {
+  const done = () => { if (btn) { const o = btn.textContent; btn.textContent = tr("copied"); setTimeout(() => btn.textContent = o, 1500); } };
+  if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done); return; }
+  const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); done(); } finally { ta.remove(); }
 }

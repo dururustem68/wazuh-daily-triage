@@ -206,7 +206,7 @@ class Repo:
         d = await self.s.get("knowledge", kid)
         if not d or d.get("env") != self.env:
             return None
-        if "status" in patch and patch["status"] not in KNOWLEDGE_STATUS:
+        if patch.get("status") is not None and patch["status"] not in KNOWLEDGE_STATUS:
             raise ValueError("invalid status")
         d.update({k: v for k, v in patch.items() if v is not None})
         d["updated_at"] = now_iso()

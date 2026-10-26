@@ -19,3 +19,7 @@ environments:
     seed_file: seed/example.yaml
     schedule: {enabled: false}
     rule_deploy: {enabled: true}   # demo: deploys into the in-memory fake manager
+    mail: {alert_level: 7, max_per_hour: 12}    # analyse e-mail channel saturation (ossec.conf email_maxperhour)
+    vuln_sla: {critical: 15, high: 30, medium: 90}
+    inventory: [web01, db01, jenkins, k8s-cp1, k8s-w1, k8s-w2, laptop-ops, mail01, backup01]
+    promote: {mode: host, rules_file: /var/ossec/etc/rules/local_rules.xml}

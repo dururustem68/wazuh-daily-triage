@@ -75,6 +75,41 @@ class LivenessCfg(BaseModel):
     notify_recovery: bool = True
 
 
+class MailCfg(BaseModel):
+    """The manager's e-mail limits (ossec.conf <global>). When set, each run shows the hours in which the alert mail
+    channel was saturated and the alerts that may never have been mailed in those hours."""
+    alert_level: int = 7          # email_alert_level
+    max_per_hour: int = 12        # email_maxperhour (Wazuh default 12)
+
+
+class VulnSlaCfg(BaseModel):
+    """Days an active vulnerability may stay open, per severity (0 = not tracked)."""
+    critical: int = 15
+    high: int = 30
+    medium: int = 90
+    low: int = 0
+
+    def days(self) -> dict[str, int]:
+        return {k.capitalize(): v for k, v in self.model_dump().items() if v}
+
+
+class PromoteCfg(BaseModel):
+    """How a tested rule draft becomes a permanent rule in your own configuration management ("promotion package").
+
+    mode `host`: the rules file lives on the manager host. mode `kubernetes`: the file is in a kustomize repo
+    (e.g. wazuh-kubernetes) and is rolled out with `kubectl apply -k`.
+    """
+    mode: Literal["host", "kubernetes"] = "host"
+    repo_dir: str = ""                    # kubernetes: repository root on the operator's machine
+    rules_file: str = "/var/ossec/etc/rules/local_rules.xml"   # host: absolute; kubernetes: relative to repo_dir
+    catalog_file: str = ""                # optional markdown alert catalogue (relative to repo_dir) — a § draft is generated
+    kubeconfig: str = ""
+    namespace: str = "wazuh"
+    master_pod: str = "wazuh-manager-master-0"
+    kustomize_dir: str = ""               # relative to repo_dir, e.g. k8s/wazuh
+    manager_label: str = "app=wazuh-manager"   # pods that must become Ready again after the rollout
+
+
 class RuleDeployCfg(BaseModel):
     """Optional: let "Approve and deploy" write approved rule drafts to the manager.
 
@@ -183,6 +218,11 @@ class Environment(BaseModel):
     notify: NotifyCfg | None = None   # per-environment notification override
     rule_deploy: RuleDeployCfg = Field(default_factory=RuleDeployCfg)
     liveness: LivenessCfg = Field(default_factory=LivenessCfg)
+    mail: MailCfg | None = None          # set to analyse e-mail channel saturation
+    vuln_sla: VulnSlaCfg = Field(default_factory=VulnSlaCfg)
+    promote: PromoteCfg = Field(default_factory=PromoteCfg)
+    inventory: list[str] = Field(default_factory=list)   # expected agent names (coverage reconciliation)
+    inventory_file: str | None = None    # one agent name per line (# comments allowed)
 
     @field_validator("id")
     @classmethod
@@ -208,6 +248,16 @@ class Environment(BaseModel):
             return None
         p = Path(rel)
         return p if p.is_absolute() else base / p
+
+    def inventory_names(self, base: Path) -> list[str]:
+        names = list(self.inventory)
+        p = self.resolve(base, self.inventory_file)
+        if p:
+            try:
+                names += [ln.split("#", 1)[0].strip() for ln in p.read_text(encoding="utf-8").splitlines()]
+            except OSError:
+                pass
+        return sorted({n for n in names if n})
 
     def context_text(self, base: Path) -> str:
         p = self.resolve(base, self.context_file)
@@ -331,6 +381,10 @@ def settings_from_env() -> dict:
     if E("LIVENESS_INTERVAL_MINUTES") or E("LIVENESS_ENABLED"):
         env["liveness"] = {"enabled": _bool(E("LIVENESS_ENABLED"), True),
                            "interval_minutes": int(E("LIVENESS_INTERVAL_MINUTES") or 10)}
+    if E("MAIL_MAX_PER_HOUR"):
+        env["mail"] = {"alert_level": int(E("MAIL_ALERT_LEVEL") or 7), "max_per_hour": int(E("MAIL_MAX_PER_HOUR"))}
+    if E("INVENTORY"):
+        env["inventory"] = [x.strip() for x in E("INVENTORY", "").split(",") if x.strip()]
     if _bool(E("RULE_DEPLOY_ENABLED"), False):
         env["rule_deploy"] = {"enabled": True, "username": E("WAZUH_DEPLOY_USER", ""),
                               "password": E("WAZUH_DEPLOY_PASSWORD", ""),

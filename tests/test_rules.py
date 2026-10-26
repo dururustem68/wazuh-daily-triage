@@ -161,3 +161,40 @@ async def test_upload_refused_changes_nothing(monkeypatch):
     sid = await rt.chat_from_knowledge("demo", k["id"], "tr")
     hist = await er.repo.chat_history(sid, 10)
     assert any("rules:delete" in (m.get("text") or m.get("content") or "") for m in hist)
+
+
+ROOTCHECK = """<group name="local,rootcheck,">
+  <rule id="100962" level="3">
+    <if_group>rootcheck</if_group>
+    <match>/dev/termination-log</match>
+    <description>kubelet termination-log</description>
+  </rule>
+</group>"""
+
+
+async def test_internal_events_skip_logtest_and_inconclusive(monkeypatch):
+    rt = Runtime(load_settings(os.path.join(ROOT, "config/demo.yaml")), demo=True)
+    er = rt.get("demo")
+    tests = [{"event": "File '/dev/termination-log' present on /dev.", "expect": "match"}]
+    k = await er.repo.add_knowledge("rule_draft", "rc", "", extra={"xml": ROOTCHECK, "tests": tests})
+    assert (await rt.rule_view("demo", k["id"]))["analysis"]["replayable"] is False
+    rec = await rt.rule_deploy("demo", k["id"], "alice")
+    assert rec["state"] == "deployed" and any(s["step"] == "logtest skipped" for s in rec["steps"])
+
+    # a sample no rule matches at all is inconclusive, not a failure
+    async def nothing(event, log_format="syslog", location="daily-triage"):
+        return {"output": {}}
+    monkeypatch.setattr(er.api, "logtest", nothing)
+    k2 = await er.repo.add_knowledge("rule_draft", "d", "", extra={"xml": DETECT, "tests": tests})
+    rec = await rt.rule_deploy("demo", k2["id"], "alice")
+    lt = next(s for s in rec["steps"] if s["step"] == "logtest")
+    assert rec["state"] == "deployed" and lt["ok"] and "?" in lt["detail"]
+
+
+async def test_range_error_also_reports_collision():
+    rt = Runtime(load_settings(os.path.join(ROOT, "config/demo.yaml")), demo=True)
+    er = rt.get("demo")
+    cfg = er.env.rule_deploy.model_copy(update={"id_min": 119000, "id_max": 119999})
+    a = await R.analyse(DETECT.replace("100950", "100212"), cfg, er.api)
+    assert any("outside the allowed range" in e for e in a["errors"])
+    assert any("already exists" in e for e in a["errors"])

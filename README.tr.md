@@ -42,6 +42,19 @@ koşu özetlerini e-posta, Telegram ya da Microsoft Teams ile bildirir.
 - **E-posta, Telegram ve Microsoft Teams bildirimleri** — kritik durumlar (SIEM sessizliği, indexer red, gerçek
   olay; aynı konu her koşuda tekrarlanmaz), isteğe bağlı her koşu sonrası kısa özet ve kural uygulamaları
   ([docs/notifications.md](docs/notifications.md)).
+- **Canlı doğrulama** — uygulanan, onaylanan ya da kalıcı yapılan kural her rapordan sonra gerçek olaylarla
+  kontrol edilir: "canlıda 12× doğrulandı (son …)" ya da "5 gündür görülmedi". Logtest'in geçmesi kanıt değildir;
+  gerçek olay kanıttır.
+- **Kalıcı hale getir** — test edilmiş taslak için *kendi* yapılandırma yönetiminize taşıma paketi: kaynağı
+  belirtilmiş kural bloğu, betik (yedek → ekle → çalışan manager'da `wazuh-analysisd -t` → `kubectl apply -k` ya
+  da restart → yüklendi mi) ve alarm kataloğunuz için § taslağı.
+- **Mail kanalı doluluğu** — `mail:` ayarlıysa her rapor, bir yığının `email_maxperhour` sınırını aştığı saatleri
+  ve o saatlerde tetiklenip maili hiç gitmemiş olabilecek diğer kuralları gösterir.
+- **Kapsam ve zafiyet SLA'sı** — durum/sürüm/node başına ajanlar, envanter listesinde olup kayıtlı olmayan
+  ajanlar ve şiddet başına SLA süresini aşan açık zafiyetler.
+- **Aylık denetim raporu** — alarm hacmi, raporlar, bulgular ve kararlarınız, kural değişiklikleri (kim, ne zaman,
+  neyi düşürdü), canlılık kontrolünden SIEM kesintileri, kapsam ve zafiyet SLA'sı. Deterministik (yapay zekâ yok),
+  PDF olarak yazdırılabilir ya da Markdown indirilebilir — ISO 27001 / ISMS gözden geçirmeleri için kanıt.
 - **Sohbet** — ortam hakkında soru sorun; aynı araçlarla, kanıta dayalı cevap.
 - **Kayıtlar Wazuh'un içinde** — her ortamın kendi indexer'ında `daily-triage-runs / -knowledge / -chat`.
 - **Çok ortam, çok dil** (İngilizce, Türkçe — sol menünün altından seçilir), ortam başına model (ör. düzenlemeye tabi veri
@@ -158,6 +171,8 @@ Bilgi tabanındaki her kural taslağında üç düğme vardır:
   kontrol eder, iki yönlü logtest yapar ve herhangi bir hatada **kendiliğinden geri alır**. Alarm susturan ya da
   seviye düşüren taslaklar, kural ID'leri yazılarak ikinci kez onaylanır.
 - **Wazuh'tan kaldır** — uygulanmış taslağı aynı güvenceyle geri çeker.
+- **Canlıda kontrol et / Kalıcı hale getir** — kural uygulandığından beri gerçek olayda tetiklendi mi görün ve
+  onu kendi kural dosyanıza / deponuza taşıyacak paketi alın (`promote:` ayarı).
 
 Kurulum ve gereken API yetkileri: [docs/rule-deployment.md](docs/rule-deployment.md).
 

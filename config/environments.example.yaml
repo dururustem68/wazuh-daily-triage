@@ -71,6 +71,22 @@ environments:
       file: wdt_rules.xml       # etc/rules/<file> on the manager (master in a cluster)
       id_min: 100000            # drafts with IDs outside this range are refused
       id_max: 119999
+    # mail: {alert_level: 7, max_per_hour: 12}   # your ossec.conf email_alert_level / email_maxperhour:
+    #                                            # shows hours the mail channel was flooded + rules that may never have been mailed
+    vuln_sla: {critical: 15, high: 30, medium: 90}   # days; overdue active vulnerabilities (needs vulnerability.detected_at)
+    # inventory: [web01, db01]  # expected agent names (or inventory_file: one name per line) → missing / unexpected agents
+    # promote:                  # "Make permanent": package to move a tested draft into your own configuration
+    #   mode: host              # host: rules file on the manager | kubernetes: kustomize repo + kubectl apply -k
+    #   rules_file: /var/ossec/etc/rules/local_rules.xml
+    #   # kubernetes example (wazuh-kubernetes):
+    #   # mode: kubernetes
+    #   # repo_dir: /path/to/wazuh-kubernetes
+    #   # rules_file: wazuh/wazuh_managers/wazuh_conf/local_rules.xml
+    #   # kustomize_dir: wazuh
+    #   # catalog_file: docs/alert-catalogue.md     # optional: a § draft is generated for it
+    #   # kubeconfig: ~/.kube/config
+    #   # namespace: wazuh
+    #   # master_pod: wazuh-manager-master-0
     # llm:                      # optional per-environment model, e.g. a local model for regulated data
     #   provider: openai
     #   base_url: http://ollama:11434/v1

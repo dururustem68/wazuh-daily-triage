@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}{{ a.title }} · {{ app_title }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div class="titles">
+    <div class="eyebrow">{{ env.name }} · {{ _('nav.audit') }}</div>
+    <h1>{{ a.title }}</h1>
+    <div class="sub">{{ _('au.period') }}: {{ a.from[:10] }} – {{ a.to[:10] }} · {{ _('au.generated') }} {{ a.generated_at|ts }}</div>
+  </div>
+  <div class="tools noprint">
+    <form method="get" class="inline"><select name="month" data-autosubmit>{% for m in months %}<option value="{{ m }}" {{ 'selected' if m == a.month }}>{{ m }}</option>{% endfor %}</select></form>
+    <a class="btn" href="/api/e/{{ env.id }}/audit.md?month={{ a.month }}">{{ _('au.download_md') }}</a>
+    <button class="btn primary" data-print>{{ _('au.print') }}</button>
+  </div>
+</div>
+<p class="small muted">{{ _('au.intro') }}</p>
+{% if a.errors %}<div class="flags">{% for e in a.errors %}<div class="flag amber">{{ e }}</div>{% endfor %}</div>{% endif %}
+
+{% set v = a.volume %}
+<section class="kpis">
+  <div class="kpi"><b>{{ (v.total if v else 0)|n }}</b><span>{{ _('au.total') }}</span></div>
+  <div class="kpi"><b>{{ (v.high if v else 0)|n }}</b><span>{{ _('au.high', l=env.high_level) }}</span></div>
+  <div class="kpi"><b>{{ a.runs.count }}</b><span>{{ _('au.runs') }}</span></div>
+  <div class="kpi"><b>{{ a.rule_changes|length }}</b><span>{{ _('au.rule_changes') }}</span></div>
+  <div class="kpi"><b>{{ a.liveness.events|length }}</b><span>{{ _('au.liveness') }}</span></div>
+</section>
+
+{% if v and v.daily %}
+<div class="card"><h2>{{ _('au.daily') }}</h2>
+  {% set mx = (v.daily|map(attribute='n')|max) or 1 %}
+  <div class="abars">{% for d in v.daily %}<div class="abar" title="{{ d.d }}: {{ d.n|n }} / {{ d.hi|n }}"><span class="t" data-ah="{{ (d.n * 100 / mx)|round(1) }}"></span><span class="h" data-ah="{{ (d.hi * 100 / mx)|round(1) }}"></span><em>{{ d.d[8:10] }}</em></div>{% endfor %}</div>
+  <p class="small muted">{{ _('au.daily_help', l=env.high_level) }}</p>
+</div>
+<div class="card"><h2>{{ _('au.top_high', l=env.high_level) }}</h2>
+<table class="tbl"><thead><tr><th>{{ _('au.rule') }}</th><th>{{ _('au.level') }}</th><th class="r">{{ _('au.count') }}</th><th>{{ _('au.desc') }}</th></tr></thead>
+<tbody>{% for r in v.top_high %}<tr><td>{{ r.id }}</td><td>{{ r.level }}</td><td class="r">{{ r.n|n }}</td><td>{{ r.desc }}</td></tr>{% endfor %}</tbody></table></div>
+{% endif %}
+
+<div class="card"><h2>{{ _('au.runs') }}</h2>
+  <p>{{ _('au.runs_line', n=a.runs.count, ok=a.runs.health.ok, w=a.runs.health.warn, c=a.runs.health.critical, e=a.runs.error, a=a.runs.ai_failed) }}</p>
+  <p class="small">{% for k, n in a.findings.by_label.items() %}<span class="pill {{ LABEL_COLORS.get(k, 'gray') }}">{{ n }} {{ _('label.' ~ k) }}</span> {% endfor %}</p>
+  <p class="small muted">{{ _('au.decisions') }}: {% for k, n in a.findings.by_decision.items() %}{{ _('us.' ~ k) }} {{ n }}{{ ' · ' if not loop.last }}{% endfor %}</p>
+  {% if a.findings.notable %}<h3>{{ _('au.notable') }}</h3>
+  <table class="tbl small"><thead><tr><th>{{ _('au.date') }}</th><th>{{ _('au.finding') }}</th><th>{{ _('au.decision') }}</th></tr></thead>
+  <tbody>{% for x in a.findings.notable %}<tr><td><a href="/e/{{ env.id }}/r/{{ x.run }}">{{ x.at|ts }}</a></td><td>{{ x.title }}</td><td>{{ _('us.' ~ x.user_status) }} {{ x.note }}</td></tr>{% endfor %}</tbody></table>{% endif %}
+</div>
+
+<div class="card"><h2>{{ _('au.rule_changes') }}</h2>
+{% if a.rule_changes %}<table class="tbl small"><thead><tr><th>{{ _('au.date') }}</th><th>{{ _('au.action') }}</th><th>ID</th><th>{{ _('au.by') }}</th><th>{{ _('au.title_col') }}</th></tr></thead>
+<tbody>{% for x in a.rule_changes %}<tr><td>{{ x.at|ts }}</td><td>{{ x.action }} → {{ x.state }}{% if x.risky %} <span class="pill amber">{{ _('au.risky') }}</span>{% endif %}</td>
+<td>{{ x.ids|join(', ') }}</td><td>{{ x.by or '' }}</td><td>{{ x.title }}</td></tr>{% endfor %}</tbody></table>
+{% else %}<p class="muted">{{ _('au.none') }}</p>{% endif %}
+</div>
+
+<div class="grid2">
+{% for kind in ['decision', 'baseline'] %}
+<div class="card"><h2>{{ _('kind.' ~ kind) }} <span class="small muted">({{ _('au.changed_in_month') }})</span></h2>
+  {% set rows = a.knowledge[kind] %}
+  {% if rows %}<ul class="small">{% for x in rows %}<li>{{ x.title }} <span class="muted">· {{ _('kst.' ~ x.status) }} · {{ x.updated|ts }}</span></li>{% endfor %}</ul>
+  {% else %}<p class="muted small">{{ _('au.none') }}</p>{% endif %}
+</div>
+{% endfor %}
+</div>
+
+<div class="card"><h2>{{ _('au.liveness') }}</h2>
+{% if a.liveness.events %}<ul class="small">{% for e in a.liveness.events %}<li>{{ e.start|ts }} → {{ e.end|ts if e.end else _('au.ongoing') }}{% if e.minutes %} ({{ e.minutes }} min){% endif %} — {{ e.msg }}</li>{% endfor %}</ul>
+{% else %}<p class="muted small">{{ _('au.no_outage') if a.liveness.enabled else _('au.live_off') }}</p>{% endif %}
+</div>
+
+{% set cov = a.coverage %}
+{% if cov %}
+<div class="card"><h2>{{ _('au.coverage') }} <span class="small muted">({{ _('au.snapshot', t=a.snapshot_at|ts) }})</span></h2>
+  <p class="small">{% for k, n in cov.by_status.items() %}<span class="pill {{ 'green' if k == 'active' else 'amber' }}">{{ k }} {{ n }}</span> {% endfor %}
+   · {{ _('au.versions') }}: {% for k, n in cov.versions.items() %}{{ k }} ×{{ n }}{{ ', ' if not loop.last }}{% endfor %} ({{ _('au.manager') }} {{ cov.manager_version }})</p>
+  {% if cov.active_by_node %}<p class="small muted">{{ _('au.by_node') }}: {% for k, n in cov.active_by_node.items() %}{{ k }} {{ n }}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+  {% if cov.not_active %}<p class="small">{{ _('au.not_active') }}: {% for x in cov.not_active %}{{ x.name }} ({{ x.status }}{% if x.hours %}, {{ x.hours }} h{% endif %}){{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+  {% if cov.inventory %}<p class="small">{{ _('au.inv_missing') }}: <b>{{ cov.inventory.missing|join(', ') or '—' }}</b> · {{ _('au.inv_unexpected') }}: {{ cov.inventory.unexpected|join(', ') or '—' }}</p>{% endif %}
+</div>
+{% endif %}
+
+{% set vu = a.vulnerabilities %}
+{% if vu %}
+<div class="card"><h2>{{ _('au.vulns') }}</h2>
+  <p class="small">{% for k, n in vu.severity.items() %}{{ k }} {{ n|n }}{{ ' · ' if not loop.last }}{% endfor %}</p>
+  {% if vu.sla and vu.sla.unavailable %}<p class="small muted">{{ _('au.sla_unavailable') }}</p>
+  {% elif vu.sla %}<table class="tbl small"><thead><tr><th>{{ _('au.severity') }}</th><th class="r">SLA</th><th class="r">{{ _('au.overdue') }}</th><th>{{ _('au.oldest') }}</th><th>{{ _('au.top_agents') }}</th></tr></thead>
+  <tbody>{% for k, s in vu.sla.items() %}<tr><td>{{ k }}</td><td class="r">{{ s.days }} d</td><td class="r"><b>{{ s.overdue|n }}</b></td><td>{{ s.oldest|ts if s.oldest else '—' }}</td>
+  <td>{% for ag, n in s.by_agent.items() %}{{ ag }} {{ n }}{{ ', ' if not loop.last }}{% endfor %}</td></tr>{% endfor %}</tbody></table>{% endif %}
+</div>
+{% endif %}
+
+{% if a.open_items %}<div class="card"><h2>{{ _('kind.open_item') }}</h2><ul class="small">{% for x in a.open_items %}<li>{{ x.title }}</li>{% endfor %}</ul></div>{% endif %}
+{% endblock %}

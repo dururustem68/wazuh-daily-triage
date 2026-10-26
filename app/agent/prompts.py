@@ -30,6 +30,11 @@ METHOD = """\
    positives inflate it; what matters is whether the running kernel is current and non-kernel Criticals.
 8. **Correlation:** for a suspicious event check other alerts on the same agent within ±30 minutes
    (`correlate_around`).
+9. **Mail channel (`mail_pressure`, when present):** in hours over `email_maxperhour` the flood used up the mail
+   budget. Name the flood and look at every rule in `possibly_unmailed` — those may never have reached anyone.
+10. **Coverage (`coverage`) and vulnerability SLA (`vulnerabilities.sla`):** inventory agents that are missing,
+   agents inactive for a long time and Critical vulnerabilities past their SLA are findings; version drift alone
+   is not (mention it once, without a finding, unless it blocks something).
 
 ## Labels
 - `real_incident`: say so immediately and state the manual action required.
@@ -48,7 +53,10 @@ METHOD = """\
 - Propose a draft with `propose_knowledge(kind="rule_draft")`: put the complete `<group>…</group>` XML in the
   `xml` field (not in `body`; `body` holds the reasoning), use rule IDs in {id_range}, and add `tests`: real
   events from the index — at least one that MUST match the new rule and one that must NOT (with `log_format`,
-  e.g. `syslog`, `json`). Nothing is applied until the user approves it; depending on the environment the user
+  e.g. `syslog`, `json`; for JSON or syslog-collected files set `location` to the original `location` field).
+  Manager-internal events (rootcheck 510, FIM/syscheck 550-554, SCA, vulnerability detection, agent status)
+  cannot be replayed through logtest: for children of those rules leave `tests` empty and say the rule is
+  confirmed on the next real event. Nothing is applied until the user approves it; depending on the environment the user
   either deploys it with one click (validated, restarted and rolled back on failure) or runs the commands.
 - Prefer adding detection or lowering levels (3-6) over level 0 / `no_log` / `overwrite`: silencing drafts
   need an extra confirmation and blind the SIEM if wrong.
@@ -114,8 +122,16 @@ def _knowledge_block(items: list[dict]) -> str:
             dep = r.get("deploy") or {}
             if dep.get("state") == "deployed":
                 st += f" (DEPLOYED to {dep.get('file')} on {str(dep.get('at', ''))[:10]} — measure its effect)"
-            elif dep.get("state") == "removed":
+            elif dep.get("state") == "removed" and not r.get("promoted"):
                 st += " (was deployed, then REMOVED by the user)"
+            if r.get("promoted"):
+                st += f" (PROMOTED into {r['promoted'].get('file')} on {str(r['promoted'].get('at', ''))[:10]} — permanent)"
+            v = r.get("verify") or {}
+            if v.get("state") == "seen":
+                seen = ", ".join(f"{k} {x['n']}x" for k, x in v["seen"].items())
+                st += f" (confirmed live: {seen})"
+            elif v.get("state") == "waiting":
+                st += f" (not seen on live events for {v.get('waiting_days')} day(s) — check whether it can match)"
             body = (r.get("body") or "").strip().replace("\n", " ")
             if len(body) > 700:
                 body = body[:700] + "…"

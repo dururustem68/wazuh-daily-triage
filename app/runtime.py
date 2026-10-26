@@ -240,7 +240,12 @@ class Runtime:
             last = await repo.last_success()
             frm = self._window(env, last, started, hours)
 
-            collected = await Collector(env, rt.ix, rt.api, lang).collect(frm, started)
+            collected = await Collector(env, rt.ix, rt.api, lang,
+                                        inventory=env.inventory_names(self.settings.base_dir)).collect(frm, started)
+            try:  # live verification of deployed / approved rule drafts (best effort)
+                await self.verify_rules(env.id)
+            except Exception as e:  # noqa: BLE001
+                log.warning("%s: rule verification failed: %s", env.id, e)
             flags = collected["flags"]
             run.update(window=collected["window"], flags=flags, health=health_status(flags),
                        metrics={"total": (collected.get("volume") or {}).get("total", 0),
@@ -436,9 +441,13 @@ class Runtime:
             log.exception("liveness notification failed")
         if new or resolved:
             log.warning("%s liveness: new=%s resolved=%s", env_id, new, list(resolved))
+        events = list(prev.get("events") or [])
+        for c, o in resolved.items():  # outage history for the monthly audit report
+            events.append({"code": c, "msg": o.get("msg"), "start": o.get("since"), "end": iso(now),
+                           "minutes": round((now - _parse(o["since"])).total_seconds() / 60)})
         state = {"id": f"_live_{env_id}", "env": "__meta__", "kind": "liveness", "status": "closed",
                  "title": env_id, "problems": cur, "checked_at": iso(now), "created_at": prev.get("created_at") or now_iso(),
-                 "updated_at": now_iso(), "last_result": sent}
+                 "updated_at": now_iso(), "last_result": sent, "events": events[-500:]}
         self.live_state[env_id] = state
         try:
             await rt.store.put("knowledge", state["id"], state)
@@ -605,7 +614,8 @@ class Runtime:
                    "file": rt.env.rule_deploy.file, "ids": ids, "risky": an["risky"]}
             try:
                 rec["steps"] = await rulemod.apply(api, rt.env.rule_deploy, kid, xml, ids, d.get("title", ""),
-                                                   d.get("tests"), remove=remove)
+                                                   d.get("tests"), remove=remove,
+                                                   replayable=an.get("replayable", True))
                 rec["state"] = "removed" if remove else "deployed"
             except rulemod.DeployError as e:
                 rec.update(state="failed", error=str(e)[:500], steps=getattr(e, "steps", None))
@@ -631,6 +641,76 @@ class Runtime:
             log.info("rule %s %s by %s: %s", kid, rec["action"], actor, rec["state"])
             await self._notify_rule(rt, d, rec, transport=self.notify_transport)
             return rec
+
+    # ------------------------------------------------------------ live verification / promotion
+    async def verify_rules(self, env_id: str, kid: str | None = None) -> list[dict]:
+        """Has a deployed / approved / promoted rule draft fired on real events since then?"""
+        rt = self.get(env_id)
+        if kid:
+            rows = [await self._rule_entry(rt, kid)]
+        else:
+            rows = await rt.repo.list_knowledge(kinds=["rule_draft"], status=["active", "closed"], size=500)
+        now = datetime.now(UTC)
+        out = []
+        for d in rows:
+            dep, prom = d.get("deploy") or {}, d.get("promoted") or {}
+            if dep.get("state") == "deployed":
+                since = dep.get("at")
+            elif prom.get("at"):
+                since = prom["at"]
+            elif d.get("status") == "active":
+                since = d.get("approved_at") or d.get("updated_at")
+            else:
+                continue
+            if not since or (not kid and (now - _parse(since)).days > 60):
+                continue  # verified long ago or too old to matter
+            ids = [r["id"] for r in rulemod.parse(rulemod.extract_xml(d))[0] if r.get("id")] or d.get("rule_ids") or []
+            if not ids:
+                continue
+            r = await rt.ix.search(rt.env.alerts_index, {
+                "size": 0, "query": {"bool": {"filter": [{"terms": {"rule.id": ids}},
+                                                         {"range": {"timestamp": {"gte": since}}}]}},
+                "aggs": {"r": {"terms": {"field": "rule.id", "size": len(ids)},
+                               "aggs": {"f": {"min": {"field": "timestamp"}}, "l": {"max": {"field": "timestamp"}},
+                                        "a": {"terms": {"field": "agent.name", "size": 3}}}}}})
+            seen = {b["key"]: {"n": b["doc_count"], "first": b["f"].get("value_as_string"),
+                               "last": b["l"].get("value_as_string"), "agents": [a["key"] for a in b["a"]["buckets"]]}
+                    for b in r["aggregations"]["r"]["buckets"]}
+            v = {"checked_at": iso(now), "since": since, "ids": ids, "seen": seen,
+                 "state": "seen" if seen else "waiting",
+                 "last": max((x["last"] or "" for x in seen.values()), default=None),
+                 "waiting_days": None if seen else (now - _parse(since)).days}
+            if (d.get("verify") or {}).get("state") != v["state"] and seen:
+                log.info("%s: rule draft %s confirmed on live events (%s)", env_id, d["id"], ", ".join(seen))
+            await rt.repo.update_knowledge(d["id"], verify=v)
+            out.append({"id": d["id"], **v})
+        return out
+
+    async def promote_view(self, env_id: str, kid: str, actor: str = "") -> dict:
+        from . import promote
+        rt = self.get(env_id)
+        d = await self._rule_entry(rt, kid)
+        xml = rulemod.extract_xml(d)
+        an = await rulemod.analyse(xml, rt.env.rule_deploy.model_copy(update={"id_min": 0, "id_max": 10**7}),
+                                   rt.api, rt.env.high_level)
+        # existing ids are fine here when they are the ones this draft deployed (file == rule_deploy.file)
+        errors = [e for e in an["errors"] if "already exists in " + rt.env.rule_deploy.file not in e]
+        pkg = promote.package(rt.env, d, xml, an, self.lang(rt.env), actor)
+        pkg["errors"] = errors
+        return pkg
+
+    async def mark_promoted(self, env_id: str, kid: str, actor: str) -> dict:
+        rt = self.get(env_id)
+        d = await self._rule_entry(rt, kid)
+        if (d.get("deploy") or {}).get("state") == "deployed":
+            raise ValueError("remove the draft from " + rt.env.rule_deploy.file + " first")
+        ids = [r["id"] for r in rulemod.parse(rulemod.extract_xml(d))[0] if r.get("id")]
+        rec = {"at": iso(datetime.now(UTC)), "by": actor, "file": rt.env.promote.rules_file, "ids": ids}
+        return await rt.repo.update_knowledge(kid, promoted=rec, status="closed")
+
+    async def audit(self, env_id: str, month: str | None = None) -> dict:
+        from . import audit
+        return await audit.build(self, env_id, month)
 
     async def chat_from_finding(self, env_id: str, run_id: str, fid: str, lang: str | None = None) -> str:
         """Open a chat session pre-filled with a finding and its manual checks (no LLM call)."""
@@ -875,6 +955,8 @@ def flags_only_report(flags: list[dict], err: str, lang: str, key: str = "run.ai
     """Report built from deterministic flags only (used when the LLM is unavailable)."""
     findings = []
     for f in flags:
+        if f.get("severity") == "info":
+            continue
         crit = f.get("severity") == "critical"
         findings.append({"id": f"f{len(findings) + 1}", "label": "investigate", "severity": "high" if crit else "medium",
                          "title": f.get("message", f.get("code", "")), "detail": f"`{f.get('code')}`",

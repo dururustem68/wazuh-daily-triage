@@ -430,6 +430,7 @@ SPECS: dict[str, dict] = {
                             "xml": {"type": "string", "description": "rule_draft only: complete <group>...</group> XML"},
                             "tests": {"type": "array", "description": "rule_draft only: logtest events", "items": _obj({
                                 "event": {"type": "string"}, "log_format": {"type": "string"},
+                                "location": {"type": "string", "description": "original location (log file path)"},
                                 "expect": {"type": "string", "enum": ["match", "no_match"]}}, ["event", "expect"])}},
                            ["kind", "title"])},
     "list_reports": {"name": "list_reports", "description": "List of recent daily triage reports.",

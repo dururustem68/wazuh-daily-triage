@@ -104,3 +104,15 @@ def test_watch_board_sections(c):
     c.post("/lang", data={"lang": "en"})
     page = c.get("/").text
     assert "Waiting for your decision" in page and "Rule changes" in page and "Requests and open items" in page
+
+
+
+def test_edit_rule_draft_xml(c):
+    c.post("/login", data={"password": "pw"})
+    k = c.post("/api/e/demo/k", json={"kind": "rule_draft", "title": "t", "body": "b"}).json()
+    r = c.post(f"/api/e/demo/k/{k['id']}", json={"xml": '<rule id="119001" level="3"><if_sid>5710</if_sid>'
+                                                     '<description>x</description></rule>'}).json()
+    assert "119001" in r["xml"]
+    page = c.get("/e/demo/k").text
+    assert "data-copy-report" in page, page[:300]
+    assert "119001" in c.get("/e/demo/k?kind=rule_draft").text

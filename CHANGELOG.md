@@ -3,6 +3,39 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] — 2026-10-26
+
+### Added
+- **Live verification** of rule drafts: after every run (and with **Check live**) a deployed, approved or
+  promoted draft is checked against real events since it was applied — "confirmed live N×" or "not seen for
+  N days". The state is shown on the card and given to the AI.
+- **Make permanent** (promotion package): rule block with provenance, a script for `host` or `kubernetes`
+  (backup → append → `wazuh-analysisd -t` on the running manager → `kubectl apply -k` / restart → loaded?),
+  and a draft § for an alert catalogue; refuses while the draft is still in `rule_deploy.file`. **Mark as
+  promoted** records who/when/where. Configure with `promote:`.
+- **Mail channel saturation** (`mail: {alert_level, max_per_hour}`): saturated hours, the flooding rule, and the
+  other rules that may never have been mailed; `mail_saturated` flag.
+- **Agent coverage**: agents by status, version (drift from the manager) and node; `inventory` /
+  `inventory_file` → expected-but-missing and unexpected agents.
+- **Vulnerability SLA** (`vuln_sla`, default Critical 15 / High 30 / Medium 90 days) from
+  `vulnerability.detected_at`: overdue counts, agents, packages, oldest.
+- **Monthly audit report** (`/e/{env}/audit`, Markdown export): alert volume per day, top high-level rules, runs,
+  findings and decisions, rule changes, decisions/baselines changed, SIEM outages (liveness history), coverage,
+  vulnerability SLA, open items. Printable (print CSS).
+- Liveness keeps an outage history (problem start/end) for the audit report.
+- **Copy details** on every knowledge entry: the entry, deploy result / errors and rule XML as plain text.
+- **Edit** on a rule draft also edits its rule XML (e.g. move the ID into the allowed range).
+
+### Fixed
+- Rule deployment no longer rolls back drafts whose logtest sample cannot be replayed: children of
+  manager-internal events (rootcheck, FIM/syscheck, SCA, vulnerability detection, agent status) skip logtest
+  ("confirm on the next real event"), and a `match` sample that no rule matches at all is reported as
+  inconclusive (`?`) instead of failed. A sample caught by another rule still fails and rolls back.
+- Rule-draft tests accept the original `location`; the agent is told not to add logtest samples for internal events.
+- **Edit** on a knowledge entry failed with "invalid status" (title/body changes were never saved).
+- Draft analysis checks existing rules even when the ID is outside the allowed range, so an ID collision is
+  reported together with the range error.
+
 ## [0.4.4] — 2026-10-26
 
 ### Added

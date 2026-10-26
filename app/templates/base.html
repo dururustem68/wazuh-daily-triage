@@ -15,7 +15,9 @@
   "test": _('env.test'), "ok": _('chk.ok'), "fail": _('chk.fail'),
   "rd_confirm": _('rd.confirm'), "rd_type_ids": _('rd.type_ids'), "rd_working": _('rd.working'),
   "rd_unconfirm": _('rd.unconfirm'), "rd_errors": _('rd.errors'), "rd_risky": _('rd.risky'),
-  "rd_cmds_note": _('rd.cmds_note'), "kb_io_result": _('kb.io_result'), "kb_io_dry": _('kb.io_dry'), "rd_disabled": _('rd.disabled')
+  "rd_cmds_note": _('rd.cmds_note'), "kb_io_result": _('kb.io_result'), "kb_io_dry": _('kb.io_dry'), "rd_disabled": _('rd.disabled'),
+  "pr_steps": _('pr.steps'), "pr_block": _('pr.block'), "pr_script": _('pr.script'), "pr_catalog": _('pr.catalog'),
+  "pr_mark": _('pr.mark'), "pr_mark_confirm": _('pr.mark_confirm'), "pr_remove_first": _('pr.remove_first')
 } | tojson }}</script>
 <script src="/static/app.js?v={{ version }}" defer></script>
 </head>
@@ -35,6 +37,7 @@
       <a href="/e/{{ e.id }}" class="sub {{ 'on' if path == '/e/' ~ e.id or '/r/' in path }}"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 3v5h5M9 12h8M9 16h8"/></svg>{{ _('nav.reports') }}</a>
       <a href="/e/{{ e.id }}/chat" class="sub {{ 'on' if path.endswith('/chat') }}"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg>{{ _('nav.chat') }}</a>
       <a href="/e/{{ e.id }}/k" class="sub {{ 'on' if path.endswith('/k') }}"><svg viewBox="0 0 24 24"><path d="M5 3h12a2 2 0 0 1 2 2v16H7a2 2 0 0 1-2-2zM5 17a2 2 0 0 1 2-2h12"/></svg>{{ _('nav.knowledge') }}</a>
+      <a href="/e/{{ e.id }}/audit" class="sub {{ 'on' if path.endswith('/audit') }}"><svg viewBox="0 0 24 24"><path d="M9 3h6v3H9zM6 5h12v16H6zM9 11l2 2 4-4M9 17h6"/></svg>{{ _('nav.audit') }}</a>
       {% endif %}
     </div>
     {% endfor %}

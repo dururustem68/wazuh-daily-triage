@@ -52,6 +52,18 @@ of silencing.
 - **Notifications by e-mail, Telegram or Microsoft Teams** — critical situations (SIEM silent, indexer red, real
   incidents) without repeating the same item every run, an optional short summary after every run, and rule
   deployments ([docs/notifications.md](docs/notifications.md)).
+- **Live verification** — a deployed, approved or promoted rule is checked against real events after every run:
+  "confirmed live 12× (last …)" or "not seen for 5 days". `logtest passed` is not proof; a real event is.
+- **Make permanent** — for a tested draft, a promotion package for *your* configuration management: the rule
+  block with provenance, a script (backup → append → `wazuh-analysisd -t` on the running manager → roll out with
+  `kubectl apply -k` or a restart → check it loaded) and a draft § for your alert catalogue.
+- **Mail channel saturation** — with `mail:` set, each run shows the hours a flood exceeded `email_maxperhour`
+  and the other rules that fired in those hours and may never have been mailed.
+- **Coverage and vulnerability SLA** — agents per status/version/node, expected-but-missing agents from an
+  inventory list, and active vulnerabilities open longer than the SLA per severity.
+- **Monthly audit report** — alert volume, runs, findings and your decisions, rule changes (who, when, what was
+  lowered), SIEM outages from the liveness check, coverage and vulnerability SLA. Deterministic (no AI), printable
+  as PDF or downloadable as Markdown — evidence for ISO 27001 / ISMS reviews.
 - **Chat** — ask questions about an environment; answers use the same tools and show their tool calls.
 - **Stored in Wazuh itself** — `daily-triage-runs`, `daily-triage-knowledge`, `daily-triage-chat` indices in
   each environment's own indexer. No extra database.
@@ -187,6 +199,8 @@ Every rule draft in the knowledge base has three buttons:
   runs the draft's two-way logtest and **rolls back automatically** on any failure. Drafts that silence or lower
   alerts need the rule IDs typed as a second confirmation.
 - **Remove from Wazuh** — undoes a deployed draft the same way.
+- **Check live / Make permanent** — see whether the rule fired on real events since it was applied, and get the
+  package that moves it into your own rules file / repository (configure `promote:`).
 
 Setup and the exact API permissions: [docs/rule-deployment.md](docs/rule-deployment.md).
 
@@ -268,7 +282,7 @@ without a cluster. Adding a UI language = adding a dictionary to `app/i18n.py`.
 - Expose the tools as an **MCP server** (use them from Claude Desktop and other MCP clients)
 - More notification channels (Slack, generic webhook)
 - OIDC login, multiple users and an approval audit trail
-- Weekly vulnerability/SCA digest, streaming chat answers
+- SCA digest, streaming chat answers
 
 ## Acknowledgements
 

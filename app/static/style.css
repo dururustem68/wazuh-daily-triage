@@ -312,3 +312,22 @@ a.bt:hover { color: var(--accent); }
 .brow .answer { color: var(--green); margin: 6px 0 0; }
 .bempty { color: var(--muted); font-size: 13px; padding: 6px 2px; }
 @media (max-width: 1100px) { .board { grid-template-columns: 1fr; } }
+
+textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+
+/* audit report */
+.abars { display: flex; align-items: flex-end; gap: 3px; height: 140px; padding: 8px 8px 18px; background: var(--panel-2); border-radius: 10px; }
+.abar { position: relative; flex: 1; height: 100%; display: flex; align-items: flex-end; }
+.abar .t { position: absolute; bottom: 0; left: 0; right: 0; background: var(--accent); opacity: .35; border-radius: 3px 3px 0 0; }
+.abar .h { position: absolute; bottom: 0; left: 20%; right: 20%; background: var(--red); opacity: .85; border-radius: 2px 2px 0 0; }
+.abar em { position: absolute; bottom: -16px; left: 0; right: 0; text-align: center; font-size: 10px; font-style: normal; color: var(--muted); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+.promo pre.code { max-height: 340px; overflow: auto; }
+.promo ol { padding-left: 20px; }
+.verify { margin: 6px 0; }
+@media print {
+  .side, .noprint, .kactions, .tools { display: none !important; }
+  .content, main { margin: 0 !important; padding: 0 !important; max-width: none !important; }
+  .card, .kpi { box-shadow: none !important; break-inside: avoid; }
+  body { background: #fff !important; color: #000 !important; }
+}

@@ -38,7 +38,7 @@
 
 {% if run.flags %}
 <section class="flags">
-  {% for f in run.flags %}<div class="flag {{ 'red' if f.severity == 'critical' else 'amber' }}">{{ f.message }}</div>{% endfor %}
+  {% for f in run.flags %}<div class="flag {{ 'red' if f.severity == 'critical' else 'amber' if f.severity == 'warn' else 'gray' }}">{{ f.message }}</div>{% endfor %}
 </section>
 {% endif %}
 
@@ -130,6 +130,20 @@
   {% endif %}
 
 </section>
+{% set mp = c.mail_pressure %}
+{% if mp and mp.saturated_hours %}
+<section class="card" id="mail">
+  <h2>{{ _('mp.title') }}</h2>
+  <p class="small">{{ _('mp.help', l=mp.alert_level, m=mp.max_per_hour, n=mp.saturated_hours|length, x=mp.excess|n) }}</p>
+  <table class="tbl compact"><tr><th>{{ _('mp.hour') }}</th><th class="r">{{ _('mp.alerts') }}</th><th>{{ _('mp.flood') }}</th></tr>
+  {% for h in mp.saturated_hours %}<tr><td>{{ h.t|ts }}</td><td class="r">{{ h.n|n }}</td>
+    <td class="small">{% for r in h.flood %}{{ r.id }} ×{{ r.n|n }} — {{ r.desc|truncate(70) }}{% endfor %}</td></tr>{% endfor %}</table>
+  {% if mp.possibly_unmailed %}<h3>{{ _('mp.buried') }}</h3>
+  <p class="small muted">{{ _('mp.buried_help') }}</p>
+  <table class="tbl compact"><tr><th>{{ _('rep.rule') }}</th><th>{{ _('rep.lvl') }}</th><th class="r">{{ _('rep.count') }}</th><th>{{ _('rep.desc') }}</th><th>{{ _('au.top_agents') }}</th></tr>
+  {% for r in mp.possibly_unmailed %}<tr><td>{{ r.id }}</td><td>{{ r.level }}</td><td class="r">{{ r.n|n }}</td><td class="small">{{ r.desc|truncate(80) }}</td><td class="small">{{ r.agents|join(', ') }}</td></tr>{% endfor %}</table>{% endif %}
+</section>
+{% endif %}
 <details class="card">
   <summary>{{ _('rep.details') }}</summary>
   <div class="grid two">
@@ -174,7 +188,16 @@
     <h3>{{ _('rep.srcips') }}</h3>
     <table class="tbl compact">{% for r in c.srcips or [] %}<tr><td>{{ r.ip }}</td><td class="r">{{ r.count|n }}</td><td>{{ _('rep.max') }} {{ r.max_level }}</td><td class="small">{{ r.rules.keys()|join(', ') }}</td></tr>{% endfor %}</table>
     {% if c.vulnerabilities %}<h3>{{ _('rep.vulns') }}</h3>
-    <p class="small">{% for k, n in c.vulnerabilities.severity.items() %}{{ k }} {{ n|n }}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+    <p class="small">{% for k, n in c.vulnerabilities.severity.items() %}{{ k }} {{ n|n }}{{ ' · ' if not loop.last }}{% endfor %}</p>
+    {% set sla = c.vulnerabilities.sla %}
+    {% if sla and not sla.unavailable %}<table class="tbl compact"><tr><th>{{ _('au.severity') }}</th><th class="r">SLA</th><th class="r">{{ _('au.overdue') }}</th><th>{{ _('au.top_agents') }}</th></tr>
+    {% for k, s in sla.items() %}<tr><td>{{ k }}</td><td class="r">{{ s.days }} d</td><td class="r">{{ s.overdue|n }}</td><td class="small">{% for ag, n in s.by_agent.items() %}{{ ag }} {{ n }}{{ ', ' if not loop.last }}{% endfor %}</td></tr>{% endfor %}</table>
+    {% elif sla %}<p class="small muted">{{ _('au.sla_unavailable') }}</p>{% endif %}{% endif %}
+    {% set cov = c.coverage %}
+    {% if cov %}<h3>{{ _('au.coverage') }}</h3>
+    <p class="small">{% for k, n in cov.by_status.items() %}{{ k }} {{ n }}{{ ' · ' if not loop.last }}{% endfor %} — {{ _('au.versions') }}: {% for k, n in cov.versions.items() %}{{ k }} ×{{ n }}{{ ', ' if not loop.last }}{% endfor %} ({{ _('au.manager') }} {{ cov.manager_version }})</p>
+    {% if cov.active_by_node %}<p class="small muted">{{ _('au.by_node') }}: {% for k, n in cov.active_by_node.items() %}{{ k }} {{ n }}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+    {% if cov.inventory %}<p class="small">{{ _('au.inv_missing') }}: <b>{{ cov.inventory.missing|join(', ') or '—' }}</b> · {{ _('au.inv_unexpected') }}: {{ cov.inventory.unexpected|join(', ') or '—' }}</p>{% endif %}{% endif %}
     </div>
   </div>
   {% if c.errors %}<h3>{{ _('rep.collect_errors') }}</h3><ul class="small">{% for e in c.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}

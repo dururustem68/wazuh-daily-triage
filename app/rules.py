@@ -65,12 +65,24 @@ def parse(xml: str) -> tuple[list[dict], list[str]]:
         opts = [o.text.strip() for o in r.iter("options") if o.text]
         parents = [x.strip() for t in ("if_sid", "if_matched_sid") for el in r.iter(t)
                    for x in re.split(r"[,\s]+", el.text or "") if x.strip()]
+        desc = next((el.text or "" for el in r.iter("description")), "").strip()
+        conds = []
+        for el in r:
+            if el.tag in ("if_sid", "if_matched_sid", "description", "options", "mitre", "group", "info"):
+                continue
+            attrs = " ".join(f'{k}="{v}"' for k, v in el.attrib.items())
+            conds.append(f"<{el.tag}{' ' + attrs if attrs else ''}>{(el.text or '').strip()}")
         rules.append({"id": r.get("id"), "level": r.get("level"), "overwrite": r.get("overwrite") == "yes",
-                      "options": opts, "parents": parents,
+                      "options": opts, "parents": parents, "description": desc, "conditions": conds,
+                      "frequency": r.get("frequency"), "timeframe": r.get("timeframe"), "ignore": r.get("ignore"),
                       "if_group": [el.text for el in r.iter("if_group")] + [el.text for el in r.iter("if_matched_group")]})
     if not rules:
         errors.append("no <rule> element")
     return rules, errors
+
+
+INTERNAL_GROUPS = {"rootcheck", "syscheck", "syscheck_file", "syscheck_entry_added", "syscheck_entry_modified",
+                   "syscheck_entry_deleted", "sca", "vulnerability-detector", "ossec"}
 
 
 async def analyse(xml: str, cfg: RuleDeployCfg, api: WazuhAPI | None, high_level: int = 7) -> dict:
@@ -98,7 +110,8 @@ async def analyse(xml: str, cfg: RuleDeployCfg, api: WazuhAPI | None, high_level
     if len(set(ids)) != len(ids):
         errors.append("duplicate rule ids in the draft")
     parents_info: dict[str, dict] = {}
-    if api and not errors:
+    # existing-rule checks also when the id range is wrong, so a collision is reported at the same time
+    if api and rules and all(r["id"] and r["id"].isdigit() for r in rules):
         want = sorted({p for r in rules for p in r["parents"]} | set(ids))
         try:
             for x in await api.rules(want):
@@ -123,7 +136,17 @@ async def analyse(xml: str, cfg: RuleDeployCfg, api: WazuhAPI | None, high_level
                         and str(pi.get("filename", "")) > cfg.file:
                     errors.append(f"rule {r['id']}: parent {p} is in {pi.get('filename')}, which loads after "
                                   f"{cfg.file} (alphabetical) — rename rule_deploy.file, e.g. zz_{cfg.file}")
+    # events produced inside the manager (rootcheck, FIM, SCA, vulnerability detection, agent status) cannot be
+    # replayed through /logtest — their samples would never reach the rule
+    internal = set(re.findall(r"<if_group>\s*([^<\s]+)\s*</if_group>", xml))
+    internal |= set(re.findall(r"<decoded_as>\s*([^<\s]+)\s*</decoded_as>", xml))
+    if re.search(r"<category>\s*ossec\s*</category>", xml):
+        internal.add("ossec")
+    for v in parents_info.values():
+        internal |= set(v.get("groups") or [])
+    not_replayable = sorted(internal & INTERNAL_GROUPS)
     return {"ok": not errors, "errors": errors, "risky": sorted(set(risky)), "ids": ids,
+            "replayable": not not_replayable, "internal_groups": not_replayable,
             "xml": _normalise(xml), "parents": {k: {"level": v.get("level"), "description": v.get("description"),
                                                     "filename": v.get("filename")} for k, v in parents_info.items()}}
 
@@ -212,12 +235,15 @@ async def _run_tests(api: WazuhAPI, ids: list[str], tests: list[dict]) -> list[d
         d = await api.logtest(t["event"], t.get("log_format", "syslog"), t.get("location", "daily-triage"))
         rid = str(((d.get("output") or {}).get("rule") or {}).get("id", ""))
         want = t.get("expect", "match") == "match"
-        out.append({"expect": "match" if want else "no_match", "got_rule": rid, "ok": (rid in ids) == want})
+        # no rule at all matched the sample (not even a parent): the sample is not reproducible, not a rule failure
+        inconclusive = want and not rid
+        out.append({"expect": "match" if want else "no_match", "got_rule": rid, "ok": (rid in ids) == want,
+                    "inconclusive": inconclusive})
     return out
 
 
 async def apply(api: WazuhAPI, cfg: RuleDeployCfg, kid: str, xml: str, ids: list[str], title: str = "",
-                tests: list[dict] | None = None, remove: bool = False) -> list[dict]:
+                tests: list[dict] | None = None, remove: bool = False, replayable: bool = True) -> list[dict]:
     """Write (or remove) one draft's block, validate, restart, verify; roll back on any failure."""
     steps: list[dict] = []
 
@@ -276,10 +302,19 @@ async def apply(api: WazuhAPI, cfg: RuleDeployCfg, kid: str, xml: str, ids: list
         await api.restart(cluster)
         step("restart requested", True)
         step("manager back", True, await _wait_back(api, ids, cfg.file, cfg.restart_timeout, present=not remove))
-        if tests and not remove:
+        if tests and not remove and not replayable:
+            step("logtest skipped", True, "manager-internal events (rootcheck / FIM / SCA / vulnerability) cannot be "
+                 "replayed through logtest — the rule is loaded; confirm it on the next real event")
+        elif tests and not remove:
             res = await _run_tests(api, ids, tests)
-            ok = all(r["ok"] for r in res)
-            step("logtest", ok, "; ".join(f"{r['expect']} → {r['got_rule'] or '-'} {'✓' if r['ok'] else '✗'}" for r in res))
+            failed = [r for r in res if not r["ok"] and not r["inconclusive"]]
+            ok = not failed
+            detail = "; ".join(f"{r['expect']} → {r['got_rule'] or '-'} "
+                               f"{'?' if r['inconclusive'] else '✓' if r['ok'] else '✗'}" for r in res)
+            if ok and any(r["inconclusive"] for r in res):
+                detail += " — '?' = no rule matched the sample at all (it cannot be replayed through logtest); " \
+                          "the rule is loaded, confirm it on the next real event"
+            step("logtest", ok, detail)
             if not ok:
                 await rollback("logtest expectations not met")
                 raise DeployError("logtest failed")

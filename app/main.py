@@ -7,9 +7,11 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 import secrets
 import time
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -469,6 +471,7 @@ class KReq(BaseModel):
     body: str | None = None
     status: str | None = None
     rule_ids: list[str] | None = None
+    xml: str | None = None          # rule drafts: edited rule XML
 
 
 @app.post("/api/e/{env_id}/k")
@@ -488,8 +491,10 @@ async def api_k_update(request: Request, env_id: str, kid: str, body: KReq):
     er = _env(request, env_id)
     try:
         d = await er.repo.update_knowledge(kid, status=body.status, title=body.title, body=body.body,
+                                           approved_at=now_iso() if body.status == "active" else None,
                                            kind=body.kind if body.kind in KNOWLEDGE_KINDS else None,
-                                           rule_ids=body.rule_ids)
+                                           rule_ids=body.rule_ids,
+                                           xml=body.xml.strip()[:20000] if body.xml is not None else None)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     if not d:
@@ -556,6 +561,62 @@ async def api_rule_deploy(request: Request, env_id: str, kid: str, body: DeployR
 @app.post("/api/e/{env_id}/k/{kid}/undeploy")
 async def api_rule_undeploy(request: Request, env_id: str, kid: str):
     return await _deploy(request, env_id, kid, "", remove=True)
+
+
+@app.post("/api/e/{env_id}/k/{kid}/verify")
+async def api_rule_verify(request: Request, env_id: str, kid: str):
+    _env(request, env_id)
+    try:
+        res = await _rt(request).verify_rules(env_id, kid)
+    except KeyError as e:
+        raise HTTPException(404) from e
+    return res[0] if res else {"state": "not_applicable"}
+
+
+@app.get("/api/e/{env_id}/k/{kid}/promote")
+async def api_rule_promote(request: Request, env_id: str, kid: str):
+    _env(request, env_id)
+    try:
+        return await _rt(request).promote_view(env_id, kid, actor(request))
+    except KeyError as e:
+        raise HTTPException(404) from e
+
+
+@app.post("/api/e/{env_id}/k/{kid}/promoted")
+async def api_rule_promoted(request: Request, env_id: str, kid: str):
+    _env(request, env_id)
+    try:
+        return await _rt(request).mark_promoted(env_id, kid, actor(request))
+    except KeyError as e:
+        raise HTTPException(404) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.get("/e/{env_id}/audit", response_class=HTMLResponse)
+async def audit_page(request: Request, env_id: str, month: str | None = None):
+    er = _env(request, env_id)
+    if month and not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(400, "month must be YYYY-MM")
+    d = await _rt(request).audit(env_id, month)
+    now = datetime.now(UTC)
+    months = []
+    y, m = now.year, now.month
+    for _ in range(12):
+        months.append(f"{y:04d}-{m:02d}")
+        y, m = (y - 1, 12) if m == 1 else (y, m - 1)
+    return tpl.TemplateResponse(request, "audit.html", _ctx(request, er=er, env=er.env, a=d, months=months))
+
+
+@app.get("/api/e/{env_id}/audit.md")
+async def audit_md(request: Request, env_id: str, month: str | None = None):
+    from .audit import markdown
+    er = _env(request, env_id)
+    if month and not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(400, "month must be YYYY-MM")
+    d = await _rt(request).audit(env_id, month)
+    return Response(markdown(d, ui_lang(request)), media_type="text/markdown; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="wazuh-audit-{er.env.id}-{d["month"]}.md"'})
 
 
 @app.post("/api/e/{env_id}/liveness")

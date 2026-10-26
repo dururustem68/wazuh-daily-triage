@@ -163,8 +163,10 @@ def generate_vulns() -> list[dict]:
     for a in AGENTS[:7]:
         for _ in range(rnd.randint(20, 60)):
             sev = rnd.choices(["Critical", "High", "Medium", "Low"], [1, 4, 8, 3])[0]
+            det = datetime.now(UTC) - timedelta(days=rnd.randint(1, 120), hours=rnd.randint(0, 23))
             out.append({"agent": {"id": a[0], "name": a[1]}, "package": {"name": rnd.choice(pk)},
-                        "vulnerability": {"id": f"CVE-2025-{rnd.randint(1000, 9999)}", "severity": sev}})
+                        "vulnerability": {"id": f"CVE-2025-{rnd.randint(1000, 9999)}", "severity": sev,
+                                          "detected_at": _iso(det)}})
     return out
 
 
@@ -350,7 +352,7 @@ def _agg(docs: list[dict], spec: dict) -> dict:
         vals = [v for d in docs for v in _vals(d, f)]
         if not vals:
             return {"value": None}
-        if f == "timestamp":
+        if f == "timestamp" or f.endswith("_at"):
             dts = [_date(v) for v in vals]
             dt = min(dts) if op == "min" else max(dts)
             return {"value": dt.timestamp() * 1000, "value_as_string": _iso(dt)}
