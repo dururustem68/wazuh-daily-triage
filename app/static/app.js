@@ -43,6 +43,7 @@ function escapeHtml(s) {
 document.addEventListener("DOMContentLoaded", () => {
   // histogram bar heights (CSP forbids inline style attributes)
   document.querySelectorAll(".hist .bar[data-h]").forEach(b => { b.style.height = b.dataset.h + "%"; });
+  document.querySelectorAll("[data-w]").forEach(b => { b.style.width = b.dataset.w + "%"; });
 
   // start a run
   document.querySelectorAll("[data-run]").forEach(btn => btn.addEventListener("click", async () => {

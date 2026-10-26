@@ -5,11 +5,16 @@ actually alive, separates real risk from known noise, writes a short diagnostic 
 Indexer, asks you only what needs a human decision — and remembers your answers next time.
 
 Bring your own AI: Anthropic, OpenAI, Azure OpenAI or any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio,
-LiteLLM). One Docker container, read-only towards Wazuh.
+LiteLLM). One Docker container, read-only towards Wazuh by default. Critical alerts and run summaries go to
+e-mail, Telegram or Microsoft Teams.
 
-[Türkçe README](README.tr.md) · [AI providers](docs/providers.md) · [Permissions & network](docs/permissions.md) · [Rule deployment](docs/rule-deployment.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[Türkçe README](README.tr.md) · [AI providers](docs/providers.md) · [Notifications](docs/notifications.md) · [Permissions & network](docs/permissions.md) · [Rule deployment](docs/rule-deployment.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ![Report](docs/screenshot-report.png)
+
+| Recommendation inbox | Knowledge base and rule drafts |
+|---|---|
+| ![Inbox](docs/screenshot-inbox.png) | ![Knowledge base](docs/screenshot-knowledge.png) |
 
 ## Why
 
@@ -44,8 +49,9 @@ of silencing.
 - **Recommendation inbox** — findings one at a time, de-duplicated across runs; one decision settles every
   occurrence. Findings that need a look on a server carry exact read-only commands, and **Investigate in chat**
   opens a conversation where you paste the output and get the next step.
-- **Critical alerts** by e-mail, Telegram or Microsoft Teams — SIEM silent, indexer red, real incidents — without
-  repeating the same item every run ([docs/notifications.md](docs/notifications.md)).
+- **Notifications by e-mail, Telegram or Microsoft Teams** — critical situations (SIEM silent, indexer red, real
+  incidents) without repeating the same item every run, an optional short summary after every run, and rule
+  deployments ([docs/notifications.md](docs/notifications.md)).
 - **Chat** — ask questions about an environment; answers use the same tools and show their tool calls.
 - **Stored in Wazuh itself** — `daily-triage-runs`, `daily-triage-knowledge`, `daily-triage-chat` indices in
   each environment's own indexer. No extra database.
@@ -125,6 +131,77 @@ Bring your own key. Full setup for each provider, including model names and para
 The model must support tool (function) calling. Each environment can override the model (`llm:` block) — e.g.
 a local model for an environment whose data must not leave your network. `max_tool_steps` caps cost per run.
 
+## Notifications — e-mail, Telegram, Microsoft Teams
+
+| When | Setting (default) |
+|---|---|
+| SIEM silent, indexer red, manager daemon down, indexer disk ≥ 90 % | `on_critical_flags: true` |
+| Finding labelled *real incident* / severity *critical* | `on_real_incident: true`, `on_critical_findings: true` |
+| The run itself failed | `on_run_error: false` |
+| Short summary after **every** run (health, counts, recommendations waiting) | `on_run_summary: false` |
+| A rule draft was deployed, rolled back or removed | `on_rule_deploy: true` |
+
+The same critical item is not repeated within `repeat_hours` (24). A channel is active as soon as its fields are
+set; **Test notifications** on the environment page checks all of them.
+
+```sh
+# .env — any combination of channels
+NOTIFY_UI_URL=https://triage.example.internal      # link in messages
+NOTIFY_ON_RUN_SUMMARY=true
+
+TELEGRAM_BOT_TOKEN=123456789:AA...                 # @BotFather → /newbot
+TELEGRAM_CHAT_ID=-1001234567890                    # see below
+
+TEAMS_WEBHOOK_URL=https://...                      # channel → Workflows → "Post to a channel when a webhook request is received"
+
+SMTP_HOST=smtp.example.org
+SMTP_PORT=587
+SMTP_SECURITY=starttls                             # starttls | ssl | none
+SMTP_USER=...
+SMTP_PASSWORD=...
+SMTP_FROM=wazuh-triage@example.org
+SMTP_TO=secops@example.org,oncall@example.org
+```
+
+- **Telegram chat id:** add the bot to the group (or send it a message), send `/start@<your_bot>`, then open
+  `https://api.telegram.org/bot<token>/getUpdates` and take `"chat":{"id":...}` — group ids are negative
+  (`-100…`). Already sending Wazuh alerts to Telegram through the Dashboard's Notifications plugin? The same
+  bot token and chat id work here.
+- **Teams:** the old Office 365 "Incoming Webhook" connectors are retired; use the Workflows template above.
+  Messages arrive as Adaptive Cards with a link to the report.
+- Multi-environment setups put the same keys in a `notify:` block, globally or per environment —
+  see [docs/notifications.md](docs/notifications.md).
+
+Messages contain environment names, finding titles, host names and IPs — pick channels accordingly.
+
+## Rule drafts — commands or one-click deploy
+
+Every rule draft in the knowledge base has three buttons:
+
+- **Commands** — a copy-paste block for the manager: backup, append to `etc/rules/wdt_rules.xml`,
+  `wazuh-analysisd -t` (restores the backup if it fails), restart, verify, roll back. Works everywhere.
+- **Approve and deploy** — opt-in per environment (`rule_deploy`). Writes the draft through the Wazuh API with a
+  separate least-privilege user, validates, restarts the manager or cluster, checks the rule IDs are loaded,
+  runs the draft's two-way logtest and **rolls back automatically** on any failure. Drafts that silence or lower
+  alerts need the rule IDs typed as a second confirmation.
+- **Remove from Wazuh** — undoes a deployed draft the same way.
+
+Setup and the exact API permissions: [docs/rule-deployment.md](docs/rule-deployment.md).
+
+## Knowledge base import / export
+
+Bring the notes you already keep (known noise, decisions, lessons) as a YAML list — the same format as
+[`config/seed/example.yaml`](config/seed/example.yaml):
+
+```sh
+python -m app.kb import noise.yaml -e prod --dry-run     # preview
+python -m app.kb import noise.yaml -e prod --update      # add new, update changed (matched by key or kind+title)
+kubectl exec -i deploy/wazuh-daily-triage -- python -m app.kb import - -e prod --update < noise.yaml
+python -m app.kb export -e prod --kind baseline > baseline.yaml
+```
+
+Or use **Import / export** on the knowledge base page. Re-running never creates duplicates.
+
 ## Compatibility
 
 - Wazuh **4.x** (developed against 4.14) — all-in-one, distributed, Docker and Kubernetes deployments.
@@ -162,8 +239,9 @@ schedule  │ Collector ──► deterministic summary + health flags          
           │   vulns · agent · rule · logtest · validate_rule_xml · propose        │
           │      │                                                               │
           │      ▼                                                               │
-          │ submit_report ──► daily-triage-runs                                  │
+          │ submit_report ──► daily-triage-runs ──► notify (mail/Telegram/Teams) │
           │ Web UI / chat ◄──► daily-triage-knowledge / -chat                    │
+          │ Approve & deploy (opt-in, separate API user) ──► etc/rules/wdt_rules │
           └───────────┬──────────────────────────────┬───────────────────────────┘
                       │ HTTPS 9200                   │ HTTPS 55000
                Wazuh Indexer                  Wazuh server API

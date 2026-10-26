@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ _('kb.title') }} · {{ env.name }}{% endblock %}
 {% block body %}
-<h1>{{ _('kb.title') }}</h1>
-<p class="muted">{{ _('kb.intro') }}</p>
+<div class="page-head">
+  <div class="titles"><div class="eyebrow">{{ env.name }}</div><h1>{{ _('kb.title') }}</h1>
+    <div class="sub">{{ _('kb.intro') }}</div></div>
+</div>
 
-<details class="card" open>
+<details class="card">
   <summary><b>{{ _('kb.new') }}</b></summary>
   <form class="kform" data-kadd="/api/e/{{ env.id }}/k">
     <div class="row">
@@ -38,7 +40,7 @@
   <a href="?status=proposed" class="{{ 'on' if status == 'proposed' }}">{{ _('kb.proposed') }}</a>
   <a href="?status=active" class="{{ 'on' if status == 'active' }}">{{ _('kb.active') }}</a>
   <a href="?status=closed" class="{{ 'on' if status == 'closed' }}">{{ _('kb.closed') }}</a>
-  <span>|</span>
+  <span class="sep"></span>
   {% for k in KINDS %}<a href="?kind={{ k }}" class="{{ 'on' if kind == k }}">{{ _('kind.' ~ k) }}</a>{% endfor %}
 </div>
 
@@ -64,7 +66,7 @@
       <button class="btn small" data-copy-prev>{{ _('rep.copy') }}</button></details>{% endif %}
     <div class="rd-out small" hidden></div>
   {% endif %}
-  <div class="row small">
+  <div class="row small kactions">
     {% set deployed = r.kind == 'rule_draft' and r.deploy and r.deploy.state == 'deployed' %}
     {% if r.kind == 'rule_draft' and deploy_on and not deployed and r.status in ('proposed', 'active') %}<button class="btn small primary" data-deploy>{{ _('rd.deploy') }}</button>{% endif %}
     {% if deployed and deploy_on %}<button class="btn small" data-undeploy>{{ _('rd.undeploy') }}</button>{% endif %}
@@ -77,6 +79,6 @@
   </div>
 </article>
 {% else %}
-<p class="muted">{{ _('kb.empty') }}</p>
+<div class="card empty"><b>{{ _('kb.empty') }}</b></div>
 {% endfor %}
 {% endblock %}

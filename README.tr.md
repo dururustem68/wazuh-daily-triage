@@ -5,11 +5,16 @@
 geri yazar, yalnızca insan kararı gereken yerde size soru sorar ve cevaplarınızı ertesi gün hatırlar.
 
 Yapay zekâ anahtarınız sizin: Anthropic, OpenAI, Azure OpenAI ya da OpenAI uyumlu herhangi bir uç nokta (Ollama,
-vLLM, LM Studio, LiteLLM). Tek Docker konteyner; Wazuh'a karşı salt okunur.
+vLLM, LM Studio, LiteLLM). Tek Docker konteyner; varsayılan olarak Wazuh'a karşı salt okunur. Kritik durumları ve
+koşu özetlerini e-posta, Telegram ya da Microsoft Teams ile bildirir.
 
-[English README](README.md) · [Yapay zekâ sağlayıcıları](docs/providers.tr.md) · [Yetkiler ve ağ](docs/permissions.md) · [Kural uygulama](docs/rule-deployment.md) · [Katkı](CONTRIBUTING.md) · [Güvenlik](SECURITY.md)
+[English README](README.md) · [Yapay zekâ sağlayıcıları](docs/providers.tr.md) · [Bildirimler](docs/notifications.md) · [Yetkiler ve ağ](docs/permissions.md) · [Kural uygulama](docs/rule-deployment.md) · [Katkı](CONTRIBUTING.md) · [Güvenlik](SECURITY.md)
 
-![Rapor](docs/screenshot-report.png)
+![Rapor](docs/screenshot-report-tr.png)
+
+| Öneri kuyruğu | Bilgi tabanı ve kural taslakları |
+|---|---|
+| ![Öneriler](docs/screenshot-inbox-tr.png) | ![Bilgi tabanı](docs/screenshot-knowledge-tr.png) |
 
 ## Ne yapar
 
@@ -34,11 +39,12 @@ vLLM, LM Studio, LiteLLM). Tek Docker konteyner; Wazuh'a karşı salt okunur.
 - **Öneri kuyruğu** — bulgular tek tek ve koşular arası tekilleştirilmiş gelir; bir karar tüm tekrarlara uygulanır.
   Sunucuda bakılması gerekenler salt okunur komutlarla gelir; **Sohbette incele** ile çıktıyı yapıştırıp bir sonraki
   adımı alırsınız.
-- **Kritik bildirimler** — e-posta, Telegram ya da Microsoft Teams; SIEM sessizliği, indexer red, gerçek olaylar;
-  aynı konu her koşuda tekrarlanmaz ([docs/notifications.md](docs/notifications.md)).
+- **E-posta, Telegram ve Microsoft Teams bildirimleri** — kritik durumlar (SIEM sessizliği, indexer red, gerçek
+  olay; aynı konu her koşuda tekrarlanmaz), isteğe bağlı her koşu sonrası kısa özet ve kural uygulamaları
+  ([docs/notifications.md](docs/notifications.md)).
 - **Sohbet** — ortam hakkında soru sorun; aynı araçlarla, kanıta dayalı cevap.
 - **Kayıtlar Wazuh'un içinde** — her ortamın kendi indexer'ında `daily-triage-runs / -knowledge / -chat`.
-- **Çok ortam, çok dil** (İngilizce, Türkçe — sağ üstten seçilir), ortam başına model (ör. düzenlemeye tabi veri
+- **Çok ortam, çok dil** (İngilizce, Türkçe — sol menünün altından seçilir), ortam başına model (ör. düzenlemeye tabi veri
   için yerel model), arayüzde ve komut satırında bağlantı testi.
 
 ## Hızlı başlangıç
@@ -95,6 +101,77 @@ Anahtar sizin. Her sağlayıcı için ayrıntılı kurulum: **[docs/providers.tr
 ¹ OpenAI akıl yürütme modelleri ayrıca `LLM_TOKEN_PARAM=max_completion_tokens` ve `LLM_TEMPERATURE=none` ister.
 
 Model araç kullanımını (function calling) desteklemelidir. Her ortam kendi modelini seçebilir (`llm:` bloğu).
+
+## Bildirimler — e-posta, Telegram, Microsoft Teams
+
+| Ne zaman | Ayar (varsayılan) |
+|---|---|
+| SIEM sessiz, indexer red, manager süreci durmuş, indexer diski ≥ %90 | `on_critical_flags: true` |
+| *Gerçek olay* etiketli ya da *kritik* önemde bulgu | `on_real_incident: true`, `on_critical_findings: true` |
+| Koşunun kendisi başarısız | `on_run_error: false` |
+| **Her** koşudan sonra kısa özet (sağlık, sayılar, bekleyen öneriler) | `on_run_summary: false` |
+| Kural taslağı uygulandı, geri alındı ya da kaldırıldı | `on_rule_deploy: true` |
+
+Aynı kritik konu `repeat_hours` (24) içinde tekrar gönderilmez. Bir kanal, alanları dolu olduğu anda etkinleşir;
+ortam sayfasındaki **Bildirim testi** hepsini dener.
+
+```sh
+# .env — kanalları istediğiniz gibi birleştirin
+NOTIFY_UI_URL=https://triage.example.internal      # mesajlardaki bağlantı
+NOTIFY_ON_RUN_SUMMARY=true
+
+TELEGRAM_BOT_TOKEN=123456789:AA...                 # @BotFather → /newbot
+TELEGRAM_CHAT_ID=-1001234567890                    # aşağıya bakın
+
+TEAMS_WEBHOOK_URL=https://...                      # kanal → Workflows → "Post to a channel when a webhook request is received"
+
+SMTP_HOST=smtp.example.org
+SMTP_PORT=587
+SMTP_SECURITY=starttls                             # starttls | ssl | none
+SMTP_USER=...
+SMTP_PASSWORD=...
+SMTP_FROM=wazuh-triage@example.org
+SMTP_TO=secops@example.org,oncall@example.org
+```
+
+- **Telegram chat id:** botu gruba ekleyin (ya da bota mesaj yazın), `/start@<botunuz>` gönderin, sonra
+  `https://api.telegram.org/bot<token>/getUpdates` adresinde `"chat":{"id":...}` değerini alın; grup id'leri
+  eksidir (`-100…`). Wazuh alarmlarını zaten Dashboard'un Notifications eklentisiyle Telegram'a gönderiyorsanız
+  aynı bot token'ı ve chat id burada da çalışır.
+- **Teams:** eski Office 365 "Incoming Webhook" bağlayıcıları kaldırıldı; yukarıdaki Workflows şablonunu kullanın.
+  Mesajlar rapor bağlantılı Adaptive Card olarak gelir.
+- Çok ortamlı kurulumda aynı anahtarlar `notify:` bloğuna (genel ya da ortam başına) yazılır —
+  bkz. [docs/notifications.md](docs/notifications.md).
+
+Mesajlarda ortam adı, bulgu başlıkları, sunucu adları ve IP'ler bulunur; kanalı buna göre seçin.
+
+## Kural taslakları — komutlar ya da tek tıkla uygulama
+
+Bilgi tabanındaki her kural taslağında üç düğme vardır:
+
+- **Komutlar** — manager'da yapıştırılacak blok: yedek, `etc/rules/wdt_rules.xml`'e ekleme, `wazuh-analysisd -t`
+  (hata olursa yedeği geri yükler), restart, kontrol, geri alma. Her ortamda çalışır.
+- **Onayla ve uygula** — ortam başına isteğe bağlı (`rule_deploy`). Taslağı ayrı, en az yetkili bir API
+  kullanıcısıyla yazar, doğrular, manager'ı ya da cluster'ı yeniden başlatır, kural ID'lerinin yüklendiğini
+  kontrol eder, iki yönlü logtest yapar ve herhangi bir hatada **kendiliğinden geri alır**. Alarm susturan ya da
+  seviye düşüren taslaklar, kural ID'leri yazılarak ikinci kez onaylanır.
+- **Wazuh'tan kaldır** — uygulanmış taslağı aynı güvenceyle geri çeker.
+
+Kurulum ve gereken API yetkileri: [docs/rule-deployment.md](docs/rule-deployment.md).
+
+## Bilgi tabanı içe / dışa aktarma
+
+Elinizdeki notları (bilinen gürültü, kararlar, dersler) YAML listesi olarak getirin — biçim
+[`config/seed/example.yaml`](config/seed/example.yaml) ile aynı:
+
+```sh
+python -m app.kb import gurultu.yaml -e prod --dry-run   # önizleme
+python -m app.kb import gurultu.yaml -e prod --update    # yenileri ekle, değişenleri güncelle (key ya da tür+başlık)
+kubectl exec -i deploy/wazuh-daily-triage -- python -m app.kb import - -e prod --update < gurultu.yaml
+python -m app.kb export -e prod --kind baseline > baseline.yaml
+```
+
+Ya da bilgi tabanı sayfasındaki **İçe / dışa aktar** kutusunu kullanın. Tekrar çalıştırmak çift kayıt oluşturmaz.
 
 ## Güvenlik
 

@@ -3,9 +3,19 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
-## [0.3.1] — 2026-10-26
+## [0.4.0] — 2026-10-26
+
+### Changed
+- **New interface:** sidebar navigation per environment, page headers, KPI row and section links on reports,
+  severity-coloured findings (the colour bar was never shown before), detailed data tables collapsed by default,
+  two-column recommendation inbox with progress and large decision buttons, cleaner knowledge base and chat.
 
 ### Added
+- **Run summary notification** (`on_run_summary` / `NOTIFY_ON_RUN_SUMMARY`, off by default): one short message
+  after every run — health, alert counts, findings by label, recommendations waiting. Critical items are still
+  sent on their own and the summary is appended to them.
+- **Rule deployment notification** (`on_rule_deploy`, on by default): deployed / failed (rolled back) / removed,
+  with rule ids and who did it.
 - **Knowledge base import / export** in the seed YAML format — "Import / export" on the knowledge page (paste or
   pick a file, preview first) and `python -m app.kb import|export` (stdin works, e.g. through `kubectl exec -i`).
   Re-importing is idempotent: entries match by `key` (or kind + title); `--update` refreshes changed ones.

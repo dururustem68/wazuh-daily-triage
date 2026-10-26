@@ -21,7 +21,7 @@ from .collector import Collector, _parse, health_status, iso
 from .config import DAYS, Environment, LLMConfig, Settings
 from .i18n import t
 from .llm.base import LLMError, make_llm
-from .notify import build_message, critical_items, recently_notified
+from .notify import build_message, critical_items, plain_message, recently_notified, summary_lines
 from .notify import send as notify_send
 from .store import KNOWLEDGE_KINDS, IndexStore, MemoryStore, Repo, new_id, now_iso
 from .wazuh.api import WazuhAPI
@@ -55,6 +55,7 @@ class Runtime:
         self._seeded: set[str] = set()
         self._tasks: set[asyncio.Task] = set()
         self._run_locks: dict[str, asyncio.Lock] = {}
+        self.notify_transport = None       # tests inject an httpx.MockTransport here
         for e in settings.environments:
             if demo:
                 from .demo import FakeAPI, FakeIndexer
@@ -322,23 +323,53 @@ class Runtime:
         if not cfg.enabled or not cfg.channels:
             return {}
         try:
+            lang = self.lang(rt.env)
             items = critical_items(run, cfg, self.finding_key)
-            if not items:
+            if items:
+                prev = await rt.repo.list_runs(2 * max(1, cfg.repeat_hours // 6) + 4, light=True)
+                seen = recently_notified([r for r in prev if r.get("run_id") != run.get("run_id")], cfg.repeat_hours)
+                items = [i for i in items if i["key"] not in seen]
+            summary = []
+            if cfg.on_run_summary and run.get("status") == "done":
+                waiting = len(await self.inbox(rt.env.id))
+                summary = summary_lines(run, lang, waiting, lambda k: t(lang, "label." + k))
+            if not items and not summary:
                 return {}
-            prev = await rt.repo.list_runs(2 * max(1, cfg.repeat_hours // 6) + 4, light=True)
-            seen = recently_notified([r for r in prev if r.get("run_id") != run.get("run_id")], cfg.repeat_hours)
-            items = [i for i in items if i["key"] not in seen]
-            if not items:
-                return {}
-            msg = build_message(rt.env.name, run, items, cfg, self.lang(rt.env), rt.env.id)
+            if items:
+                msg = build_message(rt.env.name, run, items, cfg, lang, rt.env.id)
+                if summary:
+                    msg = plain_message(msg["title"], msg["lines"] + ["—"] + summary, msg["link"])
+            else:
+                link = f"{cfg.ui_url.rstrip('/')}/e/{rt.env.id}/r/{run['run_id']}" if cfg.ui_url else ""
+                msg = plain_message(t(lang, "notify.summary_title", env=rt.env.name,
+                                      health=t(lang, "health." + (run.get("health") or "ok"))), summary, link)
             res = await notify_send(cfg, msg, transport=transport)
-            run["notified"] = [{"key": i["key"], "ts": now_iso()} for i in items]
+            run["notified"] = [{"key": i["key"], "ts": now_iso()} for i in items] + \
+                ([{"key": "summary", "ts": now_iso()}] if summary else [])
             run["notify_result"] = res
             await rt.repo.save_run(run)
             log.info("%s: notified %d item(s): %s", rt.env.id, len(items), res)
             return res
         except Exception:  # noqa: BLE001 — a notification problem must never break a run
             log.exception("notification failed")
+            return {}
+
+    async def _notify_rule(self, rt: EnvRuntime, entry: dict, rec: dict, transport=None) -> dict:
+        cfg = self.settings.notify_for(rt.env)
+        if not (cfg.enabled and cfg.channels and cfg.on_rule_deploy):
+            return {}
+        try:
+            lang = self.lang(rt.env)
+            lines = [entry.get("title", ""), t(lang, "notify.rule_ids", ids=", ".join(rec.get("ids") or []),
+                                               file=rec.get("file", ""), by=rec.get("by", ""))]
+            if rec.get("error"):
+                lines.append(rec["error"][:300])
+            link = f"{cfg.ui_url.rstrip('/')}/e/{rt.env.id}/k?kind=rule_draft" if cfg.ui_url else ""
+            msg = plain_message(t(lang, "notify.rule_title", env=rt.env.name, state=t(lang, "rd.state." + rec["state"])),
+                                lines, link)
+            return await notify_send(cfg, msg, transport=transport)
+        except Exception:  # noqa: BLE001
+            log.exception("rule notification failed")
             return {}
 
     async def notify_test(self, env_id: str, transport=None) -> dict:
@@ -498,6 +529,7 @@ class Runtime:
                 d.update(patch)
                 await rt.store.put("knowledge", kid, d)
             log.info("rule %s %s by %s: %s", kid, rec["action"], actor, rec["state"])
+            await self._notify_rule(rt, d, rec, transport=self.notify_transport)
             return rec
 
     async def chat_from_finding(self, env_id: str, run_id: str, fid: str, lang: str | None = None) -> str:

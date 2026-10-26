@@ -2,15 +2,36 @@
 {% block title %}{{ _('rep.title') }} {{ run.started_at|ts }} · {{ env.name }}{% endblock %}
 {% block body %}
 {% set v = c.volume or {} %}{% set hl = c.health or {} %}{% set lvl = (c.env or {}).high_level or env.high_level %}
-<div class="row">
-  <h1>{{ _('rep.title') }} · {{ run.started_at|ts }}</h1><span class="spacer"></span>
+<div class="page-head">
+  <div class="titles">
+    <div class="eyebrow"><a href="/e/{{ env.id }}">{{ env.name }}</a> · {{ _('nav.reports') }}</div>
+    <h1>{{ _('rep.title') }} · {{ run.started_at|ts }}</h1>
+    <div class="sub">{{ _('rep.window') }}: {{ (run.window or {}).from|ts }} → {{ (run.window or {}).to|ts }} ({{ _('rep.hours', h=(run.window or {}).hours) }}) ·
+      {{ _('rep.run_scheduled') if run.trigger == 'schedule' else _('rep.run_manual') }}
+      {% if run.agent %}· {{ run.agent.provider }} {{ run.agent.model }} · {{ run.agent.steps }} {{ _('rep.steps') }} · {{ run.agent.input_tokens|n }}/{{ run.agent.output_tokens|n }} {{ _('rep.tokens') }}{% endif %}</div>
+  </div>
+  <div class="tools">
   {% if run.status == 'done' %}<span class="pill big {{ HEALTH_COLORS[run.health or 'ok'] }}">{{ _('health.' ~ (run.health or 'ok')) }}</span>
   {% elif run.status == 'error' %}<span class="pill big red">{{ _('health.error') }}</span>
   {% else %}<span class="pill big blue">{{ _('stage.' ~ run.stage) if run.stage else run.status }}</span>{% endif %}
+  </div>
 </div>
-<p class="muted small">{{ _('rep.window') }}: {{ (run.window or {}).from|ts }} → {{ (run.window or {}).to|ts }} ({{ _('rep.hours', h=(run.window or {}).hours) }}) ·
-  {{ _('rep.run_scheduled') if run.trigger == 'schedule' else _('rep.run_manual') }}
-  {% if run.agent %}· {{ run.agent.provider }} {{ run.agent.model }} · {{ run.agent.steps }} {{ _('rep.steps') }} · {{ run.agent.input_tokens|n }}/{{ run.agent.output_tokens|n }} {{ _('rep.tokens') }}{% endif %}</p>
+
+{% if run.status == 'done' %}
+<div class="kpis">
+  <div class="kpi"><b>{{ v.total|n }}</b><span>{{ _('dash.alerts') }}</span></div>
+  <div class="kpi"><b>{{ v.high_level_total|n }}</b><span>{{ _('dash.level_plus', n=lvl) }}</span></div>
+  {% set real = (run.findings or [])|selectattr('label','equalto','real_incident')|list|length %}
+  <div class="kpi {{ 'alert' if real }}"><b>{{ real }}</b><span>{{ _('dash.real') }}</span></div>
+  <div class="kpi"><b>{{ (run.findings or [])|length }}</b><span>{{ _('rep.findings') }}</span></div>
+  <div class="kpi {{ 'warn' if (v.empty_hours or []) }}"><b>{{ (v.empty_hours or [])|length }}</b><span>{{ _('rep.empty_hours') }}</span></div>
+</div>
+<nav class="toc">
+  {% if run.findings %}<a href="#findings">{{ _('rep.findings') }} ({{ run.findings|length }})</a>{% endif %}
+  {% if run.questions %}<a href="#questions">{{ _('rep.questions') }} ({{ run.questions|length }})</a>{% endif %}
+  <a href="#data">{{ _('rep.data') }}</a>
+</nav>
+{% endif %}
 
 {% if run.status == 'running' %}<div class="runstate" data-runstate="{{ env.id }}" data-poll="{{ run.run_id }}" data-reload="1"></div>{% endif %}
 {% if run.error %}<div class="card err"><b>{{ _('rep.failed') }}</b> {{ run.error }}</div>{% endif %}
@@ -30,19 +51,19 @@
 {% endif %}
 
 {% if run.findings %}
-<section>
-  <h2>{{ _('rep.findings') }} <span class="muted small">({{ run.findings|length }})</span></h2>
+<section id="findings">
+  <div class="section-title"><h2>{{ _('rep.findings') }}</h2><span class="count">{{ run.findings|length }}</span></div>
   {% for f in run.findings %}
   <article class="card finding sev-{{ f.severity }}" id="{{ f.id }}">
     <div class="row">
       <span class="pill {{ LABEL_COLORS.get(f.label, 'gray') }}">{{ _('label.' ~ f.label) }}</span>
       <span class="pill outline">{{ _('sev.' ~ f.severity) }}</span>
-      <h3>{{ f.title }}</h3>
     </div>
+    <h3 class="ftitle">{{ f.title }}</h3>
     <div class="detail">{{ f.detail|md }}</div>
     {% if f.evidence %}<ul class="evidence">{% for e in f.evidence %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-    <p class="small muted">{% if f.rule_ids %}{{ _('rep.rules') }}: {{ f.rule_ids|join(', ') }}{% endif %}
-      {% if f.agents %} · {{ _('rep.agents') }}: {{ f.agents|join(', ') }}{% endif %}</p>
+    <div class="meta">{% if f.rule_ids %}<span>{{ _('rep.rules') }}: {{ f.rule_ids|join(', ') }}</span>{% endif %}
+      {% if f.agents %}<span>{{ _('rep.agents') }}: {{ f.agents|join(', ') }}</span>{% endif %}</div>
     {% if f.recommendation %}<div class="reco"><b>{{ _('rep.recommendation') }}</b> {{ f.recommendation|md }}</div>{% endif %}
     {% if f.manual_checks %}<details open><summary>{{ _('rep.manual_checks') }} ({{ f.manual_checks|length }})</summary>
       {% for c in f.manual_checks %}<div class="check"><div class="small"><code>{{ c.host }}</code> {{ c.purpose }}</div>
@@ -69,7 +90,7 @@
 
 {% if run.questions %}
 <section id="questions">
-  <h2>{{ _('rep.questions') }}</h2>
+  <div class="section-title"><h2>{{ _('rep.questions') }}</h2></div>
   <p class="muted small">{{ _('rep.questions_note') }}</p>
   {% for q in run.questions %}
   <div class="card q">
@@ -92,8 +113,8 @@
     <a class="small" href="/e/{{ env.id }}/k?status=proposed">{{ _('rep.review') }}</a></div>{% endif %}
 </section>
 
+<div class="section-title" id="data"><h2>{{ _('rep.data') }}</h2><span class="count small">{{ _('rep.deterministic') }}</span></div>
 <section class="card">
-  <div class="row"><h2>{{ _('rep.data') }}</h2><span class="spacer"></span><span class="small muted">{{ _('rep.deterministic') }}</span></div>
   <div class="stats">
     <div><b>{{ v.total|n }}</b><span>{{ _('dash.alerts') }}</span></div>
     <div><b>{{ v.high_level_total|n }}</b><span>{{ _('dash.level_plus', n=lvl) }}</span></div>
@@ -108,6 +129,9 @@
   <div class="row small muted"><span>{{ hourly[0].t|tss }}</span><span class="spacer"></span><span>{{ hourly[-1].t|tss }}</span></div>
   {% endif %}
 
+</section>
+<details class="card">
+  <summary>{{ _('rep.details') }}</summary>
   <div class="grid two">
     <div>
       <h3>{{ _('rep.levels') }}</h3>
@@ -154,7 +178,7 @@
     </div>
   </div>
   {% if c.errors %}<h3>{{ _('rep.collect_errors') }}</h3><ul class="small">{% for e in c.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-</section>
+</details>
 
 {% if run.agent and run.agent.trace %}
 <details class="card"><summary>{{ _('rep.trace', n=run.agent.trace|length) }}</summary>

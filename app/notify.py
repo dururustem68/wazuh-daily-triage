@@ -66,6 +66,8 @@ class NotifyCfg(BaseModel):
     on_real_incident: bool = True       # findings labelled real_incident
     on_critical_findings: bool = True   # findings with severity critical
     on_run_error: bool = False          # the triage run itself failed
+    on_run_summary: bool = False        # a short summary after EVERY run (health, counts, waiting recommendations)
+    on_rule_deploy: bool = True         # a rule draft was deployed, failed (rolled back) or removed
     repeat_hours: int = 24              # do not repeat the same item within this period
     ui_url: str = ""                    # base URL used for links, e.g. http://127.0.0.1:18080
     email: EmailCfg = Field(default_factory=EmailCfg)
@@ -118,6 +120,28 @@ def build_message(env_name: str, run: dict, items: list[dict], cfg: NotifyCfg, l
     link = f"{cfg.ui_url.rstrip('/')}/e/{env_id}/r/{run['run_id']}" if cfg.ui_url else ""
     title = t(lang, "notify.title", env=env_name)
     lines = [t(lang, "notify.kind." + i["kind"]) + ": " + i["text"] for i in items]
+    return {"title": title, "lines": lines, "link": link,
+            "text": "\n".join([title, ""] + [f"• {x}" for x in lines] + ([f"\n{link}"] if link else []))}
+
+
+def summary_lines(run: dict, lang: str, inbox_waiting: int | None, label_name) -> list[str]:
+    m = run.get("metrics") or {}
+    lvl = ((run.get("collected") or {}).get("env") or {}).get("high_level", "")
+    out = [t(lang, "notify.sum_counts", total=f"{m.get('total', 0):,}", high=f"{m.get('high', 0):,}", lvl=lvl)]
+    counts: dict[str, int] = {}
+    for f in run.get("findings") or []:
+        counts[f.get("label", "")] = counts.get(f.get("label", ""), 0) + 1
+    if counts:
+        out.append(t(lang, "notify.sum_findings", n=sum(counts.values()),
+                     labels=", ".join(f"{n} {label_name(k)}" for k, n in sorted(counts.items(), key=lambda x: -x[1]))))
+    if inbox_waiting:
+        out.append(t(lang, "notify.sum_inbox", n=inbox_waiting))
+    if run.get("ai_error"):
+        out.append(t(lang, "notify.sum_ai_error"))
+    return out
+
+
+def plain_message(title: str, lines: list[str], link: str = "") -> dict:
     return {"title": title, "lines": lines, "link": link,
             "text": "\n".join([title, ""] + [f"• {x}" for x in lines] + ([f"\n{link}"] if link else []))}
 

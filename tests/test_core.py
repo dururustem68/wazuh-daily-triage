@@ -383,6 +383,27 @@ async def test_notifications(settings, monkeypatch):
     assert len(sent["tg"]) == 1
     assert (await rt.notify_test("demo", transport=tr))["telegram"] == "ok"
 
+    # run summary: off by default, on → one message after every run, even without critical items
+    quiet = {"run_id": "n-3", "env": "demo", "status": "done", "health": "ok", "started_at": "2026-10-26T19:50:00.000Z",
+             "metrics": {"total": 1200, "high": 30}, "flags": [],
+             "findings": [{"id": "f1", "label": "investigate", "severity": "medium", "title": "x"}]}
+    await er.repo.save_run(quiet)
+    n = len(sent["tg"])
+    assert await rt.notify_run(er, quiet, transport=tr) == {}
+    rt.settings.notify.on_run_summary = True
+    assert (await rt.notify_run(er, quiet, transport=tr))["telegram"] == "ok"
+    txt = sent["tg"][n]["text"]
+    assert "1,200" in txt and "/e/demo/r/n-3" in txt
+    # rule deploy notification
+    from app import rules as R
+    R.POLL_FIRST = R.POLL_EVERY = 0.01
+    k = await er.repo.add_knowledge("rule_draft", "notify me", "", extra={"xml":
+        '<group name="x,"><rule id="100990" level="9"><if_sid>5710</if_sid><description>t</description></rule></group>'})
+    n = len(sent["tg"])
+    rt.notify_transport = tr
+    rec = await rt.rule_deploy("demo", k["id"], "alice")
+    assert rec["state"] == "deployed" and "100990" in sent["tg"][n]["text"] and "alice" in sent["tg"][n]["text"]
+
 
 def test_empty_env_vars_fall_back(tmp_path, monkeypatch):
     from app.config import load_settings, notify_from_env

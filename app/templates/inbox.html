@@ -1,14 +1,17 @@
 {% extends "base.html" %}
 {% block title %}{{ _('inbox.title') }} · {{ env.name }}{% endblock %}
 {% block body %}
-<div class="row">
-  <h1>{{ _('inbox.title') }}</h1><span class="spacer"></span>
-  {% if items %}<span class="muted">{{ _('inbox.position', i=i + 1, n=items|length) }}</span>{% endif %}
+<div class="page-head">
+  <div class="titles"><div class="eyebrow">{{ env.name }}</div><h1>{{ _('inbox.title') }}</h1></div>
+  {% if items %}<div class="tools"><span class="pill outline">{{ _('inbox.position', i=i + 1, n=items|length) }}</span></div>{% endif %}
 </div>
+{% if items %}<div class="progress"><span data-w="{{ ((i + 1) * 100 / items|length)|round|int }}"></span></div>{% endif %}
 
 {% if not item %}
-  <div class="card"><p class="muted">{{ _('inbox.empty') }}</p></div>
+  <div class="card empty"><b>✓</b>{{ _('inbox.empty') }}</div>
 {% else %}
+<div class="inbox-layout">
+<div>
   {% set f = item.finding %}
   <article class="card finding sev-{{ f.severity }} inbox-card" id="inbox"
            data-refs='{{ item.refs|tojson }}' data-act="/api/e/{{ env.id }}/inbox/act"
@@ -16,14 +19,14 @@
     <div class="row">
       <span class="pill {{ LABEL_COLORS.get(f.label, 'gray') }}">{{ _('label.' ~ f.label) }}</span>
       <span class="pill outline">{{ _('sev.' ~ f.severity) }}</span>
-      <h2 class="inbox-title">{{ f.title }}</h2>
     </div>
+    <h2 class="inbox-title">{{ f.title }}</h2>
     <p class="small muted">{{ _('inbox.seen', n=item.seen, t=item.first_seen|ts) }} ·
       <a href="/e/{{ env.id }}/r/{{ item.run_id }}#{{ f.id }}">{{ _('inbox.open_report') }}</a></p>
     <div class="detail">{{ f.detail|md }}</div>
     {% if f.evidence %}<ul class="evidence">{% for e in f.evidence %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-    <p class="small muted">{% if f.rule_ids %}{{ _('rep.rules') }}: {{ f.rule_ids|join(', ') }}{% endif %}
-      {% if f.agents %} · {{ _('rep.agents') }}: {{ f.agents|join(', ') }}{% endif %}</p>
+    <div class="meta">{% if f.rule_ids %}<span>{{ _('rep.rules') }}: {{ f.rule_ids|join(', ') }}</span>{% endif %}
+      {% if f.agents %}<span>{{ _('rep.agents') }}: {{ f.agents|join(', ') }}</span>{% endif %}</div>
     {% if f.recommendation %}<div class="reco"><b>{{ _('rep.recommendation') }}</b> {{ f.recommendation|md }}</div>{% endif %}
 
     {% if f.manual_checks %}
@@ -44,26 +47,30 @@
     </details>{% endif %}
 
     <div class="inbox-actions">
-      <button class="btn primary" data-chat-finding="/api/e/{{ env.id }}/r/{{ item.run_id }}/f/{{ f.id }}/chat">{{ _('inbox.chat_btn') }}</button>
       <input data-note placeholder="{{ _('inbox.note_ph') }}">
-      <div class="row">
-        <span class="small muted">{{ _('inbox.decide') }}</span>
+      <div class="small muted">{{ _('inbox.decide') }}</div>
+      <div class="decide">
         <button class="btn" data-status="acknowledged">{{ _('us.acknowledged') }}</button>
         <button class="btn" data-status="false_positive">{{ _('us.false_positive') }}</button>
         <button class="btn" data-status="baseline">{{ _('us.baseline') }}</button>
         <button class="btn" data-status="closed">{{ _('us.closed') }}</button>
+      </div>
+      <div class="row">
+        <button class="btn primary" data-chat-finding="/api/e/{{ env.id }}/r/{{ item.run_id }}/f/{{ f.id }}/chat">{{ _('inbox.chat_btn') }}</button>
         <span class="spacer"></span>
-        {% if i > 0 %}<a class="btn" href="/e/{{ env.id }}/inbox?i={{ i - 1 }}">← {{ _('inbox.prev') }}</a>{% endif %}
-        {% if i + 1 < items|length %}<a class="btn" href="/e/{{ env.id }}/inbox?i={{ i + 1 }}">{{ _('inbox.later') }} →</a>{% endif %}
+        {% if i > 0 %}<a class="btn ghost" href="/e/{{ env.id }}/inbox?i={{ i - 1 }}">← {{ _('inbox.prev') }}</a>{% endif %}
+        {% if i + 1 < items|length %}<a class="btn ghost" href="/e/{{ env.id }}/inbox?i={{ i + 1 }}">{{ _('inbox.later') }} →</a>{% endif %}
       </div>
       <span class="saved small muted"></span>
     </div>
   </article>
+</div>
 
-  <ol class="inbox-list small">
+  <ol class="inbox-list card">
     {% for it in items %}<li class="{{ 'on' if loop.index0 == i }}"><a href="/e/{{ env.id }}/inbox?i={{ loop.index0 }}">
-      <span class="pill {{ LABEL_COLORS.get(it.finding.label, 'gray') }}">{{ _('label.' ~ it.finding.label) }}</span>
-      {{ it.finding.title|truncate(110) }}</a>{% if it.seen > 1 %} <span class="muted">×{{ it.seen }}</span>{% endif %}</li>{% endfor %}
+      <span class="pill {{ LABEL_COLORS.get(it.finding.label, 'gray') }}">{{ _('label.' ~ it.finding.label) }}{% if it.seen > 1 %} ×{{ it.seen }}{% endif %}</span><br>
+      {{ it.finding.title|truncate(90) }}</a></li>{% endfor %}
   </ol>
+</div>
 {% endif %}
 {% endblock %}

@@ -152,7 +152,7 @@ def _ctx(request: Request, **kw):
     rt = request.app.state.rt
     return {"envs": [r.env for r in rt.envs.values()], "demo": rt.demo, "app_title": rt.settings.app.title,
             "auth": not AUTH_DISABLED, "lang": lang, "_": lambda key, **a: t(lang, key, **a),
-            "deploy_any": any(rt.deploy_ready(r.env) for r in rt.envs.values()), **kw}
+            "deploy_any": any(rt.deploy_ready(r.env) for r in rt.envs.values()), "path": request.url.path, **kw}
 
 
 @app.get("/login", response_class=HTMLResponse)

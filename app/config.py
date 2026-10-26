@@ -282,6 +282,8 @@ def notify_from_env() -> dict:
     return {
         "enabled": _bool(E("NOTIFY_ENABLED"), True),
         "on_run_error": _bool(E("NOTIFY_ON_RUN_ERROR"), False),
+        "on_run_summary": _bool(E("NOTIFY_ON_RUN_SUMMARY"), False),
+        "on_rule_deploy": _bool(E("NOTIFY_ON_RULE_DEPLOY"), True),
         "repeat_hours": int(E("NOTIFY_REPEAT_HOURS", "24")),
         "ui_url": E("NOTIFY_UI_URL", ""),
         "email": {"host": E("SMTP_HOST", ""), "port": int(E("SMTP_PORT", "587")), "security": E("SMTP_SECURITY", "starttls"),

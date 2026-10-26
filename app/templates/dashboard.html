@@ -1,16 +1,18 @@
 {% extends "base.html" %}
 {% block body %}
-<h1>{{ _('dash.title') }}</h1>
+<div class="page-head">
+  <div class="titles"><h1>{{ _('dash.title') }}</h1></div>
+</div>
 <div class="grid cards">
 {% for c in cards %}
   {% set last = c.last %}
-  <section class="card env-card">
+  <section class="card env-card h-{{ (last.health or 'ok') if last else 'none' }}">
     <div class="row">
       <h2><a href="/e/{{ c.env.id }}">{{ c.env.name }}</a></h2>
       <div class="spacer"></div>
       {% if last %}<span class="pill {{ HEALTH_COLORS[last.health or 'ok'] }}">{{ _('health.' ~ (last.health or 'ok')) }}</span>{% endif %}
     </div>
-    <p class="muted small">{{ c.env.description }}</p>
+    {% if c.env.description %}<p class="muted small">{{ c.env.description }}</p>{% endif %}
     {% if last %}
       <div class="stats">
         <div><b>{{ last.metrics.total|n }}</b><span>{{ _('dash.alerts') }}</span></div>
@@ -18,18 +20,20 @@
         <div><b>{{ (last.findings or [])|selectattr('label','equalto','real_incident')|list|length }}</b><span>{{ _('dash.real') }}</span></div>
         <div><b>{{ c.new_f }}</b><span>{{ _('dash.unreviewed') }}</span></div>
       </div>
+      {% if c.inbox %}
+      <a class="callout" href="/e/{{ c.env.id }}/inbox"><b>{{ c.inbox }}</b><span>{{ _('inbox.waiting', n=c.inbox) }}</span><span class="spacer"></span>→</a>
+      {% endif %}
       <div class="summary">{{ last.summary_md|md }}</div>
       <p class="small muted">{{ _('dash.last_report') }}: <a href="/e/{{ c.env.id }}/r/{{ last.run_id }}">{{ last.started_at|ts }}</a>
         · {{ _('dash.window', h=last.window.hours) }}</p>
-      {% if c.inbox %}<p><a class="btn primary" href="/e/{{ c.env.id }}/inbox">{{ _('inbox.waiting', n=c.inbox) }} →</a></p>{% endif %}
       {% if c.open_q or c.proposals %}
-      <p class="small">
+      <p class="row small">
         {% if c.open_q %}<a class="pill blue" href="/e/{{ c.env.id }}/r/{{ last.run_id }}#questions">{{ _('dash.questions_waiting', n=c.open_q) }}</a>{% endif %}
         {% if c.proposals %}<a class="pill purple" href="/e/{{ c.env.id }}/k?status=proposed">{{ _('dash.proposals', n=c.proposals) }}</a>{% endif %}
       </p>
       {% endif %}
     {% else %}
-      <p class="muted">{{ _('dash.no_report') }}</p>
+      <div class="empty"><b>{{ _('dash.no_report') }}</b></div>
     {% endif %}
     <div class="row actions">
       <button class="btn primary" data-run="{{ c.env.id }}" {{ 'disabled' if c.running }}>{{ _('run.running') if c.running else _('run.now') }}</button>
