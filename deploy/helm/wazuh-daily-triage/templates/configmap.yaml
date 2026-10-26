@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wdt.fullname" . }}-config
+  labels:
+    {{- include "wdt.labels" . | nindent 4 }}
+data:
+  environments.yaml: |
+{{ .Values.config.environments | indent 4 }}
+  context.md: |
+{{ .Values.config.context | default "# (no extra context)" | indent 4 }}
+  seed.yaml: |
+{{ .Values.config.seed | default "[]" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wdt.fullname" . }}-env
+  labels:
+    {{- include "wdt.labels" . | nindent 4 }}
+data:
+  APP_LANGUAGE: {{ .Values.app.language | quote }}
+  TZ: {{ .Values.app.timezone | quote }}
+  COOKIE_SECURE: {{ .Values.app.cookieSecure | quote }}
+  {{- if .Values.app.forwardedAllowIPs }}
+  FORWARDED_ALLOW_IPS: {{ .Values.app.forwardedAllowIPs | quote }}
+  {{- end }}
+  {{- if .Values.app.notifyUiUrl }}
+  NOTIFY_UI_URL: {{ .Values.app.notifyUiUrl | quote }}
+  {{- end }}
+  {{- range $k, $v := .Values.env }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}

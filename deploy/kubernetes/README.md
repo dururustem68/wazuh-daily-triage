@@ -1,5 +1,7 @@
 # Kubernetes
 
+> **Prefer Helm?** An equivalent chart ships at [../helm/wazuh-daily-triage](../helm/wazuh-daily-triage).
+
 Kustomize manifests:
 
 ```

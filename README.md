@@ -133,9 +133,10 @@ vi config/context/<env>.md         # a few lines describing the environment
 
 ### Kubernetes
 
-Kustomize base, example overlay and optional components in **[deploy/kubernetes](deploy/kubernetes/README.md)** —
-single replica, non-root, read-only filesystem, no PVC (state lives in the Wazuh Indexer). Components:
-`networkpolicy`, `ingress-nginx` (TLS, cert-manager, oauth2-proxy option) and `ingress-traefik-authentik` (SSO).
+A **[Helm chart](deploy/helm/wazuh-daily-triage)** and a kustomize base, example overlay and optional components in
+**[deploy/kubernetes](deploy/kubernetes/README.md)** — single replica, non-root, read-only filesystem, no PVC
+(state lives in the Wazuh Indexer). Components: `networkpolicy`, `ingress-nginx` (TLS, cert-manager, oauth2-proxy
+option) and `ingress-traefik-authentik` (SSO).
 
 ## AI providers
 

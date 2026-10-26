@@ -1,0 +1,38 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wdt.fullname" . }}
+  labels:
+    {{- include "wdt.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace }}
+      ports:
+        - { port: {{ .Values.service.port }} }
+  egress:
+    - ports:              # DNS
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    - to:                 # Wazuh indexer / API
+        {{- if .Values.networkPolicy.wazuhCIDR }}
+        - ipBlock: { cidr: {{ .Values.networkPolicy.wazuhCIDR | quote }} }
+        {{- else }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.wazuhNamespace }}
+        {{- end }}
+      ports:
+        - { port: 9200 }
+        - { port: 55000 }
+    - ports:              # hosted LLM, Telegram, Teams, Slack, Discord, ntfy (HTTPS)
+        - { port: 443 }
+    - ports:              # SMTP (only if e-mail notifications are used)
+        - { port: 587 }
+        - { port: 465 }
+{{- end }}

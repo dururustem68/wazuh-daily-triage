@@ -1,0 +1,41 @@
+{{- $svc := include "wdt.fullname" . }}
+Wazuh Daily Triage is deployed.
+
+{{- if not .Values.secret.APP_PASSWORD }}
+⚠  `secret.APP_PASSWORD` is empty — the UI will return 503 until you set it
+   (or use an SSO proxy with AUTH_DISABLED=true).
+{{- end }}
+
+1. Fill in the secrets and config (one or more environments) — e.g. a values
+   override file:
+
+     secret:
+       APP_PASSWORD: "..."
+       APP_SECRET: "..."
+       LLM_API_KEY: "..."
+       INDEXER_PASSWORD: "..."
+       API_PASSWORD: "..."
+
+2. Apply and check:
+
+     helm upgrade --install wazuh-daily-triage . -f my-values.yaml
+     kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ $svc }}
+     kubectl -n {{ .Release.Namespace }} exec deploy/{{ $svc }} -- python -m app.check
+
+3. Open the UI (ClusterIP by default):
+
+     kubectl -n {{ .Release.Namespace }} port-forward svc/{{ $svc }} 8080:8080
+     # http://127.0.0.1:8080
+
+{{- if .Values.ingress.enabled }}
+An Ingress is enabled — make sure TLS + an SSO proxy (or a strong app password
+and COOKIE_SECURE=true) protect it before exposing it.
+{{- else }}
+For an Ingress, set `ingress.enabled=true`. Behind SSO set AUTH_DISABLED=true in
+the environments.yaml and enable `networkPolicy`.
+{{- end }}
+
+Notes:
+- One replica only (the scheduler runs in-process); `Recreate` strategy.
+- State lives in the Wazuh Indexer (`daily-triage-*`) — no PVC.
+- Read-only by default; opt-in rule deployment needs a separate API user.

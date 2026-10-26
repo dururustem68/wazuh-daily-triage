@@ -1,0 +1,166 @@
+# Default values for wazuh-daily-triage.
+# Everything secret goes under `secret:` (a Kubernetes Secret); the application
+# reads them through ${VAR} placeholders in `config.environments`.
+
+image:
+  repository: ghcr.io/dururustem68/wazuh-daily-triage
+  tag: ""                 # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+# One replica only: the built-in scheduler would run every daily check once per
+# replica. The Deployment uses the Recreate strategy for the same reason.
+replicaCount: 1
+
+# Non-secret process environment (the app reads config via ${VAR} expansion).
+app:
+  language: en           # en | tr | es | de
+  timezone: UTC
+  cookieSecure: false    # true behind TLS
+  forwardedAllowIPs: ""  # the ingress controller's pod CIDR — never "*"
+  notifyUiUrl: ""        # link target in notification messages
+
+# Extra non-secret env vars, injected verbatim (e.g. LOG_LEVEL, WDT_SCHEDULER).
+env: {}
+
+# Secrets — a Kubernetes Secret's stringData. Set the ones you need; an empty
+# value disables that feature. NEVER commit these here; pass them with
+# `--set-file` or a values override from a secret store.
+secret:
+  APP_PASSWORD: ""       # the web UI password (set it, or use SSO + AUTH_DISABLED)
+  APP_SECRET: ""         # session signing key (openssl rand -hex 32)
+  LLM_API_KEY: ""
+  INDEXER_USER: daily-triage
+  INDEXER_PASSWORD: ""
+  API_USER: daily-triage
+  API_PASSWORD: ""
+  DEPLOY_USER: ""        # optional rule deployment (separate least-privilege user)
+  DEPLOY_PASSWORD: ""
+  # notifications (docs/notifications.md)
+  TELEGRAM_BOT_TOKEN: ""
+  TELEGRAM_CHAT_ID: ""
+  TEAMS_WEBHOOK_URL: ""
+  SLACK_WEBHOOK_URL: ""
+  DISCORD_WEBHOOK_URL: ""
+  WEBHOOK_URL: ""
+  WEBHOOK_TOKEN: ""
+  NTFY_TOPIC: ""
+  NTFY_TOKEN: ""
+  SMTP_HOST: ""
+  SMTP_USER: ""
+  SMTP_PASSWORD: ""
+  SMTP_FROM: ""
+  SMTP_TO: ""
+
+# The application configuration, mounted at /app/config. Keep the ${VAR}
+# placeholders — they are expanded from `env:` / `secret:` at startup.
+config:
+  # A full environments.yaml. Configure one or more environments (docs/... and
+  # config/environments.example.yaml). In-cluster Wazuh service names are shown.
+  environments: |
+    app:
+      timezone: ${TZ:-UTC}
+      language: ${APP_LANGUAGE:-en}
+    llm:
+      provider: anthropic
+      model: claude-sonnet-5-5
+      api_key: ${LLM_API_KEY}
+      max_tokens: 8000
+      max_tool_steps: 16
+    notify:
+      ui_url: ${NOTIFY_UI_URL:-}
+      telegram: {bot_token: "${TELEGRAM_BOT_TOKEN:-}", chat_id: "${TELEGRAM_CHAT_ID:-}"}
+      teams: {webhook_url: "${TEAMS_WEBHOOK_URL:-}"}
+      slack: {webhook_url: "${SLACK_WEBHOOK_URL:-}"}
+      discord: {webhook_url: "${DISCORD_WEBHOOK_URL:-}"}
+      webhook: {url: "${WEBHOOK_URL:-}", token: "${WEBHOOK_TOKEN:-}"}
+      ntfy: {topic: "${NTFY_TOPIC:-}", token: "${NTFY_TOKEN:-}"}
+      email: {host: "${SMTP_HOST:-}", username: "${SMTP_USER:-}", password: "${SMTP_PASSWORD:-}",
+              sender: "${SMTP_FROM:-}", to: ["${SMTP_TO:-}"]}
+    environments:
+      - id: prod
+        name: Production Wazuh
+        indexer:
+          url: https://indexer.wazuh.svc.cluster.local:9200
+          username: ${INDEXER_USER}
+          password: ${INDEXER_PASSWORD}
+          verify_tls: false
+        api:
+          url: https://wazuh.wazuh.svc.cluster.local:55000
+          username: ${API_USER}
+          password: ${API_PASSWORD}
+          verify_tls: false
+        schedule: {times: ["07:30", "19:30"], days: [mon, tue, wed, thu, fri]}
+        window_min_hours: 12
+        liveness: {enabled: true, interval_minutes: 10}
+        rule_deploy:
+          enabled: false
+          username: ${DEPLOY_USER:-}
+          password: ${DEPLOY_PASSWORD:-}
+          file: wdt_rules.xml
+        context_file: context/main.md
+        seed_file: seed/main.yaml
+
+  # Environment context (a few lines the AI reads on every run) and seed notes
+  # (known noise / decisions / lessons) — same format as config/seed/example.yaml.
+  context: |
+    # Describe this environment for the AI:
+    # what each host does, admin IPs, maintenance windows, isolated servers…
+  seed: |
+    []
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits: { memory: 512Mi }
+
+# Read-only Kubernetes API access for the optional k8s tools (docs/sources.md).
+serviceAccount:
+  create: true
+  name: ""
+rbac:
+  create: true           # read-only ClusterRole (get/list; no secrets/configmaps)
+  namespaces: []         # optional allow-list for the k8s tools (empty = all)
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  seccompProfile: { type: RuntimeDefault }
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: ["ALL"] }
+
+# Optional Ingress (nginx). For SSO, put oauth2-proxy/Authentik in front and set
+# app-level AUTH_DISABLED=true via the environments.yaml — see the kustomize docs.
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: triage.example.com
+      paths:
+        - { path: "/", pathType: Prefix }
+  tls: []
+  #  - hosts: [triage.example.com]
+  #    secretName: triage-tls
+
+# Optional NetworkPolicy (recommended behind SSO). Mirrors the kustomize
+# `networkpolicy` component; edit the egress to match your Wazuh / SMTP layout.
+networkPolicy:
+  enabled: false
+  ingressNamespace: ingress-nginx
+  wazuhNamespace: wazuh
+  wazuhCIDR: ""          # set to the indexer/API address when Wazuh is outside the cluster
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

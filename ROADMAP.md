@@ -7,7 +7,7 @@ Where the project is going, roughly ordered by impact. This is a living document
 
 | Status | Item | Why |
 |---|---|---|
-| 🚧 | **Helm chart** + a one-line install | most Wazuh users deploy with `wazuh-kubernetes`/Helm; a chart is the single biggest adoption lever. |
+| ✅ | **Helm chart** + a one-line install | most Wazuh users deploy with `wazuh-kubernetes`/Helm; a chart is the single biggest adoption lever. |
 | ✅ | Docker Compose + Kubernetes (kustomize) | single container, read-only FS, non-root, no PVC. |
 | ⬜ | Signed container images (cosign) + SBOM + SLSA provenance | a requirement in enterprise evaluations. |
 | ✅ | Multi-language UI (en, tr, es, de) | more languages = more users; the catalogue is tiny (`app/i18n.py`). |

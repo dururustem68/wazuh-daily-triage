@@ -10,6 +10,8 @@ All notable changes to this project are documented here. The format follows
   e-mail, Telegram and Teams — configurable per channel via `notify:` or `SLACK_WEBHOOK_URL`,
   `DISCORD_WEBHOOK_URL`, `WEBHOOK_URL`/`WEBHOOK_TOKEN`, `NTFY_TOPIC`/`NTFY_TOKEN`.
 - **Spanish** and **German** UI (`es`, `de`), selectable from the language menu; the report language follows.
+- **Helm chart** in `deploy/helm/wazuh-daily-triage` (hardened deployment, optional read-only RBAC, ingress and
+  network policy), linted and rendered in CI.
 
 ### Changed
 - CI now runs **CodeQL** and a **dependency audit** (`pip-audit`); releases attach an **SPDX SBOM** artifact.

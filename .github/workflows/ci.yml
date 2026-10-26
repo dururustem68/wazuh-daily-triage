@@ -54,3 +54,19 @@ jobs:
             sed -i "s#^components: .*#components: [../components/$c]#" kustomization.yaml
             kubectl kustomize . > /dev/null && echo "$c OK"
           done
+
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.15.0
+      - name: Lint and render the chart
+        run: |
+          helm lint deploy/helm/wazuh-daily-triage
+          helm template test deploy/helm/wazuh-daily-triage > /dev/null
+          helm template test deploy/helm/wazuh-daily-triage \
+            --set ingress.enabled=true \
+            --set networkPolicy.enabled=true \
+            --set secret.APP_PASSWORD=test > /dev/null
