@@ -1,0 +1,14 @@
+# Example evaluation cases for the demo data (WDT_DEMO=true python -m app.eval config/eval/demo.yaml).
+# For real environments copy this file and describe windows you have already reviewed by hand.
+- name: demo — last 24 hours
+  env: demo
+  from: now-24h
+  to: now
+  expect:
+    - id: jenkins-basic-auth-bruteforce
+      rules: ["100212", "100213"]
+    - id: ssh-bruteforce-db01
+      rules: ["5710", "5712"]
+  forbid:
+    - id: web-scanner-noise
+      rules: ["31101"]

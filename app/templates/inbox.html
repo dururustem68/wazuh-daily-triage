@@ -62,6 +62,7 @@
         {% if i + 1 < items|length %}<a class="btn ghost" href="/e/{{ env.id }}/inbox?i={{ i + 1 }}">{{ _('inbox.later') }} →</a>{% endif %}
       </div>
       <span class="saved small muted"></span>
+      {% set run_id = item.run_id %}{% include "_incident.html" %}
     </div>
   </article>
 </div>

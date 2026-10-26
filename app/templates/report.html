@@ -83,6 +83,7 @@
       <span class="spacer"></span>
       <button class="btn small" data-chat-finding="/api/e/{{ env.id }}/r/{{ run.run_id }}/f/{{ f.id }}/chat">{{ _('inbox.chat_btn') }}</button>
     </div>
+    {% set run_id = run.run_id %}{% include "_incident.html" %}
   </article>
   {% endfor %}
 </section>
@@ -130,6 +131,22 @@
   {% endif %}
 
 </section>
+{% set an = c.anomalies %}
+{% if an and (an.spikes or an.new_pairs) %}
+<details class="card" id="anomalies" open>
+  <summary>{{ _('an.title') }} <span class="small muted">({{ _('an.help', d=an.baseline_days) }})</span></summary>
+  <div class="grid two">
+    <div><h3>{{ _('an.spikes') }}</h3>
+    {% if an.spikes %}<table class="tbl compact"><tr><th>{{ _('rep.rule') }}</th><th>{{ _('rep.agent') }}</th><th class="r">{{ _('an.per_day') }}</th><th class="r">{{ _('an.base') }}</th><th class="r">z</th></tr>
+    {% for x in an.spikes %}<tr title="{{ x.desc }}"><td>{{ x.rule }} <span class="muted small">L{{ x.level }}</span></td><td>{{ x.agent }}</td><td class="r">{{ x.per_day|n }}</td><td class="r muted">{{ x.baseline_per_day }}</td><td class="r"><b>{{ x.z }}</b></td></tr>{% endfor %}</table>
+    {% else %}<p class="muted small">{{ _('au.none') }}</p>{% endif %}</div>
+    <div><h3>{{ _('an.new') }}</h3>
+    {% if an.new_pairs %}<table class="tbl compact"><tr><th>{{ _('rep.rule') }}</th><th>{{ _('rep.agent') }}</th><th class="r">{{ _('rep.count') }}</th><th>{{ _('rep.desc') }}</th></tr>
+    {% for x in an.new_pairs %}<tr><td>{{ x.rule }} <span class="muted small">L{{ x.level }}</span></td><td>{{ x.agent }}</td><td class="r">{{ x.count|n }}</td><td class="small">{{ x.desc|truncate(60) }}</td></tr>{% endfor %}</table>
+    {% else %}<p class="muted small">{{ _('au.none') }}</p>{% endif %}</div>
+  </div>
+</details>
+{% endif %}
 {% set mp = c.mail_pressure %}
 {% if mp and mp.saturated_hours %}
 <section class="card" id="mail">

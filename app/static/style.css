@@ -331,3 +331,7 @@ textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, mono
   .card, .kpi { box-shadow: none !important; break-inside: avoid; }
   body { background: #fff !important; color: #000 !important; }
 }
+
+.incident { margin-top: 8px; }
+.incident .inc-box { margin-top: 8px; }
+.incident .inc-box textarea { width: 100%; }

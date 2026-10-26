@@ -35,6 +35,12 @@ METHOD = """\
 10. **Coverage (`coverage`) and vulnerability SLA (`vulnerabilities.sla`):** inventory agents that are missing,
    agents inactive for a long time and Critical vulnerabilities past their SLA are findings; version drift alone
    is not (mention it once, without a finding, unless it blocks something).
+11. **Anomalies (`anomalies`)** are computed without AI: `spikes` = rule × agent far above its 14-day daily mean
+   (z-score), `new_pairs` = a rule firing on an agent where it never fired in 14 days. Start there; explain each
+   high one (known change? attack? new noise?) instead of re-deriving volumes yourself.
+12. **Other sources:** when `prom_*`, `loki_*` or `k8s_*` tools exist, use them to explain what Wazuh alone cannot:
+   pod restarts / OOM / node pressure (k8s_get pods|nodes|events), service logs around an alert (loki_query),
+   resource trends (prom_range). Always narrow by namespace/labels and time.
 
 ## Labels
 - `real_incident`: say so immediately and state the manual action required.

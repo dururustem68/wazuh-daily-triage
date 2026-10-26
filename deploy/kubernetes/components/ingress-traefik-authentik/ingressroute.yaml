@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Edit: host (3×), the TLS secret, and the Authentik service (here: embedded outpost of an in-cluster Authentik
+# Edit: host (4×), the TLS secret, and the Authentik service (here: embedded outpost of an in-cluster Authentik
 # in namespace "authentik"). Cross-namespace service references need Traefik's
 # --providers.kubernetescrd.allowCrossNamespace=true; otherwise add an ExternalName service in this namespace.
 apiVersion: traefik.io/v1alpha1
@@ -38,5 +38,12 @@ spec:
         - name: authentik-server
           namespace: authentik
           port: 80
+    # MCP endpoint (docs/mcp.md): checks its own bearer token (MCP_TOKEN); remove if you do not use it
+    - kind: Rule
+      match: Host(`triage.example.com`) && Path(`/mcp`)
+      priority: 900
+      services:
+        - name: wazuh-daily-triage
+          port: 8080
   tls:
     secretName: triage-tls     # e.g. a copy of your wildcard certificate, or a cert-manager Certificate

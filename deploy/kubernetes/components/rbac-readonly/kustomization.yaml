@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Optional: read-only Kubernetes access for the AI (sources.kubernetes.enabled: true).
+# Pods, pod logs, nodes, events, workloads, jobs, services, ingresses, PVCs — never secrets or configmaps.
+# The cluster role is cluster-wide; to limit it, bind it with RoleBindings per namespace instead and set
+# sources.kubernetes.namespaces to the same list.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - rbac.yaml
+patches:
+  - target: {kind: Deployment, name: wazuh-daily-triage}
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/automountServiceAccountToken
+        value: true
+      - op: add
+        path: /spec/template/spec/serviceAccountName
+        value: wazuh-daily-triage

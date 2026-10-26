@@ -64,6 +64,18 @@ of silencing.
 - **Monthly audit report** — alert volume, runs, findings and your decisions, rule changes (who, when, what was
   lowered), SIEM outages from the liveness check, coverage and vulnerability SLA. Deterministic (no AI), printable
   as PDF or downloadable as Markdown — evidence for ISO 27001 / ISMS reviews.
+- **Anomalies without AI** — every run compares rule × agent counts with the previous 14 days: spikes (z-score)
+  and rules firing on an agent for the first time; the AI starts from there.
+- **Beyond Wazuh (optional)** — read-only Prometheus, Loki and Kubernetes tools (pods, restarts, OOM kills, node
+  pressure, events, pod logs; never secrets) so the cause of an alert can be checked, not guessed
+  ([docs/sources.md](docs/sources.md)).
+- **Incident record drafts** — one click on a finding: the AI gathers the evidence and fills your incident
+  template (timeline, root cause, impact, evidence queries, actions); edit, download, or open it as an internal
+  Zammad ticket.
+- **MCP server** — the same read-only tools for Claude Desktop or any MCP client, so you can investigate with live
+  data from your own assistant ([docs/mcp.md](docs/mcp.md)).
+- **Evaluation** — `python -m app.eval` replays days you reviewed yourself and scores the AI (recall, noise
+  reported as incidents, tokens): compare models and prompts with numbers ([docs/eval.md](docs/eval.md)).
 - **Chat** — ask questions about an environment; answers use the same tools and show their tool calls.
 - **Stored in Wazuh itself** — `daily-triage-runs`, `daily-triage-knowledge`, `daily-triage-chat` indices in
   each environment's own indexer. No extra database.
@@ -279,7 +291,6 @@ without a cluster. Adding a UI language = adding a dictionary to `app/i18n.py`.
 
 ## Roadmap
 
-- Expose the tools as an **MCP server** (use them from Claude Desktop and other MCP clients)
 - More notification channels (Slack, generic webhook)
 - OIDC login, multiple users and an approval audit trail
 - SCA digest, streaming chat answers

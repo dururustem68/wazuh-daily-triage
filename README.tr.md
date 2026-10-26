@@ -55,6 +55,18 @@ koşu özetlerini e-posta, Telegram ya da Microsoft Teams ile bildirir.
 - **Aylık denetim raporu** — alarm hacmi, raporlar, bulgular ve kararlarınız, kural değişiklikleri (kim, ne zaman,
   neyi düşürdü), canlılık kontrolünden SIEM kesintileri, kapsam ve zafiyet SLA'sı. Deterministik (yapay zekâ yok),
   PDF olarak yazdırılabilir ya da Markdown indirilebilir — ISO 27001 / ISMS gözden geçirmeleri için kanıt.
+- **Yapay zekâsız anomali** — her rapor kural × ajan sayılarını önceki 14 günle karşılaştırır: sıçramalar
+  (z-skoru) ve bir ajanda ilk kez görülen kurallar; yapay zekâ işe buradan başlar.
+- **Wazuh'un ötesi (isteğe bağlı)** — salt-okunur Prometheus, Loki ve Kubernetes araçları (pod'lar, yeniden
+  başlamalar, OOM, node baskısı, event'ler, pod logları; secret asla): alarmın nedeni tahmin edilmez, kontrol
+  edilir ([docs/sources.md](docs/sources.md)).
+- **Olay kaydı taslağı** — bulguda tek tık: yapay zekâ kanıtları toplar ve olay şablonunuzu doldurur (zaman
+  çizelgesi, kök neden, etki, kanıt sorguları, aksiyonlar); düzenleyin, indirin ya da Zammad'da iç not olarak açın.
+- **MCP sunucusu** — aynı salt-okunur araçlar Claude Desktop ya da herhangi bir MCP istemcisi için: kendi
+  asistanınızla canlı veriyle inceleyin ([docs/mcp.md](docs/mcp.md)).
+- **Değerlendirme** — `python -m app.eval`, elle incelediğiniz günleri yeniden çalıştırıp yapay zekâyı puanlar
+  (yakalama oranı, olay diye raporlanan gürültü, token): modelleri ve promptları sayıyla karşılaştırın
+  ([docs/eval.md](docs/eval.md)).
 - **Sohbet** — ortam hakkında soru sorun; aynı araçlarla, kanıta dayalı cevap.
 - **Kayıtlar Wazuh'un içinde** — her ortamın kendi indexer'ında `daily-triage-runs / -knowledge / -chat`.
 - **Çok ortam, çok dil** (İngilizce, Türkçe — sol menünün altından seçilir), ortam başına model (ör. düzenlemeye tabi veri

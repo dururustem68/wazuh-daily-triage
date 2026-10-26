@@ -110,6 +110,66 @@ class PromoteCfg(BaseModel):
     manager_label: str = "app=wazuh-manager"   # pods that must become Ready again after the rollout
 
 
+class SourceEndpoint(BaseModel):
+    url: str = ""
+    username: str = ""
+    password: str = ""
+    bearer_token: str = ""
+    verify_tls: bool = True
+    ca_file: str | None = None
+    timeout: float = 30.0
+    org_id: str = ""                      # Loki multi-tenancy (X-Scope-OrgID)
+
+    @property
+    def verify(self):
+        return self.ca_file or self.verify_tls
+
+
+class KubernetesSource(BaseModel):
+    """Read-only Kubernetes API (pods, nodes, events, workloads, pod logs; never secrets or configmaps)."""
+    enabled: bool = False
+    in_cluster: bool = True               # use the pod's service account (needs the rbac-readonly component)
+    api_url: str = ""                     # when not in cluster
+    token: str = ""
+    verify_tls: bool = True
+    ca_file: str | None = None
+    namespaces: list[str] = Field(default_factory=list)   # optional allow-list; empty = all
+    pod_logs: bool = True
+
+
+class SourcesCfg(BaseModel):
+    """Extra read-only data sources the AI can query next to Wazuh."""
+    prometheus: SourceEndpoint | None = None
+    loki: SourceEndpoint | None = None
+    kubernetes: KubernetesSource = Field(default_factory=KubernetesSource)
+
+    @field_validator("prometheus", "loki", mode="before")
+    @classmethod
+    def _empty(cls, v):
+        return None if isinstance(v, dict) and not v.get("url") else v
+
+
+class ZammadCfg(BaseModel):
+    url: str = ""
+    token: str = ""
+    group: str = "Users"
+    customer: str = ""                    # e-mail of the ticket customer
+    verify_tls: bool = True
+
+
+class IncidentCfg(BaseModel):
+    """Incident record drafts from findings (e.g. ISO 27001 / ISMS-18 records)."""
+    id_prefix: str = "INC-"
+    template_file: str | None = None      # markdown skeleton the AI fills; default: built-in
+    template: str | None = None           # … or the skeleton inline ({id} {title} {by} are filled in)
+    zammad: ZammadCfg | None = None       # optional: open the draft as an internal Zammad ticket
+
+    @field_validator("zammad", mode="before")
+    @classmethod
+    def _z(cls, v):
+        return None if isinstance(v, dict) and not v.get("url") else v
+
+
 class RuleDeployCfg(BaseModel):
     """Optional: let "Approve and deploy" write approved rule drafts to the manager.
 
@@ -223,6 +283,9 @@ class Environment(BaseModel):
     promote: PromoteCfg = Field(default_factory=PromoteCfg)
     inventory: list[str] = Field(default_factory=list)   # expected agent names (coverage reconciliation)
     inventory_file: str | None = None    # one agent name per line (# comments allowed)
+    sources: SourcesCfg = Field(default_factory=SourcesCfg)
+    incident: IncidentCfg = Field(default_factory=IncidentCfg)
+    anomaly: bool = True                  # deterministic rule×agent anomalies against a 14-day baseline
 
     @field_validator("id")
     @classmethod

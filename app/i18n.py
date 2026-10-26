@@ -241,6 +241,18 @@ EN: dict[str, str] = {
     "au.oldest": "Oldest",
     "au.top_agents": "Agents",
     "au.sla_unavailable": "The vulnerability index has no detection date (vulnerability.detected_at); SLA ageing is not available.",
+    "an.title": "Anomalies",
+    "an.help": "rule × agent vs. the previous {d} days, no AI",
+    "an.spikes": "Far above normal",
+    "an.new": "New on this agent",
+    "an.per_day": "Per day now",
+    "an.base": "Normal/day",
+    "inc.create": "Incident record draft",
+    "inc.open": "Incident record {id}",
+    "inc.download": "Download .md",
+    "inc.regen": "Regenerate",
+    "inc.ticket": "Open as Zammad ticket",
+    "inc.working": "Writing the record — the AI checks the evidence (up to a minute)…",
 }
 
 TR: dict[str, str] = {
@@ -471,6 +483,18 @@ TR: dict[str, str] = {
     "au.oldest": "En eski",
     "au.top_agents": "Ajanlar",
     "au.sla_unavailable": "Zafiyet indeksinde tespit tarihi (vulnerability.detected_at) yok; SLA yaşlandırması yapılamıyor.",
+    "an.title": "Anomaliler",
+    "an.help": "kural × ajan, önceki {d} günle karşılaştırma, yapay zekâsız",
+    "an.spikes": "Normalin çok üstünde",
+    "an.new": "Bu ajanda yeni",
+    "an.per_day": "Şu an/gün",
+    "an.base": "Normal/gün",
+    "inc.create": "Olay kaydı taslağı",
+    "inc.open": "Olay kaydı {id}",
+    "inc.download": ".md indir",
+    "inc.regen": "Yeniden üret",
+    "inc.ticket": "Zammad bileti aç",
+    "inc.working": "Kayıt yazılıyor — yapay zekâ kanıtları kontrol ediyor (bir dakikaya kadar)…",
 }
 
 CATALOG = {"en": EN, "tr": TR}

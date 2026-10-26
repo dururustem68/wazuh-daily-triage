@@ -131,7 +131,7 @@ def _valid(tok: str | None) -> bool:
 @app.middleware("http")
 async def auth_mw(request: Request, call_next):
     p = request.url.path
-    public = p.startswith("/static") or p in ("/login", "/healthz", "/lang")
+    public = p.startswith("/static") or p in ("/login", "/healthz", "/lang", "/mcp")   # /mcp: own bearer token
     if not public and not AUTH_DISABLED:
         if not APP_PASSWORD:
             return HTMLResponse(f"<p>{t(ui_lang(request), 'auth.no_password')}</p>", status_code=503)
@@ -201,6 +201,11 @@ async def set_lang(request: Request, lang: str = Form(...)):
     if lang in LANGUAGES:
         r.set_cookie("lang", lang, max_age=365 * 86400, samesite="strict", secure=COOKIE_SECURE)
     return r
+
+
+from .mcp import router as mcp_router  # noqa: E402
+
+app.include_router(mcp_router)
 
 
 @app.get("/healthz")
@@ -419,6 +424,46 @@ async def api_inbox_act(request: Request, env_id: str, body: InboxActReq):
     refs = [r for r in body.refs if isinstance(r.get("run_id"), str) and isinstance(r.get("fid"), str)]
     n = await _rt(request).inbox_act(env_id, refs, body.user_status, (body.user_note or "").strip() or None)
     return {"ok": True, "updated": n}
+
+
+class IncidentReq(BaseModel):
+    md: str | None = None
+
+
+@app.post("/api/e/{env_id}/r/{run_id}/f/{fid}/incident")
+async def api_incident(request: Request, env_id: str, run_id: str, fid: str):
+    _env(request, env_id)
+    try:
+        return await _rt(request).incident_draft(env_id, run_id, fid, actor(request), ui_lang(request))
+    except KeyError as e:
+        raise HTTPException(404) from e
+
+
+@app.post("/api/e/{env_id}/r/{run_id}/f/{fid}/incident/save")
+async def api_incident_save(request: Request, env_id: str, run_id: str, fid: str, body: IncidentReq):
+    er = _env(request, env_id)
+    rt = _rt(request)
+    async with rt.run_lock(run_id):
+        run = await er.repo.get_run(run_id)
+        f = next((x for x in (run or {}).get("findings") or [] if x.get("id") == fid), None)
+        if not f or not f.get("incident"):
+            raise HTTPException(404)
+        f["incident"].update(md=(body.md or "")[:200000], edited_by=actor(request), edited_at=now_iso())
+        await er.repo.save_run(run)
+    return f["incident"]
+
+
+@app.post("/api/e/{env_id}/r/{run_id}/f/{fid}/incident/ticket")
+async def api_incident_ticket(request: Request, env_id: str, run_id: str, fid: str, body: IncidentReq):
+    _env(request, env_id)
+    try:
+        return await _rt(request).incident_ticket(env_id, run_id, fid, body.md)
+    except KeyError as e:
+        raise HTTPException(404) from e
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(502, str(e)) from e
 
 
 @app.post("/api/e/{env_id}/k/{kid}/chat")

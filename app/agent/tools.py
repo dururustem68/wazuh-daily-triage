@@ -83,8 +83,9 @@ def _compact_event(src: dict) -> dict:
 
 class ToolBox:
     def __init__(self, env: Environment, ix: Indexer, api: WazuhAPI | None, repo: Repo,
-                 mode: str = "chat", run_id: str | None = None):
+                 mode: str = "chat", run_id: str | None = None, sources: dict | None = None):
         self.env = env
+        self.sources = sources or {}
         self.ix = ix
         self.api = api
         self.repo = repo
@@ -106,7 +107,15 @@ class ToolBox:
         if api:
             self._handlers.update({"agent_info": self.agent_info, "rule_info": self.rule_info,
                                    "logtest": self.logtest})
-        if mode == "chat":
+        if self.sources.get("prometheus"):
+            self._handlers.update({"prom_query": self.prom_query, "prom_range": self.prom_range})
+        if self.sources.get("loki"):
+            self._handlers.update({"loki_query": self.loki_query, "loki_labels": self.loki_labels})
+        if self.sources.get("kubernetes"):
+            self._handlers.update({"k8s_get": self.k8s_get})
+            if self.env.sources.kubernetes.pod_logs:
+                self._handlers["k8s_logs"] = self.k8s_logs
+        if mode in ("chat", "mcp"):
             self._handlers.update({"list_reports": self.list_reports, "get_report": self.get_report,
                                    "knowledge": self.knowledge})
         if mode == "triage":
@@ -314,6 +323,30 @@ class ToolBox:
         return {"ok": True, "id": doc["id"], "status": "proposed",
                 "note": "No effect until the user approves it in the UI."}
 
+    # ------------------------------------------------------------- extra sources (read-only)
+    async def prom_query(self, a):
+        return await self.sources["prometheus"].query(a["expr"], a.get("time"))
+
+    async def prom_range(self, a):
+        return await self.sources["prometheus"].query_range(a["expr"], a.get("from"), a.get("to"), a.get("step"))
+
+    async def loki_query(self, a):
+        return await self.sources["loki"].query(a["query"], a.get("from"), a.get("to"), int(a.get("limit") or 100),
+                                                "forward" if a.get("oldest_first") else "backward")
+
+    async def loki_labels(self, a):
+        return await self.sources["loki"].labels(a.get("name"))
+
+    async def k8s_get(self, a):
+        return await self.sources["kubernetes"].get(a["kind"], a.get("namespace"), a.get("name"),
+                                                    a.get("label_selector"), a.get("field_selector"),
+                                                    int(a.get("limit") or 200))
+
+    async def k8s_logs(self, a):
+        return await self.sources["kubernetes"].logs(a["namespace"], a["pod"], a.get("container"),
+                                                     int(a.get("tail") or 200), bool(a.get("previous")),
+                                                     a.get("since_seconds"))
+
     async def list_reports(self, a):
         runs = await self.repo.list_runs(int(min(a.get("size", 10), 30)))
         return [{"run_id": r["run_id"], "started_at": r.get("started_at"), "status": r.get("status"),
@@ -433,6 +466,34 @@ SPECS: dict[str, dict] = {
                                 "location": {"type": "string", "description": "original location (log file path)"},
                                 "expect": {"type": "string", "enum": ["match", "no_match"]}}, ["event", "expect"])}},
                            ["kind", "title"])},
+    "prom_query": {"name": "prom_query", "description":
+        "Prometheus instant query (PromQL), e.g. node disk usage, pod restarts, up{job=...}. Read-only.",
+        "parameters": _obj({"expr": {"type": "string"}, "time": {"type": "string", "description": "ISO-8601 or now-1h"}},
+                           ["expr"])},
+    "prom_range": {"name": "prom_range", "description":
+        "Prometheus range query: min/max/last and up to 60 sampled points per series (max 20 series).",
+        "parameters": _obj({"expr": {"type": "string"}, "from": {"type": "string"}, "to": {"type": "string"},
+                            "step": {"type": "string", "description": "e.g. 60s, 5m"}}, ["expr"])},
+    "loki_query": {"name": "loki_query", "description":
+        "Loki LogQL query over a time range: log lines (newest first, max 500) or a metric query "
+        "(count_over_time …). Always use a label selector, e.g. {namespace=\"wazuh\"} |= \"error\".",
+        "parameters": _obj({"query": {"type": "string"}, "from": {"type": "string", "description": "ISO-8601 or now-2h"},
+                            "to": {"type": "string"}, "limit": {"type": "integer"},
+                            "oldest_first": {"type": "boolean"}}, ["query"])},
+    "loki_labels": {"name": "loki_labels", "description": "Loki label names, or the values of one label (name).",
+        "parameters": _obj({"name": {"type": "string"}})},
+    "k8s_get": {"name": "k8s_get", "description":
+        "Read-only Kubernetes listing: pods (phase, restarts, last termination reason), nodes (Ready, pressure, "
+        "kernel), events (newest first), deployments/statefulsets/daemonsets/replicasets, jobs/cronjobs, "
+        "services, ingresses, pvcs, namespaces. Secrets and configmaps are never available.",
+        "parameters": _obj({"kind": {"type": "string"}, "namespace": {"type": "string"}, "name": {"type": "string"},
+                            "label_selector": {"type": "string"}, "field_selector": {"type": "string"},
+                            "limit": {"type": "integer"}}, ["kind"])},
+    "k8s_logs": {"name": "k8s_logs", "description":
+        "Last lines of a pod's log (tail ≤ 1000; previous=true for the crashed container).",
+        "parameters": _obj({"namespace": {"type": "string"}, "pod": {"type": "string"}, "container": {"type": "string"},
+                            "tail": {"type": "integer"}, "previous": {"type": "boolean"},
+                            "since_seconds": {"type": "integer"}}, ["namespace", "pod"])},
     "list_reports": {"name": "list_reports", "description": "List of recent daily triage reports.",
         "parameters": _obj({"size": {"type": "integer"}})},
     "get_report": {"name": "get_report", "description": "A full report (the last successful one if run_id is omitted).",

@@ -3,6 +3,23 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] — 2026-10-26
+
+### Added
+- **MCP server** on `POST /mcp` (Streamable HTTP, JSON): every read-only tool for every environment, plus
+  `list_environments`, `inbox`, `audit_report`; `propose_knowledge` creates proposals only. Off unless
+  `MCP_TOKEN` is set (bearer token). `tools/mcp_bridge.py`: stdio bridge for Claude Desktop (stdlib only).
+- **Prometheus, Loki and Kubernetes tools** (`sources:`): PromQL instant/range, LogQL, Kubernetes pods / nodes /
+  events / workloads / jobs / services / ingresses / PVCs and pod logs — read-only, never secrets/configmaps,
+  optional namespace allow-list; shown in the connection test. `components/rbac-readonly` for in-cluster access.
+- **Anomalies** (no AI): rule × agent spikes against the previous 14 days (z-score) and rules new on an agent;
+  in the report and given to the AI first.
+- **Incident record drafts** from any finding (report and inbox): the AI fills an incident template with
+  evidence it queries itself; editable, downloadable, saved on the finding; optional internal **Zammad** ticket
+  (`incident.zammad`). Custom template via `incident.template_file`.
+- **Evaluation**: `python -m app.eval cases.yaml [--model …] [--repeat N] [--out …]` replays past windows and
+  scores recall, noise reported as incidents, steps, tokens and time; nothing is stored.
+
 ## [0.5.0] — 2026-10-26
 
 ### Added

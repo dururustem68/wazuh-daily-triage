@@ -68,6 +68,8 @@ class Collector:
         }
         if self.env.mail:
             tasks["mail_pressure"] = self._mail_pressure(frm, to)
+        if self.env.anomaly:
+            tasks["anomalies"] = self._anomalies(frm, to)
         if self.api:
             tasks["coverage"] = self._coverage(to)
         res = await asyncio.gather(*(self._safe(k, v) for k, v in tasks.items()))
@@ -370,6 +372,51 @@ class Collector:
                                     "oldest": (ag[f"over_{sev}"]["oldest"] or {}).get("value_as_string")}
                               for sev, days in sla.items()}
         return out
+
+    # ------------------------------------------------------------------ anomalies (no AI)
+    async def _anomalies(self, frm, to, days: int = 14) -> dict:
+        """rule × agent counts in the window vs. the daily mean / spread of the previous `days` days."""
+        hours = max(1.0, (to - frm).total_seconds() / 3600)
+        b_from = frm - timedelta(days=days)
+        pair = {"r": {"terms": {"field": "rule.id", "size": 150},
+                      "aggs": {"a": {"terms": {"field": "agent.name", "size": 40}},
+                               "d": {"terms": {"field": "rule.description", "size": 1}},
+                               "l": {"max": {"field": "rule.level"}}}}}
+        cur, base = await asyncio.gather(
+            self.ix.search(self.env.alerts_index, {"size": 0, "query": rng(frm, to), "aggs": pair}),
+            self.ix.search(self.env.alerts_index, {"size": 0, "query": rng(b_from, frm), "aggs": {
+                "r": {"terms": {"field": "rule.id", "size": 400},
+                      "aggs": {"a": {"terms": {"field": "agent.name", "size": 60},
+                                     "aggs": {"day": {"date_histogram": {
+                                         "field": TS, "fixed_interval": "1d", "min_doc_count": 0,
+                                         "extended_bounds": {"min": iso(b_from), "max": iso(frm - timedelta(seconds=1))}}}}}}}}}))
+        hist: dict[tuple, list[int]] = {}
+        for rb in _b(base["aggregations"]["r"]):
+            for ab in _b(rb["a"]):
+                days_ = [d["doc_count"] for d in _b(ab["day"])]
+                hist[(rb["key"], ab["key"])] = days_[1:-1] if len(days_) > 3 else days_   # edges are partial days
+        spikes, new_pairs = [], []
+        for rb in _b(cur["aggregations"]["r"]):
+            lvl = int(rb["l"]["value"] or 0)
+            desc = (_b(rb["d"]) or [{"key": ""}])[0]["key"]
+            for ab in _b(rb["a"]):
+                n = ab["doc_count"]
+                per_day = n * 24 / hours
+                h = hist.get((rb["key"], ab["key"]))
+                if not h or not any(h):
+                    if n >= 5 or lvl >= self.env.high_level:
+                        new_pairs.append({"rule": rb["key"], "agent": ab["key"], "count": n, "level": lvl, "desc": desc})
+                    continue
+                vals = h or [0]
+                mean = sum(vals) / len(vals)
+                sd = (sum((v - mean) ** 2 for v in vals) / len(vals)) ** 0.5
+                z = (per_day - mean) / max(sd, 1.0, mean * 0.1)
+                if z >= 3 and n >= 20:
+                    spikes.append({"rule": rb["key"], "agent": ab["key"], "count": n, "per_day": round(per_day),
+                                   "baseline_per_day": round(mean, 1), "z": round(z, 1), "level": lvl, "desc": desc})
+        spikes.sort(key=lambda x: (-x["z"]))
+        new_pairs.sort(key=lambda x: (-x["level"], -x["count"]))
+        return {"baseline_days": days, "spikes": spikes[:25], "new_pairs": new_pairs[:25]}
 
     # ------------------------------------------------------------------ e-mail channel saturation
     async def _mail_pressure(self, frm, to) -> dict:

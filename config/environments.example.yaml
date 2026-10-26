@@ -87,6 +87,15 @@ environments:
     #   # kubeconfig: ~/.kube/config
     #   # namespace: wazuh
     #   # master_pod: wazuh-manager-master-0
+    # sources:                  # extra read-only data for the AI — docs/sources.md
+    #   prometheus: {url: "http://prometheus.monitoring:9090"}
+    #   loki: {url: "http://loki-gateway.monitoring"}
+    #   kubernetes: {enabled: true, namespaces: []}   # needs components/rbac-readonly
+    # incident:                 # "Incident record draft" on findings
+    #   id_prefix: "INC-"
+    #   template_file: incident-template.md   # optional; {id} {title} {by} are filled in (or template: inline)
+    #   zammad: {url: "https://zammad.example.com", token: "${ZAMMAD_TOKEN:-}", group: "SecOps", customer: "secops@example.com"}
+    # anomaly: true             # rule × agent spikes / new pairs vs. 14 days (no AI)
     # llm:                      # optional per-environment model, e.g. a local model for regulated data
     #   provider: openai
     #   base_url: http://ollama:11434/v1

@@ -1,0 +1,8 @@
+{# incident record block for one finding; needs env, run_id, f #}
+<div class="incident" data-incident="/api/e/{{ env.id }}/r/{{ run_id }}/f/{{ f.id }}/incident"
+     data-zammad="{{ '1' if env.incident.zammad else '0' }}" data-file="{{ (f.incident.id if f.incident else 'incident') ~ '.md' }}">
+  <button class="btn small" data-inc-open>{% if f.incident %}{{ _('inc.open', id=f.incident.id) }}{% else %}{{ _('inc.create') }}{% endif %}</button>
+  {% if f.incident and f.incident.ticket %}<a class="small" href="{{ f.incident.ticket.url }}" target="_blank" rel="noopener">Zammad #{{ f.incident.ticket.number }}</a>{% endif %}
+  <textarea class="inc-md" hidden>{{ f.incident.md if f.incident else '' }}</textarea>
+  <div class="inc-box" hidden></div>
+</div>

@@ -243,6 +243,48 @@ document.addEventListener("DOMContentLoaded", () => {
     catch (e) { b.disabled = false; alert(e.message); }
   }));
 
+  // incident record drafts
+  document.querySelectorAll("[data-incident]").forEach(box => {
+    const url = box.dataset.incident, md = box.querySelector(".inc-md"), area = box.querySelector(".inc-box");
+    const render = () => {
+      area.hidden = false;
+      area.innerHTML = `<textarea rows="22" class="mono">${escapeHtml(md.value)}</textarea>
+        <div class="row small"><button class="btn small primary" data-inc-save>${escapeHtml(tr("save"))}</button>
+        <button class="btn small" data-inc-copy>${escapeHtml(tr("copy"))}</button>
+        <button class="btn small" data-inc-dl>${escapeHtml(tr("inc_download"))}</button>
+        <button class="btn small" data-inc-regen>${escapeHtml(tr("inc_regen"))}</button>
+        ${box.dataset.zammad === "1" ? `<button class="btn small" data-inc-ticket>${escapeHtml(tr("inc_ticket"))}</button>` : ""}
+        <span class="small muted inc-msg"></span></div>`;
+      const ta = area.querySelector("textarea"), msg = area.querySelector(".inc-msg");
+      area.querySelector("[data-inc-save]").addEventListener("click", async () => {
+        try { await api(url + "/save", "POST", { md: ta.value }); md.value = ta.value; msg.textContent = tr("saved"); }
+        catch (e) { msg.textContent = e.message; }
+      });
+      area.querySelector("[data-inc-copy]").addEventListener("click", ev => copyText(ta.value, ev.target));
+      area.querySelector("[data-inc-dl]").addEventListener("click", () => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([ta.value], { type: "text/markdown" }));
+        a.download = box.dataset.file; a.click(); URL.revokeObjectURL(a.href);
+      });
+      area.querySelector("[data-inc-regen]").addEventListener("click", () => generate());
+      const tk = area.querySelector("[data-inc-ticket]");
+      if (tk) tk.addEventListener("click", async () => {
+        tk.disabled = true;
+        try { const t = await api(url + "/ticket", "POST", { md: ta.value }); msg.innerHTML = `<a href="${escapeHtml(t.url)}" target="_blank" rel="noopener">Zammad #${escapeHtml(String(t.number))}</a>`; }
+        catch (e) { msg.textContent = e.message; tk.disabled = false; }
+      });
+    };
+    const generate = async () => {
+      area.hidden = false; area.innerHTML = `<p class="small">⏳ ${escapeHtml(tr("inc_working"))}</p>`;
+      try { const r = await api(url, "POST"); md.value = r.md; box.dataset.file = r.id + ".md"; render(); }
+      catch (e) { area.innerHTML = `<p class="bad small">${escapeHtml(e.message)}</p>`; }
+    };
+    box.querySelector("[data-inc-open]").addEventListener("click", () => {
+      if (!area.hidden) { area.hidden = true; return; }
+      md.value ? render() : generate();
+    });
+  });
+
   // recommendation inbox: one decision applies to every occurrence, then the next item
   const card = document.getElementById("inbox");
   if (card) card.querySelectorAll("[data-status]").forEach(b => b.addEventListener("click", async () => {

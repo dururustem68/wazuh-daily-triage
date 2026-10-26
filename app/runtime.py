@@ -31,6 +31,23 @@ log = logging.getLogger("wdt")
 UTC = UTC
 
 
+def build_sources(env: Environment) -> dict:
+    """Prometheus / Loki / Kubernetes clients for one environment (only those configured)."""
+    from .sources import Kubernetes, Loki, Prometheus, SourceError
+    out: dict = {}
+    sc = env.sources
+    if sc.prometheus:
+        out["prometheus"] = Prometheus(sc.prometheus)
+    if sc.loki:
+        out["loki"] = Loki(sc.loki)
+    if sc.kubernetes.enabled:
+        try:
+            out["kubernetes"] = Kubernetes(sc.kubernetes)
+        except (SourceError, OSError) as e:
+            log.warning("%s: Kubernetes source disabled: %s", env.id, e)
+    return out
+
+
 class EnvRuntime:
     def __init__(self, env: Environment, ix, api, store):
         self.env = env
@@ -41,6 +58,7 @@ class EnvRuntime:
         self.lock = asyncio.Lock()
         self.deploy_lock = asyncio.Lock()
         self.current_run: str | None = None
+        self.sources: dict = build_sources(env) if not isinstance(store, MemoryStore) else {}
 
 
 class Runtime:
@@ -264,7 +282,7 @@ class Runtime:
             sysmsg = system_prompt("triage", env, env.context_text(self.settings.base_dir),
                                    [k for k in knowledge if k["kind"] != "answer"], self.settings.app.timezone, lang)
             usr = triage_user_message(_compact(collected), prev, answers, requests)
-            tb = ToolBox(env, rt.ix, rt.api, repo, mode="triage", run_id=run_id)
+            tb = ToolBox(env, rt.ix, rt.api, repo, mode="triage", run_id=run_id, sources=rt.sources)
             try:
                 res = await run_agent(self.llm_for(env), sysmsg, [{"role": "user", "content": usr}], tb,
                                       llm_cfg.max_tool_steps, stop_on="submit_report")
@@ -321,7 +339,7 @@ class Runtime:
         sysmsg += f"\n\nCurrent time (UTC): {iso(datetime.now(UTC))}"
         msgs = [{"role": m["role"], "content": m["content"]} for m in hist if m["role"] in ("user", "assistant")]
         msgs.append({"role": "user", "content": text})
-        tb = ToolBox(rt.env, rt.ix, rt.api, rt.repo, mode="chat")
+        tb = ToolBox(rt.env, rt.ix, rt.api, rt.repo, mode="chat", sources=rt.sources)
         try:
             res = await run_agent(self.llm_for(rt.env), sysmsg, msgs, tb, self.llm_cfg(rt.env).max_tool_steps)
             answer = res.text or f"_{t(lang, 'chat.empty')}_"
@@ -712,6 +730,71 @@ class Runtime:
         from . import audit
         return await audit.build(self, env_id, month)
 
+    # ------------------------------------------------------------ incident records
+    async def incident_draft(self, env_id: str, run_id: str, fid: str, actor: str = "", lang: str | None = None) -> dict:
+        from . import incident as inc
+        from .i18n import OUTPUT_LANGUAGE
+        rt = self.get(env_id)
+        lang = lang or self.lang(rt.env)
+        run = await rt.repo.get_run(run_id)
+        f = next((x for x in (run or {}).get("findings") or [] if x.get("id") == fid), None)
+        if not f:
+            raise KeyError(fid)
+        cfg = rt.env.incident
+        tpl = cfg.template or None
+        p = rt.env.resolve(self.settings.base_dir, cfg.template_file)
+        if p and p.exists():
+            tpl = p.read_text(encoding="utf-8")
+        rid = (f.get("incident") or {}).get("id") or inc.record_id(cfg.id_prefix)
+        skel = inc.skeleton(lang, tpl, rid, f.get("title", ""), actor)
+        sysmsg = inc.SYSTEM.format(language=OUTPUT_LANGUAGE.get(lang, "English"), tz=self.settings.app.timezone)
+        ctx = rt.env.context_text(self.settings.base_dir)
+        usr = (f"# Environment\n{rt.env.name}\n{ctx[:4000]}\n\n# Finding (from the daily review {run.get('started_at')})\n"
+               f"{json.dumps({k: f.get(k) for k in ('title', 'label', 'severity', 'detail', 'evidence', 'rule_ids', 'agents', 'recommendation', 'user_status', 'user_note')}, ensure_ascii=False)}\n\n"
+               f"# Review window\n{json.dumps(run.get('window'), ensure_ascii=False)}\n\n# TEMPLATE\n{skel}")
+        tb = ToolBox(rt.env, rt.ix, rt.api, rt.repo, mode="chat", sources=rt.sources)
+        tb._handlers.pop("propose_knowledge", None)
+        try:
+            if self.llm_cfg(rt.env).provider == "mock":   # demo: no model to write it
+                raise LLMError("demo mode")
+            res = await run_agent(self.llm_for(rt.env), sysmsg, [{"role": "user", "content": usr}], tb,
+                                  min(self.llm_cfg(rt.env).max_tool_steps, 12))
+            md = inc.clean(res.text) or inc.deterministic(lang, tpl, rid, f, run, actor)
+            ai = True
+        except LLMError as e:
+            log.warning("incident draft without AI: %s", e)
+            md, ai = inc.deterministic(lang, tpl, rid, f, run, actor), False
+        rec = {"id": rid, "md": md, "at": iso(datetime.now(UTC)), "by": actor, "ai": ai,
+               **({"ticket": f["incident"]["ticket"]} if (f.get("incident") or {}).get("ticket") else {})}
+        async with self.run_lock(run_id):
+            run = await rt.repo.get_run(run_id)
+            for x in run.get("findings") or []:
+                if x.get("id") == fid:
+                    x["incident"] = rec
+            await rt.repo.save_run(run)
+        return rec
+
+    async def incident_ticket(self, env_id: str, run_id: str, fid: str, md: str | None = None) -> dict:
+        from . import incident as inc
+        rt = self.get(env_id)
+        z = rt.env.incident.zammad
+        if not z:
+            raise PermissionError("Zammad is not configured (incident.zammad)")
+        async with self.run_lock(run_id):
+            run = await rt.repo.get_run(run_id)
+            f = next((x for x in (run or {}).get("findings") or [] if x.get("id") == fid), None)
+            if not f or not f.get("incident"):
+                raise KeyError(fid)
+            if f["incident"].get("ticket"):
+                return f["incident"]["ticket"]
+            if md:
+                f["incident"]["md"] = md
+            t = await inc.zammad_ticket(z, f"{f['incident']['id']} — {f.get('title', '')}", f["incident"]["md"],
+                                        transport=self.notify_transport)
+            f["incident"]["ticket"] = t
+            await rt.repo.save_run(run)
+        return t
+
     async def chat_from_finding(self, env_id: str, run_id: str, fid: str, lang: str | None = None) -> str:
         """Open a chat session pre-filled with a finding and its manual checks (no LLM call)."""
         rt = self.get(env_id)
@@ -822,6 +905,23 @@ class Runtime:
         await step("vulns", vulns())
         await step("storage", storage())
         await step("api", api())
+        src = rt.sources
+        if src.get("prometheus"):
+            async def prom():
+                r = await src["prometheus"].query("count(up == 1)")
+                return f"{src['prometheus'].c.base_url} — {r['series'][0]['value'] if r['series'] else 0} targets up"
+            await step("prometheus", prom())
+        if src.get("loki"):
+            async def loki():
+                return f"{src['loki'].c.base_url} — {len(await src['loki'].labels())} labels"
+            await step("loki", loki())
+        if env.sources.kubernetes.enabled:
+            async def k8s():
+                if not src.get("kubernetes"):
+                    raise RuntimeError("Kubernetes source could not start (see the log)")
+                r = await src["kubernetes"].get("nodes", limit=50)
+                return f"{r['count']} nodes, " + f"{sum(1 for n in r['items'] if n.get('ready') == 'True')} ready"
+            await step("kubernetes", k8s())
         if with_llm:
             await step("llm", llm())
         return out
@@ -875,6 +975,8 @@ class Runtime:
             await rt.ix.close()
             if rt.api:
                 await rt.api.close()
+            for src in rt.sources.values():
+                await src.close()
 
 
 def _neg_ts(ts: str | None) -> float:

@@ -8,14 +8,15 @@ deploy/kubernetes/
 ├── components/                   optional building blocks for an overlay
 │   ├── networkpolicy/            only the ingress controller may reach the pod; DNS, Wazuh, HTTPS, SMTP out
 │   ├── ingress-nginx/            ingress-nginx + TLS (cert-manager), app password login, oauth2-proxy option
-│   └── ingress-traefik-authentik/ Traefik IngressRoute + Authentik forward auth (SSO, AUTH_DISABLED=true)
+│   ├── ingress-traefik-authentik/ Traefik IngressRoute + Authentik forward auth (SSO, AUTH_DISABLED=true)
+│   └── rbac-readonly/            service account + read-only ClusterRole for the Kubernetes tools (docs/sources.md)
 └── example/                      an overlay: namespace, environments.yaml, context, seed, secret.env
 ```
 
 ```sh
 cp -r deploy/kubernetes/example ~/triage-overlay && cd ~/triage-overlay
 # point the base at the repository:
-sed -i 's#  - ../base .*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.5.0#' kustomization.yaml
+sed -i 's#  - ../base .*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.6.0#' kustomization.yaml
 cp secret.env.example secret.env && vi secret.env environments.yaml context.md
 kubectl apply -k .
 kubectl -n wazuh-daily-triage rollout status deploy/wazuh-daily-triage
@@ -32,7 +33,11 @@ Enable them in your overlay's `kustomization.yaml` (`components:`). They contain
 |---|---|---|
 | `networkpolicy` | NetworkPolicy: ingress only from the controller namespace; egress DNS, Wazuh 9200/55000, 443, 587/465 | — |
 | `ingress-nginx` | Ingress (class `nginx`, TLS secret `triage-tls`, `cert-manager.io/cluster-issuer`) | `COOKIE_SECURE=true`, `FORWARDED_ALLOW_IPS` |
-| `ingress-traefik-authentik` | Traefik `Middleware` (forwardAuth) + `IngressRoute`, Authentik outpost route | `AUTH_DISABLED=true`, `COOKIE_SECURE=true`, `NOTIFY_UI_URL` |
+| `ingress-traefik-authentik` | Traefik `Middleware` (forwardAuth) + `IngressRoute`, Authentik outpost route, `/mcp` route | `AUTH_DISABLED=true`, `COOKIE_SECURE=true`, `NOTIFY_UI_URL` |
+| `rbac-readonly` | ServiceAccount, ClusterRole (`get`/`list` pods, pods/log, nodes, events, workloads, jobs, services, ingresses, PVCs — no secrets) | mounts the token into the pod |
+
+With `networkpolicy` and `sources:` enabled, add egress for Prometheus / Loki ports and the Kubernetes API
+(usually 6443 on the control-plane nodes).
 
 With SSO in front (`AUTH_DISABLED=true`) always add `networkpolicy` as well — otherwise anything inside the
 cluster can reach the UI without logging in. The SSO user name (`X-authentik-username`, `X-Forwarded-User`,
