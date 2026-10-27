@@ -3,6 +3,16 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- `.github/workflows/ci.yml` was invalid YAML — an unquoted colon in the `mypy` step name — so GitHub created the
+  run under the file path with **no jobs**. The name is quoted now and `tests/test_ci.py` parses every workflow in
+  `pytest`, before the push.
+- The CodeQL workflow re-added in 0.7.0 collided with GitHub's default setup ("CodeQL analyses from advanced
+  configurations cannot be processed when the default setup is enabled"). Removed again, so default setup keeps
+  scanning python, actions and javascript-typescript.
+
 ## [0.7.0] — 2026-10-27
 
 ### Added
