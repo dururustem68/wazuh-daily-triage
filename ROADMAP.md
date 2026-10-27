@@ -43,7 +43,7 @@ Where the project is going, roughly ordered by impact. This is a living document
 |---|---|---|
 | ✅ | Read-only by default; separate least-privilege deploy user; prompt-injection-aware agent; strict CSP. | see [SECURITY.md](SECURITY.md). |
 | ✅ | defusedxml (no DTD/entities), bounded regexes, signed session cookie, login throttling. | |
-| 🚧 | **CodeQL + dependency audit in CI**, SBOM, signed releases. | signals enterprise readiness. |
+| ✅ | **CodeQL + dependency audit in CI**, SBOM (signed releases still planned). | signals enterprise readiness. |
 | ⬜ | Published eval results (`python -m app.eval`) per model in the README. | nobody else shows their numbers this openly. |
 
 ## Earlier releases
@@ -51,4 +51,5 @@ Where the project is going, roughly ordered by impact. This is a living document
 - v0.5.0 — mail saturation, coverage, vuln SLA, live verification, promotion package, monthly audit report.
 - v0.6.0 — MCP server, Prometheus/Loki/Kubernetes tools, anomalies, incident drafts, evaluation.
 - v0.6.1 — CodeQL fixes, defusedxml, bounded regexes, safe language cookie.
-- v0.7.0 (next) — Slack/Discord/webhook/ntfy notifications, Spanish & German UI, CodeQL + dependency audit + SBOM.
+- v0.6.3 — Slack/Discord/webhook/ntfy notifications, Spanish & German UI, Helm chart + chart publishing, Jira,
+  PDF export, read-only viewer role, dependency audit + SBOM.

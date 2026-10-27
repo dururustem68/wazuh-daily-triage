@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.6.3] — 2026-10-27
 
 ### Added
 - Notification channels **Slack**, **Discord**, **generic JSON webhook** and **ntfy** (push), alongside
@@ -19,8 +19,17 @@ All notable changes to this project are documented here. The format follows
   session cookie now carries the role and mutating requests are rejected for viewers.
 
 ### Changed
-- CI now runs **CodeQL** and a **dependency audit** (`pip-audit`); releases attach an **SPDX SBOM** artifact.
+- CI runs a **dependency audit** (`pip-audit`, non-blocking) and releases attach an **SPDX SBOM** artifact;
+  CodeQL comes from GitHub's **default setup** (the custom workflow was removed — advanced configurations cannot
+  upload SARIF while default setup is enabled).
+- The Helm chart is published to a GitHub Pages Helm repository (`helm repo add wazuh-daily-triage …`) by a
+  self-contained `helm package` + `helm repo index` workflow.
 - Added `ROADMAP.md`.
+
+### Fixed
+- `pypa/gh-action-pip-audit` was pinned to a non-existent tag (`v1.1.1`), which failed every `test` matrix job.
+- The chart-release workflow failed at the `chart-releaser` step; replaced with an explicit publish script.
+- The monthly audit PDF was redesigned (title band, KPI cards, zebra tables, page footer).
 
 ## [0.6.1] — 2026-10-27
 

@@ -18,17 +18,36 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Configure Git
-        run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
       - name: Install Helm
         uses: azure/setup-helm@v4
         with:
           version: v3.15.0
-      - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.7.0
-        with:
-          charts_dir: deploy/helm
+      - name: Publish the chart to the gh-pages Helm repository
         env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          PAGES_URL: https://dururustem68.github.io/wazuh-daily-triage
+        run: |
+          set -euo pipefail
+          CHART_DIR=$(ls -d deploy/helm/*/ | head -n1)
+          NAME=$(basename "$CHART_DIR")
+          VERSION=$(helm show chart "$CHART_DIR" | awk '/^version:/ {print $2}')
+          echo "chart: $NAME $VERSION"
+          mkdir -p /tmp/pkg
+          helm package "$CHART_DIR" -d /tmp/pkg
+
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+          # Publish from the gh-pages branch, keeping previously released versions.
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages
+            git checkout -B gh-pages origin/gh-pages
+          else
+            git checkout --orphan gh-pages
+            git rm -rf . --quiet || true
+          fi
+          cp /tmp/pkg/*.tgz .
+          helm repo index . --url "$PAGES_URL"
+          git add .
+          git commit -m "helm: publish $NAME $VERSION" || { echo "nothing new to publish"; exit 0; }
+          git push origin gh-pages
+          echo "published $NAME $VERSION to $PAGES_URL"
