@@ -14,22 +14,27 @@ outbound requests.
 from __future__ import annotations
 
 import json
+import logging
 import xml.etree.ElementTree as ET
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
-from typing import Any
+from typing import Any, Literal
 
 from defusedxml import ElementTree as SafeET
 from defusedxml.common import DefusedXmlException
 
 from ..collector import TS, _b, _parse, iso
 from ..config import Environment
+from ..query_guard import QueryError, check_interval, field, histogram_buckets, query_string, size, time_range
 from ..redact import redact
 from ..store import KNOWLEDGE_KINDS, Repo
 from ..wazuh.api import WazuhAPI
 from ..wazuh.indexer import Indexer
 
 MAX_RESULT_CHARS = 14000
+log = logging.getLogger("wdt")
+
+ToolMode = Literal["triage", "tools", "mcp"]
 
 TIME_PROPS = {
     "from": {"type": "string", "description": "Start: ISO-8601 or OpenSearch date math (now-24h). Default now-24h"},
@@ -50,15 +55,19 @@ EVENT_FIELDS = [TS, "agent.name", "agent.id", "rule.id", "rule.level", "rule.des
                 "data.vulnerability.cve", "data.vulnerability.severity", "data.vulnerability.package.name"]
 
 
-def _filters(a: dict) -> list[dict]:
-    f: list[dict] = [{"range": {TS: {"gte": a.get("from") or "now-24h", "lte": a.get("to") or "now"}}}]
-    if a.get("query"):
-        f.append({"query_string": {"query": a["query"], "analyze_wildcard": True,
-                                   "default_operator": "AND"}})
+def _filters(a: dict, limits=None) -> list[dict]:
+    """Build the filter clauses; the time window, field names and query text pass the guard rails."""
+    max_hours = int(getattr(limits, "max_range_hours", 24 * 14))
+    frm, to = time_range(a.get("from") or "now-24h", a.get("to") or "now", max_hours)
+    extra = getattr(limits, "extra_fields", None)
+    f: list[dict] = [{"range": {TS: {"gte": iso(frm), "lte": iso(to)}}}]
+    q = query_string(a.get("query"))
+    if q:
+        f.append({"query_string": {"query": q, "analyze_wildcard": True, "default_operator": "AND"}})
     if a.get("rule_ids"):
-        f.append({"terms": {"rule.id": [str(x) for x in a["rule_ids"]]}})
+        f.append({"terms": {"rule.id": [str(x) for x in a["rule_ids"]][:50]}})
     if a.get("agent"):
-        f.append({"term": {"agent.name": a["agent"]}})
+        f.append({"term": {field("agent.name", extra): str(a["agent"])}})
     if a.get("min_level") is not None:
         f.append({"range": {"rule.level": {"gte": int(a["min_level"])}}})
     return f
@@ -86,7 +95,7 @@ def _compact_event(src: dict) -> dict:
 
 class ToolBox:
     def __init__(self, env: Environment, ix: Indexer, api: WazuhAPI | None, repo: Repo,
-                 mode: str = "chat", run_id: str | None = None, sources: dict | None = None):
+                 mode: ToolMode = "tools", run_id: str | None = None, sources: dict | None = None):
         self.env = env
         self.sources = sources or {}
         self.ix = ix
@@ -94,6 +103,7 @@ class ToolBox:
         self.repo = repo
         self.mode = mode
         self.run_id = run_id
+        self.limits = env.query
         self.submitted: dict | None = None
         self.rejected_submits = 0
         self.proposals: list[dict] = []
@@ -118,7 +128,7 @@ class ToolBox:
             self._handlers.update({"k8s_get": self.k8s_get})
             if self.env.sources.kubernetes.pod_logs:
                 self._handlers["k8s_logs"] = self.k8s_logs
-        if mode in ("chat", "mcp"):
+        if mode in ("tools", "mcp"):
             self._handlers.update({"list_reports": self.list_reports, "get_report": self.get_report,
                                    "knowledge": self.knowledge})
         if mode == "triage":
@@ -135,7 +145,11 @@ class ToolBox:
             return json.dumps({"error": f"unknown tool: {name}"})
         try:
             res = await h(args or {})
+        except QueryError as e:
+            res = {"error": str(e), "hint": "narrow the window, use an allow-listed field or a coarser interval"}
         except Exception as e:  # noqa: BLE001
+            # The model gets a short error; the operator needs the traceback to see *why* a tool broke.
+            log.warning("tool %s failed (env=%s, mode=%s): %s", name, self.env.id, self.mode, e, exc_info=True)
             res = {"error": f"{type(e).__name__}: {e}"}
         txt = json.dumps(res, ensure_ascii=False, default=str)
         if self.env.redact:
@@ -145,38 +159,47 @@ class ToolBox:
         return txt
 
     # ------------------------------------------------------------- tools
+    def _span(self, a: dict) -> float:
+        frm, to = time_range(a.get("from") or "now-24h", a.get("to") or "now",
+                             int(getattr(self.limits, "max_range_hours", 24 * 14)))
+        return max(0.01, (to - frm).total_seconds() / 3600)
+
     async def search_alerts(self, a):
-        size = max(1, min(int(a.get("size", 10)), 25))
+        size_n = size(a.get("size", 10), min(25, int(getattr(self.limits, "max_size", 25))), "size")
         r = await self.ix.search(self.env.alerts_index, {
-            "size": size, "sort": [{TS: "asc" if a.get("oldest_first") else "desc"}],
-            "query": {"bool": {"filter": _filters(a)}}, "_source": EVENT_FIELDS})
+            "size": size_n, "sort": [{TS: "asc" if a.get("oldest_first") else "desc"}],
+            "query": {"bool": {"filter": _filters(a, self.limits)}}, "_source": EVENT_FIELDS})
         return {"total": r["hits"]["total"]["value"],
                 "events": [_compact_event(h["_source"]) for h in r["hits"]["hits"]]}
 
     async def aggregate_alerts(self, a):
-        field = a["field"]
-        size = max(1, min(int(a.get("size", 20)), 50))
-        agg: dict = {"terms": {"field": field, "size": size}}
-        if a.get("sub_field"):
-            agg["aggs"] = {"sub": {"terms": {"field": a["sub_field"], "size": 5}}}
+        extra = getattr(self.limits, "extra_fields", None)
+        fld = field(a["field"], extra)
+        sub = field(a["sub_field"], extra) if a.get("sub_field") else None
+        size_n = size(a.get("size", 20), int(getattr(self.limits, "max_terms_size", 50)), "size")
+        agg: dict = {"terms": {"field": fld, "size": size_n}}
+        if sub:
+            agg["aggs"] = {"sub": {"terms": {"field": sub, "size": 5}}}
         agg.setdefault("aggs", {})
         agg["aggs"]["first"] = {"min": {"field": TS}}
         agg["aggs"]["last"] = {"max": {"field": TS}}
-        r = await self.ix.search(self.env.alerts_index, {"size": 0, "query": {"bool": {"filter": _filters(a)}},
-                                                        "aggs": {"x": agg}})
+        body = {"size": 0, "query": {"bool": {"filter": _filters(a, self.limits)}}, "aggs": {"x": agg}}
+        histogram_buckets(body, self._span(a), self.limits)   # final check on the aggregation tree
+        r = await self.ix.search(self.env.alerts_index, body)
         out = []
         for b in _b(r["aggregations"]["x"]):
             row = {"key": b["key"], "count": b["doc_count"], "first": b["first"].get("value_as_string"),
                    "last": b["last"].get("value_as_string")}
-            if "sub" in b:
-                row[a["sub_field"]] = {s["key"]: s["doc_count"] for s in _b(b["sub"])}
+            if sub and "sub" in b:
+                row[sub] = {s["key"]: s["doc_count"] for s in _b(b["sub"])}
             out.append(row)
-        return {"total": r["hits"]["total"]["value"], "field": field, "buckets": out,
+        return {"total": r["hits"]["total"]["value"], "field": fld, "buckets": out,
                 "other": r["aggregations"]["x"].get("sum_other_doc_count", 0)}
 
     async def rule_timeline(self, a):
-        interval = a.get("interval", "1h")
-        r = await self.ix.search(self.env.alerts_index, {"size": 0, "query": {"bool": {"filter": _filters(a)}},
+        interval = check_interval(str(a.get("interval", "1h")), str(getattr(self.limits, "min_interval", "1m")),
+                                  self._span(a), int(getattr(self.limits, "max_buckets", 200)))
+        r = await self.ix.search(self.env.alerts_index, {"size": 0, "query": {"bool": {"filter": _filters(a, self.limits)}},
             "aggs": {"h": {"date_histogram": {"field": TS, "fixed_interval": interval, "min_doc_count": 1}}}})
         b = [{"t": x["key_as_string"], "n": x["doc_count"]} for x in _b(r["aggregations"]["h"])]
         return {"total": r["hits"]["total"]["value"], "interval": interval, "buckets": b[-200:],
@@ -185,7 +208,10 @@ class ToolBox:
     async def ip_profile(self, a):
         ip = a["ip"].strip()
         q = {"prefix": {"data.srcip": ip}} if ip.endswith((".", ":")) else {"term": {"data.srcip": ip}}
-        f = _filters({k: a.get(k) for k in ("from", "to")}) + [q]
+        f = _filters({k: a.get(k) for k in ("from", "to")}, self.limits) + [q]
+        iv = str(a.get("interval", "30m"))
+        check_interval(iv, str(getattr(self.limits, "min_interval", "1m")), self._span(a),
+                       int(getattr(self.limits, "max_buckets", 200)))
         r = await self.ix.search(self.env.alerts_index, {"size": 3, "sort": [{TS: "desc"}], "_source": EVENT_FIELDS,
             "query": {"bool": {"filter": f}}, "aggs": {
                 "rules": {"terms": {"field": "rule.id", "size": 10}, "aggs": {"d": {"terms": {"field": "rule.description", "size": 1}}}},
@@ -195,7 +221,7 @@ class ToolBox:
                 "agents": {"terms": {"field": "agent.name", "size": 10}},
                 "users": {"terms": {"field": "data.srcuser", "size": 10}},
                 "ips": {"terms": {"field": "data.srcip", "size": 10}},
-                "h": {"date_histogram": {"field": TS, "fixed_interval": a.get("interval", "30m"), "min_doc_count": 1}},
+                "h": {"date_histogram": {"field": TS, "fixed_interval": iv, "min_doc_count": 1}},
             }})
         ag = r["aggregations"]
         return {
@@ -214,7 +240,7 @@ class ToolBox:
 
     async def correlate_around(self, a):
         ts = _parse(a["timestamp"])
-        m = int(a.get("minutes", 30))
+        m = max(1, min(int(a.get("minutes", 30)), 360))
         f = [{"range": {TS: {"gte": iso(ts - timedelta(minutes=m)), "lte": iso(ts + timedelta(minutes=m))}}}]
         if a.get("agent"):
             f.append({"term": {"agent.name": a["agent"]}})

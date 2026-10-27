@@ -50,6 +50,8 @@
             <span class="pill outline">{{ _('sev.' ~ f.severity) }}</span>
             <a class="bt" href="/e/{{ c.env.id }}/inbox?i={{ it.idx }}">{{ f.title }}</a>
             {% if it.seen > 1 %}<span class="muted small">×{{ it.seen }}</span>{% endif %}
+            <span class="spacer"></span>
+            <button class="btn small" data-copy-text="{{ ftext(f, context=_('rep.context', env=c.env.name, when=it.run_started|ts)) }}">{{ _('rep.copy') }}</button>
           </div>
           {% if f.detail %}<div class="bd">{{ (f.detail|md|striptags)|truncate(260) }}</div>{% endif %}
           {% if f.manual_checks %}<div class="small muted">{{ _('dash.has_checks', n=f.manual_checks|length) }}</div>{% endif %}
@@ -67,6 +69,7 @@
           {% if x.q.why %}<div class="bd">{{ x.q.why }}</div>{% endif %}
           <div class="row qa" data-answer="/api/e/{{ c.env.id }}/r/{{ x.run_id }}/q/{{ x.q.id }}">
             <textarea rows="1" placeholder="{{ _('rep.answer_ph') }}"></textarea><button class="btn small primary" data-save>{{ _('rep.send') }}</button>
+            <button class="btn small" data-copy-text="{{ qtext(x.q, context=_('rep.context', env=c.env.name, when=x.at|ts)) }}">{{ _('rep.copy') }}</button>
           </div>
         </div>
         {% else %}<div class="bempty">{{ _('dash.q_none') }}</div>{% endfor %}

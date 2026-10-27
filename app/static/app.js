@@ -90,6 +90,11 @@ document.addEventListener("DOMContentLoaded", () => {
     copyText(b.previousElementSibling.textContent, b);
   }));
 
+  // copy a finding / question as plain text
+  document.querySelectorAll("[data-copy-text]").forEach(b => b.addEventListener("click", () => {
+    copyText(b.dataset.copyText, b);
+  }));
+
   // knowledge base
   const kf = document.querySelector("[data-kadd]");
   if (kf) kf.addEventListener("submit", async ev => {
@@ -148,8 +153,7 @@ document.addEventListener("DOMContentLoaded", () => {
           + (v.deploy_enabled ? "" : `<p class="muted">${escapeHtml(tr("rd_disabled"))}</p>`)
           + `<p class="muted">${escapeHtml(tr("rd_cmds_note"))}</p><pre class="code">${escapeHtml(v.commands)}</pre>`
           + `<button class="btn small" data-copy-out>${escapeHtml(tr("copy"))}</button>`);
-        out.querySelector("[data-copy-out]").addEventListener("click", ev => {
-          navigator.clipboard.writeText(v.commands); ev.target.textContent = tr("copied"); });
+        out.querySelector("[data-copy-out]").addEventListener("click", ev => copyText(v.commands, ev.target));
       } catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); }
       cmds.disabled = false;
     });
@@ -235,13 +239,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // open a chat about a finding
-  document.querySelectorAll("[data-chat-finding]").forEach(b => b.addEventListener("click", async () => {
-    b.disabled = true;
-    try { const r = await api(b.dataset.chatFinding, "POST"); location.href = r.url; }
-    catch (e) { b.disabled = false; alert(e.message); }
-  }));
-
   // incident record drafts
   document.querySelectorAll("[data-incident]").forEach(box => {
     const url = box.dataset.incident, md = box.querySelector(".inc-md"), area = box.querySelector(".inc-box");
@@ -322,10 +319,6 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (e) { box.textContent = tr("error") + " " + e.message; }
     btn.disabled = false;
   }));
-
-  // chat
-  const chat = document.querySelector("[data-chat]");
-  if (chat) initChat(chat);
 });
 
 function fetchBody(card, ta) { const raw = card.querySelector(".kraw"); ta.value = raw ? raw.value : ""; }
@@ -336,44 +329,7 @@ function alertInline(el, msg) {
   p.textContent = msg;
 }
 
-function initChat(chat) {
-  const msgs = document.getElementById("msgs");
-  const form = document.getElementById("composer");
-  const ta = form.querySelector("textarea");
-  let session = chat.dataset.session || null;
-  msgs.scrollTop = msgs.scrollHeight;
-  document.querySelectorAll("[data-suggest]").forEach(li => li.addEventListener("click", () => { ta.value = li.textContent; ta.focus(); }));
-  ta.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
-  form.addEventListener("submit", async ev => {
-    ev.preventDefault();
-    const text = ta.value.trim();
-    if (!text) return;
-    const hint = msgs.querySelector(".hint"); if (hint) hint.remove();
-    add("user", `<span class="ut">${escapeHtml(text)}</span>`);
-    ta.value = ""; form.querySelector("button").disabled = true;
-    const pend = add("assistant pending", escapeHtml(tr("thinking")));
-    try {
-      const r = await api(chat.dataset.chat, "POST", { text, session });
-      if (!session) { session = r.session; history.replaceState(null, "", `?s=${session}`); }
-      pend.classList.remove("pending");
-      let html = r.html;
-      if (r.trace && r.trace.length) {
-        html += `<details class="small"><summary>${escapeHtml(tr("tools", r.trace.length))}</summary><ol>` +
-          r.trace.map(t => `<li><code>${escapeHtml(t.tool)}</code> ${escapeHtml(JSON.stringify(t.input))}</li>`).join("") + "</ol></details>";
-      }
-      if (r.proposals && r.proposals.length) html += `<p class="small"><a href="k?status=proposed">${escapeHtml(tr("proposals", r.proposals.length))}</a></p>`;
-      pend.innerHTML = html;
-    } catch (e) { pend.classList.remove("pending"); pend.innerHTML = `<span class="err">${escapeHtml(tr("error"))} ${escapeHtml(e.message)}</span>`; }
-    form.querySelector("button").disabled = false;
-    msgs.scrollTop = msgs.scrollHeight;
-  });
-  function add(cls, html) {
-    const d = document.createElement("div"); d.className = "msg " + cls; d.innerHTML = html; msgs.appendChild(d);
-    msgs.scrollTop = msgs.scrollHeight; return d;
-  }
-}
-
-// plain-text report of a knowledge card (to paste into a chat / ticket)
+// plain-text report of a knowledge card (to paste into a ticket)
 function cardReport(card) {
   const t = sel => { const e = card.querySelector(sel); return e ? e.innerText.trim() : ""; };
   const lines = [t(".ktitle"), Array.from(card.querySelectorAll(".row .pill")).map(p => p.innerText.trim()).join(" · ")];
@@ -387,9 +343,38 @@ function cardReport(card) {
   return lines.filter((x, i) => x || lines[i - 1]).join("\n");
 }
 
+let liveRegion;
+function announce(msg) {
+  if (!liveRegion) {
+    liveRegion = document.createElement("div");
+    liveRegion.className = "sr-only";
+    liveRegion.setAttribute("role", "status");
+    liveRegion.setAttribute("aria-live", "polite");
+    document.body.appendChild(liveRegion);
+  }
+  liveRegion.textContent = "";
+  setTimeout(() => { liveRegion.textContent = msg; }, 30);
+}
+
 function copyText(text, btn) {
-  const done = () => { if (btn) { const o = btn.textContent; btn.textContent = tr("copied"); setTimeout(() => btn.textContent = o, 1500); } };
-  if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done); return; }
-  const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-  document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); done(); } finally { ta.remove(); }
+  const done = ok => {
+    announce(tr(ok ? "copied" : "copy_failed"));
+    if (!btn || !ok) return;
+    const o = btn.textContent;
+    btn.textContent = tr("copied");
+    setTimeout(() => { btn.textContent = o; }, 1500);
+  };
+  const fallback = () => {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } finally { ta.remove(); }
+    done(ok);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => done(true), fallback);
+    return;
+  }
+  fallback();
 }

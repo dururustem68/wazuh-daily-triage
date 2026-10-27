@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 import os
 import time
+from html import unescape
+from re import findall
 
 import pytest
 from fastapi.testclient import TestClient
@@ -24,6 +26,8 @@ def test_auth_required(c):
     assert c.post("/api/e/demo/run", json={}).status_code == 401
     assert c.post("/login", data={"password": "wrong"}).status_code == 401
     assert "Source code" in c.get("/login").text  # AGPL §13 link
+    assert c.get("/healthz").json()["ok"] is True   # liveness: public, no dependencies
+    assert c.get("/readyz").status_code == 200      # readiness: public, storage answers
 
 
 def test_viewer_read_only(c):
@@ -56,13 +60,14 @@ def test_flow(c):
     k = c.post("/api/e/demo/k", json={"kind": "decision", "title": "Do not suggest NFS alerts"}).json()
     assert c.post(f"/api/e/demo/k/{k['id']}", json={"status": "closed"}).json()["status"] == "closed"
     assert "NFS" in c.get("/e/demo/k").text
-    ch = c.post("/api/e/demo/chat", json={"text": "<script>alert(1)</script> 192.0.2.45"}).json()
-    assert ch["session"] and "<script>" not in ch["html"]
-    assert "&lt;script&gt;" in c.get(f"/e/demo/chat?s={ch['session']}").text
     chk = c.post("/api/e/demo/check").json()["results"]
     assert {x["key"] for x in chk} == {"indexer", "alerts", "vulns", "storage", "api", "llm"}
     assert all(x["ok"] for x in chk), chk
-    for p in ("/", "/e/demo", "/e/demo/chat", "/healthz"):
+    assert page.text.count("data-copy-text") >= 2          # every finding and question can be copied
+    copied = [unescape(a) for a in findall(r'data-copy-text="([^"]*)"', page.text)]
+    assert copied and all("\n" in x for x in copied)      # multi-line text survives the attribute
+    assert "data-copy-text" in c.get("/e/demo/inbox").text
+    for p in ("/", "/e/demo", "/healthz"):
         assert c.get(p).status_code == 200
 
 
@@ -79,6 +84,44 @@ def test_xss_in_markdown():
     from app.main import _md
     assert "<img" not in _md.render('<img src=x onerror=alert(1)>')
     assert 'href="javascript' not in _md.render("[x](javascript:alert(1))")
+
+
+async def test_safe_records_storage_error():
+    from types import SimpleNamespace
+
+    from app.web.common import safe
+
+    req = SimpleNamespace(state=SimpleNamespace())
+
+    async def boom():
+        raise RuntimeError("indexer down")
+
+    assert await safe(boom(), [], request=req) == []
+    assert req.state.storage_errors == ["indexer down"]
+
+
+def test_readyz_ignores_indexer_outage(c, monkeypatch):
+    # Readiness must NOT fail on an indexer outage: the UI has to stay reachable to explain the outage.
+    ix = c.app.state.rt.envs["demo"].ix
+
+    async def boom():
+        raise RuntimeError("indexer down")
+
+    monkeypatch.setattr(ix, "cluster_health", boom)
+    r = c.get("/readyz")
+    assert r.status_code == 200 and r.json()["ready"] is True and r.json()["environments"] == ["demo"]
+
+
+def test_storage_failure_shows_banner(c, monkeypatch):
+    c.post("/login", data={"password": "pw"})
+    er = c.app.state.rt.envs["demo"]
+
+    async def boom(*a, **kw):
+        raise RuntimeError("disk gone")
+
+    monkeypatch.setattr(er.repo, "list_runs", boom)
+    page = c.get("/").text
+    assert "disk gone" in page and "Request ID" in page      # visible, not just an empty list
 
 
 def test_rule_draft_ui_and_deploy(c):
@@ -115,6 +158,30 @@ def test_watch_board_sections(c):
     c.post("/lang", data={"lang": "en"})
     page = c.get("/").text
     assert "Waiting for your decision" in page and "Rule changes" in page and "Requests and open items" in page
+
+
+def test_metrics(c, monkeypatch):
+    c.post("/login", data={"password": "pw"})
+    r = c.get("/metrics")
+    assert r.status_code == 200 and "wdt_build_info" in r.text and "wdt_http_requests_total" in r.text
+
+    monkeypatch.setenv("METRICS_TOKEN", "tok")
+    assert c.get("/metrics").status_code == 401                 # token replaces the session requirement
+    assert c.get("/metrics", headers={"Authorization": "Bearer tok"}).status_code == 200
+    monkeypatch.delenv("METRICS_TOKEN")
+
+    c.post("/login", data={"password": "vwpw"})
+    assert c.get("/metrics").status_code == 403                 # viewer is not an administrator
+    c.post("/login", data={"password": "pw"})
+
+
+def test_environment_scope_denies_other_env(c, monkeypatch):
+    c.post("/login", data={"password": "pw"})
+    monkeypatch.setenv("ADMIN_ENVS", "prod")
+    assert c.post("/api/e/demo/check").status_code == 403
+    assert c.get("/e/demo").status_code == 403
+    monkeypatch.delenv("ADMIN_ENVS")
+    assert c.get("/e/demo").status_code == 200
 
 
 

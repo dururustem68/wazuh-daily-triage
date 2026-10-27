@@ -117,7 +117,7 @@ async def run_case(rt: Runtime, case: dict, llm, llm_cfg) -> dict:
                                 inventory=env.inventory_names(rt.settings.base_dir)).collect(frm, to)
     knowledge = await er.repo.list_knowledge(status=["active", "rejected"],
                                              kinds=["context", "baseline", "decision", "open_item", "lesson", "rule_draft"])
-    sysmsg = system_prompt("triage", env, env.context_text(rt.settings.base_dir), knowledge, rt.settings.app.timezone, lang)
+    sysmsg = system_prompt(env, env.context_text(rt.settings.base_dir), knowledge, rt.settings.app.timezone, lang)
     usr = triage_user_message(_compact(collected), [], [], [])
     usr += (f"\n\nNOTE: this is a replay of a past window ({collected['window']['from']} → {collected['window']['to']}). "
             "Always pass explicit `from`/`to` inside this window to the tools; 'now' is not the review time.")

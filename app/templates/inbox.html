@@ -19,6 +19,8 @@
     <div class="row">
       <span class="pill {{ LABEL_COLORS.get(f.label, 'gray') }}">{{ _('label.' ~ f.label) }}</span>
       <span class="pill outline">{{ _('sev.' ~ f.severity) }}</span>
+      <span class="spacer"></span>
+      <button class="btn small" data-copy-text="{{ ftext(f, context=_('rep.context', env=env.name, when=item.run_started|ts)) }}">{{ _('rep.copy') }}</button>
     </div>
     <h2 class="inbox-title">{{ f.title }}</h2>
     <p class="small muted">{{ _('inbox.seen', n=item.seen, t=item.first_seen|ts) }} ·
@@ -56,7 +58,6 @@
         <button class="btn" data-status="closed">{{ _('us.closed') }}</button>
       </div>
       <div class="row">
-        <button class="btn primary" data-chat-finding="/api/e/{{ env.id }}/r/{{ item.run_id }}/f/{{ f.id }}/chat">{{ _('inbox.chat_btn') }}</button>
         <span class="spacer"></span>
         {% if i > 0 %}<a class="btn ghost" href="/e/{{ env.id }}/inbox?i={{ i - 1 }}">← {{ _('inbox.prev') }}</a>{% endif %}
         {% if i + 1 < items|length %}<a class="btn ghost" href="/e/{{ env.id }}/inbox?i={{ i + 1 }}">{{ _('inbox.later') }} →</a>{% endif %}

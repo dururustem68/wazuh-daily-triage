@@ -89,7 +89,6 @@
     {% if r.status == 'proposed' %}<button class="btn small {{ '' if r.kind == 'rule_draft' else 'primary' }}" data-set="active">{{ _('rd.approve_only') if r.kind == 'rule_draft' else _('kb.approve') }}</button><button class="btn small" data-set="rejected">{{ _('kb.reject') }}</button>{% endif %}
     {% if r.status == 'active' %}<button class="btn small" data-set="closed">{{ _('kb.close') }}</button>{% endif %}
     {% if r.status in ('closed', 'rejected') %}<button class="btn small" data-set="active">{{ _('kb.reopen') }}</button>{% endif %}
-    <button class="btn small" data-chat-finding="/api/e/{{ env.id }}/k/{{ r.id }}/chat">{{ _('kb.chat_btn') }}</button>
     <button class="btn small" data-copy-report title="{{ _('kb.copy_report_help') }}">{{ _('kb.copy_report') }}</button>
     <button class="btn small" data-edit>{{ _('kb.edit') }}</button>
     <button class="btn small danger" data-del>{{ _('kb.delete') }}</button>

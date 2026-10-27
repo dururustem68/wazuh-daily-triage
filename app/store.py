@@ -4,7 +4,6 @@
 
   <prefix>-runs       daily triage runs (report, findings, questions, collected summary)
   <prefix>-knowledge  baseline / decision / context / user request / answer / rule draft / lesson
-  <prefix>-chat       chat messages
 
 `dynamic: false` — only declared fields are indexed, everything else stays in _source,
 so fields copied from alert data can never bloat the mapping.
@@ -13,7 +12,7 @@ from __future__ import annotations
 
 import uuid
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 from .wazuh.indexer import Indexer
@@ -50,10 +49,6 @@ MAPPINGS = {
         "created_at": {"type": "date"}, "updated_at": {"type": "date"},
         "created_by": {"type": "keyword"}, "source_run": {"type": "keyword"},
     }},
-    "chat": {"dynamic": False, "properties": {
-        "env": {"type": "keyword"}, "session": {"type": "keyword"}, "role": {"type": "keyword"},
-        "ts": {"type": "date"}, "content": {"type": "text"},
-    }},
 }
 
 
@@ -70,6 +65,7 @@ class Store(Protocol):
     async def put(self, kind: str, doc_id: str, doc: dict) -> None: ...
     async def get(self, kind: str, doc_id: str) -> dict | None: ...
     async def delete(self, kind: str, doc_id: str) -> None: ...
+    async def delete_before(self, kind: str, field: str, before: str, filters: dict | None = None) -> int: ...
     async def query(self, kind: str, filters: dict, sort: str, size: int, desc: bool = True,
                     exclude: list[str] | None = None) -> list[dict]: ...
 
@@ -102,6 +98,12 @@ class IndexStore:
     async def delete(self, kind, doc_id):
         await self.ensure()
         await self.ix.delete_doc(self._idx(kind), doc_id)
+
+    async def delete_before(self, kind, field, before, filters=None):
+        await self.ensure()
+        must = [{"range": {field: {"lt": before}}}]
+        must += [{"term": {k: v}} for k, v in (filters or {}).items() if v is not None]
+        return await self.ix.delete_by_query(self._idx(kind), {"bool": {"filter": must}})
 
     async def query(self, kind, filters, sort, size, desc=True, exclude=None):
         await self.ensure()
@@ -136,6 +138,14 @@ class MemoryStore:
 
     async def delete(self, kind, doc_id):
         self.data[kind].pop(doc_id, None)
+
+    async def delete_before(self, kind, field, before, filters=None):
+        doomed = [doc_id for doc_id, d in self.data[kind].items()
+                  if all(d.get(k) == v for k, v in (filters or {}).items() if v is not None)
+                  and (_dig(d, field) or "") < before]
+        for doc_id in doomed:
+            self.data[kind].pop(doc_id, None)
+        return len(doomed)
 
     async def query(self, kind, filters, sort, size, desc=True, exclude=None):
         def ok(d):
@@ -186,6 +196,13 @@ class Repo:
         r = await self.list_runs(1, status="done")
         return r[0] if r else None
 
+    async def prune_runs(self, days: int) -> int:
+        """Delete runs older than ``days``; knowledge stays forever (decisions are durable evidence)."""
+        if days <= 0:
+            return 0
+        cutoff = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        return await self.s.delete_before("runs", "started_at", cutoff, {"env": self.env})
+
     # knowledge base
     async def add_knowledge(self, kind: str, title: str, body: str = "", status: str = "active",
                             created_by: str = "user", rule_ids: list[str] | None = None,
@@ -222,21 +239,3 @@ class Repo:
                              size: int = 300) -> list[dict]:
         return await self.s.query("knowledge", {"env": self.env, "kind": kinds, "status": status},
                                   "updated_at", size)
-
-    # sohbet
-    async def chat_add(self, session: str, role: str, content: str, trace: list | None = None):
-        doc = {"id": new_id("c"), "env": self.env, "session": session, "role": role,
-               "content": content, "ts": now_iso(), "trace": trace or []}
-        await self.s.put("chat", doc["id"], doc)
-        return doc
-
-    async def chat_history(self, session: str, size: int = 40) -> list[dict]:
-        rows = await self.s.query("chat", {"env": self.env, "session": session}, "ts", size)
-        return list(reversed(rows))
-
-    async def chat_sessions(self, size: int = 200) -> list[dict]:
-        rows = await self.s.query("chat", {"env": self.env, "role": "user"}, "ts", size)
-        seen: dict[str, dict] = {}
-        for r in rows:
-            seen.setdefault(r["session"], {"session": r["session"], "ts": r["ts"], "title": r["content"][:80]})
-        return list(seen.values())

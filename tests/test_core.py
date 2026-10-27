@@ -9,13 +9,14 @@ import pytest
 from app.agent.runner import run_agent
 from app.agent.tools import ToolBox
 from app.collector import Collector
-from app.config import LLMConfig, load_settings
+from app.config import AppConfig, LLMConfig, load_settings
 from app.demo import FakeAPI, FakeIndexer
+from app.formatting import finding_text, question_text
 from app.llm.anthropic import AnthropicLLM
 from app.llm.openai_compat import OpenAICompatLLM
 from app.redact import redact
 from app.runtime import Runtime
-from app.store import MemoryStore, Repo
+from app.store import IndexStore, MemoryStore, Repo
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 
@@ -28,6 +29,12 @@ def settings():
 @pytest.fixture(scope="module")
 def ix():
     return FakeIndexer()
+
+
+def test_timezone_is_validated():
+    assert AppConfig(timezone="Europe/Istanbul").timezone == "Europe/Istanbul"
+    with pytest.raises(ValueError, match="tzdata"):
+        AppConfig(timezone="Mars/Olympus_Mons")
 
 
 def test_env_expansion(tmp_path, monkeypatch):
@@ -65,7 +72,7 @@ async def test_silence_flag(settings):
 
 async def test_all_tools(settings, ix):
     env = settings.environments[0]
-    tb = ToolBox(env, ix, FakeAPI(), Repo(MemoryStore(), env.id), mode="chat")
+    tb = ToolBox(env, ix, FakeAPI(), Repo(MemoryStore(), env.id), mode="tools")
     calls = {
         "search_alerts": {"rule_ids": ["5710"], "size": 3},
         "aggregate_alerts": {"field": "data.srcip", "min_level": 5, "sub_field": "rule.id"},
@@ -93,7 +100,7 @@ async def test_all_tools(settings, ix):
     assert bad["xml_ok"] is False
 
 
-async def test_triage_and_chat_mock(settings):
+async def test_triage_mock(settings):
     rt = Runtime(settings, demo=True)
     er = rt.get("demo")
     await er.repo.add_knowledge("request", "look at db01 ssh")
@@ -105,11 +112,28 @@ async def test_triage_and_chat_mock(settings):
     assert seeded and seeded[0]["created_by"] == "seed"
     reqs = await er.repo.list_knowledge(kinds=["request"], status="active")
     assert reqs == []  # requests are consumed by the run
-    # second run: window starts at the last run but is at least 24 h
+    # second run: the window starts where the first one ended, so the same 24 h are not analysed again
     run2 = await rt.run_triage(er, "demo-r2")
-    assert run2["window"]["hours"] == 24
-    r = await rt.chat("demo", None, "son 24 saat")
-    assert "demo answer" in r["answer"] and r["trace"]
+    assert 0 < run2["window"]["hours"] < 24
+
+
+def test_copy_text_for_findings_and_questions():
+    f = {"title": "SSH brute force", "label": "real_incident", "severity": "high",
+         "detail": "1 200 failures.", "evidence": ["5710 ×1200"], "rule_ids": ["5710"], "agents": ["db01"],
+         "recommendation": "Block 198.51.100.23.",
+         "manual_checks": [{"host": "db01", "purpose": "count failures",
+                            "command": "grep -c 'Failed' /var/log/auth.log"}]}
+    txt = finding_text(f, "tr")
+    for part in ("SSH brute force", "Gerçek olay · yüksek", "5710", "db01", "Öneri:", "grep -c", "5710 ×1200"):
+        assert part in txt
+    q = {"question": "Should 22/tcp be public?", "why": "db01 is internal.", "answer": "No."}
+    qt = question_text(q)
+    assert "Should 22/tcp be public?" in qt and "db01 is internal." in qt and "✓ No." in qt
+    # copied text carries where it came from, and the payload stays bounded
+    ctx = "prod — report of 26.10.2026 06:00"
+    assert question_text(q, "en", context=ctx).startswith(ctx + "\n\n")
+    huge = finding_text({**f, "rule_draft_xml": "<rule/>" * 9000}, "en")
+    assert len(huge) <= 12_050 and huge.endswith("…")
 
 
 def test_redact():
@@ -227,9 +251,10 @@ def test_settings_from_env(monkeypatch, tmp_path):
 
 
 def test_i18n_catalogs_match():
-    from app.i18n import DE, EN, ES, TR
-    for lang in (TR, ES, DE):
-        assert set(EN) == set(lang)
+    from app.i18n import CATALOG, EN
+    for lang, catalog in CATALOG.items():
+        missing, extra = set(EN) - set(catalog), set(catalog) - set(EN)
+        assert not missing and not extra, f"{lang}: missing={sorted(missing)} extra={sorted(extra)}"
 
 
 async def test_turkish_report_language(tmp_path):
@@ -321,11 +346,11 @@ def test_schedule_times(tmp_path):
         Schedule(times=["7:5"])
 
 
-async def test_inbox_dedupe_act_and_chat(settings):
+async def test_inbox_dedupe_and_act(settings):
     rt = Runtime(settings, demo=True)
     er = rt.get("demo")
     await rt.run_triage(er, "ib-1")
-    await rt.run_triage(er, "ib-2")
+    await rt.run_triage(er, "ib-2", hours=24)   # explicit window: the same findings again, to test grouping
     items = await rt.inbox("demo")
     assert items and all(it["seen"] == 2 for it in items)          # same findings in both runs → grouped
     first = items[0]
@@ -336,12 +361,6 @@ async def test_inbox_dedupe_act_and_chat(settings):
     assert n == 2
     after = await rt.inbox("demo")
     assert len(after) == len(items) - 1 and first["key"] not in {i["key"] for i in after}
-    it = checks[0] if checks[0]["key"] != first["key"] else checks[-1]
-    sess = await rt.chat_from_finding("demo", it["run_id"], it["finding"]["id"], "en")
-    hist = await er.repo.chat_history(sess)
-    assert [m["role"] for m in hist] == ["user", "assistant"] and "```sh" in hist[1]["content"]
-    r = await rt.chat("demo", sess, "output: 240")          # conversation continues with the context
-    assert r["session"] == sess
 
 
 async def test_notifications(settings, monkeypatch):
@@ -528,3 +547,55 @@ async def test_liveness_problem_reminder_recovery(settings):
     st = await rt.liveness_check("demo", transport=tr)
     assert not st["problems"] and len(sent) == 2 and "connection refused" in sent[1]
     assert (await rt.liveness_state("demo"))["checked_at"]
+
+
+def test_run_window_follows_the_last_report(settings):
+    rt = Runtime(settings, demo=True)
+    env = settings.environments[0].model_copy(update={"window_min_hours": 12, "window_max_hours": 96})
+    to = datetime(2026, 10, 27, 6, 0, tzinfo=UTC)
+    six_h_ago = {"window": {"to": (to - timedelta(hours=6)).isoformat()}}
+
+    # no previous report: the default (min) window
+    assert to - rt._window(env, None, to, None) == timedelta(hours=12)
+    # a report six hours ago: exactly six hours, never inflated to min/max
+    assert to - rt._window(env, six_h_ago, to, None) == timedelta(hours=6)
+    # a manual request can only widen the window
+    assert to - rt._window(env, six_h_ago, to, 24) == timedelta(hours=24)
+    assert to - rt._window(env, six_h_ago, to, 1) == timedelta(hours=6)
+    # the maximum caps a long gap (e.g. after a weekend), the minimum never shortens one
+    week_ago = {"window": {"to": (to - timedelta(days=7)).isoformat()}}
+    assert to - rt._window(env, week_ago, to, None) == timedelta(hours=96)
+    assert to - rt._window(env, week_ago, to, 1000) == timedelta(hours=96)
+    # a corrupt or future timestamp falls back instead of analysing a negative window
+    assert to - rt._window(env, {"window": {"to": "not-a-date"}}, to, None) == timedelta(hours=12)
+    future = {"window": {"to": (to + timedelta(hours=1)).isoformat()}}
+    assert to - rt._window(env, future, to, None) == timedelta(hours=12)
+
+
+async def test_run_retention_prunes_runs_not_knowledge():
+    store = MemoryStore()
+    repo = Repo(store, "prod")
+    for run in ({"run_id": "old", "env": "prod", "status": "done", "started_at": "2020-01-01T00:00:00.000Z"},
+                {"run_id": "new", "env": "prod", "status": "done", "started_at": "2999-01-01T00:00:00.000Z"},
+                {"run_id": "other", "env": "staging", "status": "done", "started_at": "2020-01-01T00:00:00.000Z"}):
+        await repo.save_run(run)
+    knowledge = await repo.add_knowledge("decision", "keep this decision")
+    await store.put("knowledge", knowledge["id"], {**knowledge, "created_at": "2020-01-01T00:00:00.000Z"})
+
+    assert await repo.prune_runs(0) == 0            # 0 disables retention
+    assert await repo.prune_runs(30) == 1
+    assert await store.get("runs", "old") is None
+    assert await store.get("runs", "new") is not None
+    assert await store.get("runs", "other") is not None   # other environment untouched
+    assert await store.get("knowledge", knowledge["id"]) is not None
+
+
+async def test_run_retention_uses_delete_by_query():
+    ix = FakeIndexer()
+    store = IndexStore(ix, "daily-triage")
+    repo = Repo(store, "prod")
+    await repo.save_run({"run_id": "old", "env": "prod", "status": "done", "started_at": "2020-01-01T00:00:00.000Z"})
+    await repo.save_run({"run_id": "new", "env": "prod", "status": "done", "started_at": "2999-01-01T00:00:00.000Z"})
+    assert await repo.prune_runs(30) == 1
+    assert await store.get("runs", "old") is None
+    assert (await store.get("runs", "new"))["run_id"] == "new"

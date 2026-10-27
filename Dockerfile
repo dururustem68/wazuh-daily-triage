@@ -20,6 +20,9 @@ COPY app ./app
 COPY config/demo.yaml config/environments.example.yaml ./config/
 COPY config/context/demo.md config/context/example.md ./config/context/
 COPY config/seed/example.yaml ./config/seed/
+# Audit trail (logs/audit.jsonl). Mount a volume here: the application keeps running when the path is not
+# writable, but then nothing is audited.
+RUN mkdir -p /app/logs && chown 10001:10001 /app/logs
 
 USER 10001
 EXPOSE 8080

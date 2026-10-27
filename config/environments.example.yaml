@@ -51,13 +51,14 @@ environments:
       verify_tls: true
     alerts_index: wazuh-alerts-4.x-*
     vuln_index: wazuh-states-vulnerabilities-*
-    storage_prefix: daily-triage        # results: daily-triage-runs / -knowledge / -chat in THIS indexer
+    storage_prefix: daily-triage        # results: daily-triage-runs / -knowledge in THIS indexer
+    run_retention_days: 0               # >0: delete runs older than N days (knowledge is never pruned)
     schedule:
       enabled: true
       times: ["07:30", "19:30"]   # or a single `time: "07:30"`
       days: [mon, tue, wed, thu, fri]
-    window_min_hours: 12        # window = since last successful run, clamped to [min, max]
-    window_max_hours: 96        # so Monday morning covers the weekend
+    window_min_hours: 12        # window = since last successful run; 12h only when there is no report yet
+    window_max_hours: 96        # cap, so Monday morning covers the weekend
     high_level: 7               # "high level" threshold
     max_silence_minutes: 60     # last alert older than this → "SIEM may be down"
     liveness: {enabled: true, interval_minutes: 10}   # quick check without AI; notifies problem + recovery

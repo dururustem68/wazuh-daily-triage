@@ -10,8 +10,8 @@
   "running": _('run.running'), "now": _('run.now'), "done": _('run.done'), "open": _('run.open'),
   "failed_start": _('run.failed_start'), "status_fail": _('run.status_fail'), "error": _('run.error'),
   "starting": _('run.starting'), "saved": _('rep.saved'), "saved_baseline": _('rep.saved_baseline'),
-  "copied": _('rep.copied'), "copy": _('rep.copy'), "sure": _('kb.sure'), "save": _('rep.save'), "thinking": _('chat.thinking'),
-  "tools": _('chat.tools', n='{n}'), "proposals": _('chat.proposals', n='{n}'), "testing": _('env.testing'),
+  "copied": _('rep.copied'), "copy": _('rep.copy'), "copy_failed": _('rep.copy_failed'), "sure": _('kb.sure'), "save": _('rep.save'),
+  "testing": _('env.testing'),
   "test": _('env.test'), "ok": _('chk.ok'), "fail": _('chk.fail'),
   "rd_confirm": _('rd.confirm'), "rd_type_ids": _('rd.type_ids'), "rd_working": _('rd.working'),
   "rd_unconfirm": _('rd.unconfirm'), "rd_errors": _('rd.errors'), "rd_risky": _('rd.risky'),
@@ -38,7 +38,6 @@
       {% if cur %}
       <a href="/e/{{ e.id }}/inbox" class="sub {{ 'on' if path.endswith('/inbox') }}"><svg viewBox="0 0 24 24"><path d="M4 4h16v10h-5l-2 3h-2l-2-3H4zM4 16h4l2 3h4l2-3h4v4H4z"/></svg>{{ _('nav.inbox') }}</a>
       <a href="/e/{{ e.id }}" class="sub {{ 'on' if path == '/e/' ~ e.id or '/r/' in path }}"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 3v5h5M9 12h8M9 16h8"/></svg>{{ _('nav.reports') }}</a>
-      <a href="/e/{{ e.id }}/chat" class="sub {{ 'on' if path.endswith('/chat') }}"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg>{{ _('nav.chat') }}</a>
       <a href="/e/{{ e.id }}/k" class="sub {{ 'on' if path.endswith('/k') }}"><svg viewBox="0 0 24 24"><path d="M5 3h12a2 2 0 0 1 2 2v16H7a2 2 0 0 1-2-2zM5 17a2 2 0 0 1 2-2h12"/></svg>{{ _('nav.knowledge') }}</a>
       <a href="/e/{{ e.id }}/audit" class="sub {{ 'on' if path.endswith('/audit') }}"><svg viewBox="0 0 24 24"><path d="M9 3h6v3H9zM6 5h12v16H6zM9 11l2 2 4-4M9 17h6"/></svg>{{ _('nav.audit') }}</a>
       {% endif %}
@@ -53,6 +52,16 @@
   </div>
 </aside>
 <div class="content">
+  {% if storage_errors %}
+  <div class="banner banner-warn" role="alert" aria-live="polite">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20zM11 9h2v6h-2zm0 8h2v2h-2z"/></svg>
+    <div class="banner-body">
+      <div>{{ _('storage.degraded', error=storage_errors[0]) }}</div>
+      {% if storage_errors|length > 1 %}<div class="muted">{{ _('storage.more', n=storage_errors|length - 1) }}</div>{% endif %}
+      {% if request_id %}<div class="muted small">{{ _('storage.request', id=request_id) }}</div>{% endif %}
+    </div>
+  </div>
+  {% endif %}
   <main>{% block body %}{% endblock %}</main>
   <footer>Wazuh Daily Triage {{ version }} · {{ _('footer.deploy') if deploy_any else _('footer') }} · <a href="{{ SOURCE_URL }}" rel="noopener">{{ _('nav.source') }}</a> (AGPL-3.0)</footer>
 </div>

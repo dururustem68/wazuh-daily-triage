@@ -9,7 +9,7 @@ Where the project is going, roughly ordered by impact. This is a living document
 |---|---|---|
 | ✅ | **Helm chart** + a one-line install (published to a Helm repo, kind-tested in CI, Artifact Hub-ready) | most Wazuh users deploy with `wazuh-kubernetes`/Helm; a chart is the single biggest adoption lever. |
 | ✅ | Docker Compose + Kubernetes (kustomize) | single container, read-only FS, non-root, no PVC. |
-| ⬜ | Signed container images (cosign) + SBOM + SLSA provenance | a requirement in enterprise evaluations. |
+| ⬜ | Signed container images (cosign) + SLSA provenance (SBOM ✅ per build) | a requirement in enterprise evaluations. |
 | ✅ | Multi-language UI (en, tr, es, de) | more languages = more users; the catalogue is tiny (`app/i18n.py`). |
 | ⬜ | Interactive demo (one-click temporary deploy) | let people try it without a Wazuh of their own. |
 
@@ -20,7 +20,7 @@ Where the project is going, roughly ordered by impact. This is a living document
 | ✅ | e-mail, Telegram, Microsoft Teams, Slack, Discord, generic webhook, ntfy | cover every team's channel. |
 | ✅ | MCP server (`/mcp`) | Claude Desktop / any MCP client can investigate with live data. |
 | ✅ | LLM providers: Anthropic, OpenAI, Azure OpenAI, Gemini, DeepSeek, Ollama/vLLM/LM Studio/LiteLLM | bring your own key, or run fully offline. |
-| ⬜ | Ticketing: **Jira**, ServiceNow, GitLab/GitHub issues (Zammad ✅) | the incident-record draft already has a clean provider hook. |
+| ✅ | Ticketing: **Jira**, Zammad (ServiceNow, GitLab/GitHub issues planned) | the incident-record draft already has a clean provider hook. |
 | ⬜ | PagerDuty / Opsgenie | for on-call escalation of `real_incident` findings. |
 
 ## Product
@@ -33,7 +33,7 @@ Where the project is going, roughly ordered by impact. This is a living document
 | ✅ | Monthly audit report (ISMS evidence) + agent coverage + vulnerability SLA + mail saturation + anomalies. | regulatory story. |
 | ✅ | **PDF export** of the monthly audit report (reportlab, Unicode-safe) | regulated customers want a printable artefact. |
 | ⬜ | **Decoder drafts** next to rule drafts (validate + logtest + rollback). | onboarding new log sources. |
-| ✅ | **Read-only viewer role** (`VIEWER_PASSWORD`; per-environment ACLs still planned). | team deployments need role separation. |
+| ✅ | **Read-only viewer role** (`VIEWER_PASSWORD`) with a permission matrix and per-role environment allow-lists. | team deployments need role separation. |
 | ⬜ | Embedded SVG time-series charts in reports. | readability + "wow" factor without a JS build step. |
 | ⬜ | False-positive feedback loop polish: auto-baseline suggestions after N days unchanged. | turns decisions into automation. |
 
@@ -43,7 +43,7 @@ Where the project is going, roughly ordered by impact. This is a living document
 |---|---|---|
 | ✅ | Read-only by default; separate least-privilege deploy user; prompt-injection-aware agent; strict CSP. | see [SECURITY.md](SECURITY.md). |
 | ✅ | defusedxml (no DTD/entities), bounded regexes, signed session cookie, login throttling. | |
-| ✅ | **CodeQL + dependency audit in CI**, SBOM (signed releases still planned). | signals enterprise readiness. |
+| ✅ | **CodeQL + dependency audit in CI** (fails on a known vulnerability), CycloneDX SBOM artifact, hash-chained audit trail, `/metrics`, production startup checks. | signals enterprise readiness. |
 | ⬜ | Published eval results (`python -m app.eval`) per model in the README. | nobody else shows their numbers this openly. |
 
 ## Earlier releases

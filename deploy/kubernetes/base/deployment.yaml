@@ -15,6 +15,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 10001
         runAsGroup: 10001
+        fsGroup: 10001              # emptyDir volumes (logs, tmp) become writable for the app user
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -38,9 +39,14 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
+            # Append-only audit trail. This emptyDir is lost with the pod: ship logs/ to central storage or
+            # replace it with a PVC (set AUDIT_LOG_FILE if you mount it elsewhere).
+            - name: logs
+              mountPath: /app/logs
           readinessProbe:
-            httpGet: { path: /healthz, port: http }
+            httpGet: { path: /readyz, port: http }
             periodSeconds: 10
+            timeoutSeconds: 4
           livenessProbe:
             httpGet: { path: /healthz, port: http }
             initialDelaySeconds: 20
@@ -63,4 +69,6 @@ spec:
               - { key: context.md, path: context/main.md }
               - { key: seed.yaml, path: seed/main.yaml }
         - name: tmp
+          emptyDir: { sizeLimit: 64Mi }
+        - name: logs
           emptyDir: { sizeLimit: 64Mi }

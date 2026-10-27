@@ -53,7 +53,7 @@ generated Secret gets a new name and the pod restarts with it.
 
 - **One replica only.** The scheduler runs inside the process; more replicas would run each check more than
   once. The Deployment uses the `Recreate` strategy for the same reason.
-- **Stateless.** Reports, knowledge base and chat live in the Wazuh Indexer (`daily-triage-*`); no PVC is needed.
+- **Stateless.** Reports and the knowledge base live in the Wazuh Indexer (`daily-triage-*`); no PVC is needed.
 - **Hardened by default:** non-root, read-only root filesystem, all capabilities dropped, no service account
   token, `restricted` Pod Security level.
 - **Same cluster as Wazuh?** Use the in-cluster service names (example above) — the indexer never has to be

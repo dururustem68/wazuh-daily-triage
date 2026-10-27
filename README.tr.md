@@ -8,7 +8,7 @@ Yapay zekâ anahtarınız sizin: Anthropic, OpenAI, Azure OpenAI ya da OpenAI uy
 vLLM, LM Studio, LiteLLM). Tek Docker konteyner; varsayılan olarak Wazuh'a karşı salt okunur. Kritik durumları ve
 koşu özetlerini e-posta, Telegram, Microsoft Teams, Slack, Discord, ntfy ya da jenerik webhook ile bildirir.
 
-[English README](README.md) · [Yapay zekâ sağlayıcıları](docs/providers.tr.md) · [Bildirimler](docs/notifications.md) · [Yetkiler ve ağ](docs/permissions.md) · [Kural uygulama](docs/rule-deployment.md) · [Katkı](CONTRIBUTING.md) · [Güvenlik](SECURITY.md)
+[English](README.md) · [Türkçe](README.tr.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Yapay zekâ sağlayıcıları](docs/providers.tr.md) · [Bildirimler](docs/notifications.md) · [Yetkiler ve ağ](docs/permissions.md) · [Kural uygulama](docs/rule-deployment.md) · [Mimari](docs/architecture.md) · [Uyumluluk](docs/compatibility.md) · [Katkı](CONTRIBUTING.md) · [Güvenlik](SECURITY.md)
 
 ![Rapor](docs/screenshot-report-tr.png)
 
@@ -18,7 +18,14 @@ koşu özetlerini e-posta, Telegram, Microsoft Teams, Slack, Discord, ntfy ya da
 
 <img src="docs/screenshot-audit-pdf.png" alt="Aylık denetim raporu (PDF)" width="430">
 
-## Ne yapar
+## Neden
+
+Sabahlarınız aynı Wazuh rutiniyle başlıyorsa — *veri akıyor mu, ajanlar bağlı mı, seviye 7+ üstünde ne var, bunun
+hangisi olağan gürültü, hangisi gerçek* — bu araç zahmetli kısmı yapar ve sizi yalnızca karar gereken yerde arar.
+Zor kazanılmış inceleme alışkanlıklarını kodlar: alarmdan önce sağlık, ortalama yerine dağılım, "her ajanda aynı
+sayı = besleme olayı", "sıfır, kuralın çalıştığı anlamına gelmez", susturmak yerine seviye düşürmek.
+
+## Özellikler
 
 - **Zamanlanmış kontrol** (ortam başına günde bir ya da birkaç saat + gün). Pencere "son başarılı koşudan bu yana"; pazartesi
   sabahı hafta sonunu kapsar.
@@ -39,8 +46,8 @@ koşu özetlerini e-posta, Telegram, Microsoft Teams, Slack, Discord, ntfy ya da
   önerileri **siz onaylayana kadar etkisizdir**. Mevcut notlarınızı YAML ile içe/dışa aktarın (arayüz ya da
   `python -m app.kb`); tekrar çalıştırmak çift kayıt oluşturmaz.
 - **Öneri kuyruğu** — bulgular tek tek ve koşular arası tekilleştirilmiş gelir; bir karar tüm tekrarlara uygulanır.
-  Sunucuda bakılması gerekenler salt okunur komutlarla gelir; **Sohbette incele** ile çıktıyı yapıştırıp bir sonraki
-  adımı alırsınız.
+  Sunucuda bakılması gerekenler salt okunur komutlarla gelir; tek tıkla bulgu ve komutlar kopyalanır, çıktıyı
+  çalıştığınız yere yapıştırırsınız.
 - **E-posta, Telegram, Microsoft Teams, Slack, Discord, ntfy ve jenerik webhook bildirimleri** — kritik durumlar
   (SIEM sessizliği, indexer red, gerçek olay; aynı konu her koşuda tekrarlanmaz), isteğe bağlı her koşu sonrası
   kısa özet ve kural uygulamaları ([docs/notifications.md](docs/notifications.md)).
@@ -70,8 +77,10 @@ koşu özetlerini e-posta, Telegram, Microsoft Teams, Slack, Discord, ntfy ya da
 - **Değerlendirme** — `python -m app.eval`, elle incelediğiniz günleri yeniden çalıştırıp yapay zekâyı puanlar
   (yakalama oranı, olay diye raporlanan gürültü, token): modelleri ve promptları sayıyla karşılaştırın
   ([docs/eval.md](docs/eval.md)).
-- **Sohbet** — ortam hakkında soru sorun; aynı araçlarla, kanıta dayalı cevap.
-- **Kayıtlar Wazuh'un içinde** — her ortamın kendi indexer'ında `daily-triage-runs / -knowledge / -chat`.
+- **Kopyalamaya hazır çıktı** — her bulgu ve soruda kopyala düğmesi (düz metin: kanıt, öneri, komutlar);
+  ticket, e-posta ya da terminale yapıştırın.
+- **Kayıtlar Wazuh'un içinde** — her ortamın kendi indexer'ında `daily-triage-runs / -knowledge`. Ek veritabanı
+  yok. İsteğe bağlı `run_retention_days` eski koşuları siler; bilgi tabanı asla silinmez.
 - **Çok ortam, çok dil** (İngilizce, Türkçe, İspanyolca, Almanca — sol menünün altından seçilir), ortam başına model (ör. düzenlemeye tabi veri
   için yerel model), arayüzde ve komut satırında bağlantı testi.
 
@@ -223,16 +232,123 @@ Ya da bilgi tabanı sayfasındaki **İçe / dışa aktar** kutusunu kullanın. T
 
 ## Güvenlik
 
+> **Varsayılan duruş:** Wazuh'a yazma yok, kabuk yok, modelden dışarı istek yok. Yapay zekânın yapabildiği her
+> şey, tanımlı sınırlar içinde bir okuma sorgusu ya da insan onayı bekleyen bir *öneridir*. Üretimde uygulama
+> örnek parolalarla, eksik `APP_SECRET` ile, güvensiz çerezle veya kapatılmış TLS doğrulamasıyla **başlamayı
+> reddeder**; durum değiştiren her istek kurcalamaya karşı korunan denetim izine yazılır.
+
 - Wazuh'a karşı varsayılan olarak **salt okunur**: Active Response, konfig yazma, ajan komutu yok. İsteğe bağlı
   kural uygulama ayrı bir API kullanıcısı kullanır (yalnız özel kural dosyası yükleme + restart); uygulama tek bir
   ayrılmış dosyaya yazar.
 - Alarm içerikleri saldırgan kontrolündedir (prompt injection); kandırılmış bir model en fazla bilgi tabanına
-  *öneri* ekleyebilir, siz onaylamadan etkisizdir.
+  *öneri* ekleyebilir, siz onaylamadan etkisizdir. Sorgu koruması (`query_guard`) alan adlarını, zaman aralığını,
+  kova ve belge sayılarını sınırlar; enjekte edilen metin pahalı ya da keyfî bir sorguya dönüşemez.
+- **Arayüzde en az yetki:** yönetici ve salt okunur görüntüleyici rolleri, izin matrisi ve isteğe bağlı ortam
+  kısıtı (`ADMIN_ENVS`, `VIEWER_ENVS`, `MCP_ENVS`). Kontroller her rotada sunucu tarafında yapılır.
+- **Denetim izi:** girişler, reddedilen istekler, kararlar ve kural uygulamaları `logs/audit.jsonl` dosyasına
+  aktör, rol, ortam, sonuç ve SHA-256 zinciriyle eklenir; bir satır değişirse zincir kırılır.
+- **Kural uygulama kapalı devre çalışır (fail closed):** doğrulama, restart ve logtest doğrulanır; başarısız bir
+  beklenti *ya da* yeniden üretilemeyen bir örnek değişikliği geri alır; geri alma da başarısız olursa kritik
+  seviyede loglanır.
 - Harici bir LLM kullanıyorsanız alarm özetleri o sağlayıcıya gider. Düzenlemeye tabi ortamlarda (BDDK, KVKK,
   GDPR) yerel model ya da `redact: true` kullanın.
 - Arayüz: parola + imzalı çerez, deneme sınırı, sıkı CSP; konteyner root olmayan kullanıcıyla ve salt okunur
   dosya sistemiyle çalışır. İsteğe bağlı salt okunur `VIEWER_PASSWORD` ile ekip hiçbir şeyi değiştirmeden her
   şeyi görüntüleyebilir.
+- **İşletim:** `/metrics` (yönetici oturumu ya da `METRICS_TOKEN`) koşu, hata, süre, token ve uygulama
+  sayaçlarını verir; `/healthz` canlılık, `/readyz` hazırlık probudur (bilerek indexer çağırmaz; böylece kesinti
+  sırasında kesintiyi anlatan arayüz servisten düşmez); her log satırı ve denetim kaydı `X-Request-ID` taşır.
+
+Bilinen sınırlar ve sürüm matrisi: [docs/compatibility.md](docs/compatibility.md). Bilinçli istisnalar:
+[docs/security-exceptions.md](docs/security-exceptions.md).
+
+## Uyumluluk (özet)
+
+- Wazuh **4.x** (4.14 ile geliştirildi ve test edildi) — all-in-one, dağıtık, Docker ve Kubernetes.
+- Wazuh Indexer / OpenSearch 2.x, standart `wazuh-alerts-*` şablonu; indeks desenleri yapılandırılabilir.
+- Wazuh API isteğe bağlı; yoksa ajan/daemon sağlığı, kural bilgisi ve logtest kapalıdır.
+- Python **3.11–3.13**; basic auth, özel CA (`ca_file`) ve karşılıklı TLS desteklenir.
+
+## Kaliteyi kendiniz ölçün
+
+Bu README'de başkasının alarmlarından gelen bir "yakalama oranı" yok; sizin verinizde bir anlamı olmaz. Onun
+yerine ölçüm aracı geliyor: `python -m app.eval`, kendi incelediğiniz günleri yeniden oynatır ve yapay zekâyı
+vardığınız sonuçla karşılaştırır.
+
+```sh
+python -m app.eval config/eval/demo.yaml               # demo senaryoları, Wazuh gerekmez
+python -m app.eval cases.yaml --repeat 3 --out res.json
+```
+
+Her senaryo için **yakalama oranı**, kaçırılan maddeler, gürültü ihlalleri (bilinen gürültünün olay olarak
+bildirilmesi), adım sayısı, token ve süre raporlanır — böylece prompt, model veya eşik değişikliği ölçülen bir
+karar olur (`docs/eval.md`).
+
+## Mimari
+
+```
+          ┌──────────────── wazuh-daily-triage (tek konteyner) ──────────────────┐
+zamanlayıcı│ Collector ──► deterministik özet + sağlık bayrakları                 │
+ / düğme  │      │                                                               │
+          │      ▼                                                               │
+          │ Ajan döngüsü ◄──► LLM (Anthropic / OpenAI uyumlu)                    │
+          │   araçlar: search · aggregate · timeline · ip_profile · correlate ·  │
+          │   vulns · agent · rule · logtest · validate_rule_xml · propose       │
+          │      │                                                               │
+          │      ▼                                                               │
+          │ submit_report ──► daily-triage-runs ──► notify (e-posta/Telegram/Teams/Slack/Discord/ntfy/webhook) │
+          │ Web arayüzü ◄──► daily-triage-runs / -knowledge                      │
+          │ Onayla ve uygula (isteğe bağlı, ayrı API kullanıcısı) ──► etc/rules/wdt_rules │
+          └───────────┬──────────────────────────────┬───────────────────────────┘
+                      │ HTTPS 9200                   │ HTTPS 55000
+               Wazuh Indexer                  Wazuh sunucu API'si
+```
+
+Python 3.12, FastAPI, Jinja2, httpx. Sağlayıcı SDK'sı yok, ön yüz derleme adımı yok. Modül haritası, istek akışı
+ve genişletme noktaları: [docs/architecture.md](docs/architecture.md).
+
+## Geliştirme
+
+```sh
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
+pytest
+pytest --cov=app --cov-report=term-missing     # CI'ın yüklediği
+ruff check .
+WDT_DEMO=true APP_PASSWORD=x uvicorn app.main:app --reload
+```
+
+`app/demo.py` küçük bir OpenSearch sorgu motoru ve sentetik veri içerir; böylece collector ve araçlar küme olmadan
+test edilir. Arayüze dil eklemek = `app/i18n.py`'ye bir sözlük eklemek.
+
+### Kendiniz ölçün
+
+Bu README'de pazarlama sayısı yok: başkasının alarmlarından gelen bir yakalama oranı sizin veriniz hakkında az şey
+söyler. Depo bunun yerine ölçüm aracını veriyor — `python -m app.eval`, kendi incelediğiniz günleri yeniden oynatır
+ve yapay zekâyı vardığınız sonuçla karşılaştırır:
+
+```sh
+python -m app.eval config/eval/demo.yaml               # demo senaryoları, Wazuh gerekmez
+python -m app.eval cases.yaml --repeat 3 --out res.json
+```
+
+Her senaryo için **yakalama oranı** (beklenen maddeler bulundu), **kaçırılan** maddeler, **gürültü ihlalleri**
+(bilinen gürültünün olay olarak bildirilmesi), bulgular, araç adımları, token ve süre raporlanır — böylece prompt,
+model veya eşik değişikliği ölçülen bir karar olur. Gerçek günlerden kendi senaryolarınızı yazın (`docs/eval.md`);
+bir gerilemeyi görmek için üç ile beş yeter. CI test paketini çalıştırır, değerlendirmeyi değil (model ve sizin
+veriniz gerekir).
+
+## Yol haritası
+
+[ROADMAP.md](ROADMAP.md) — öncelik listesinde imzalı imaj sürümleri (her derlemede SBOM zaten üretiliyor),
+ServiceNow/GitHub biletleme, decoder taslakları, gömülü grafikler ve daha fazla dil var.
+
+## Teşekkür
+
+- [Wazuh — Threat hunting with agentic AI](https://wazuh.com/blog/threat-hunting-with-agentic-ai/) (en az yetkili
+  roller, korelasyon penceresi)
+- [gensecaihq/Wazuh-MCP-Server](https://github.com/gensecaihq/Wazuh-MCP-Server),
+  [gbrigandi/mcp-server-wazuh](https://github.com/gbrigandi/mcp-server-wazuh)
 
 ## Lisans
 

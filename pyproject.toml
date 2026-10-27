@@ -24,6 +24,28 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "module"
 testpaths = ["tests"]
 
+[tool.coverage.run]
+source = ["app"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["app/web", "app/runtime.py", "app/authz.py", "app/formatting.py", "app/reporting.py", "app/services.py"]
+ignore_missing_imports = true
+follow_imports = "silent"      # gradual: legacy modules keep their types but their errors are not in scope
+check_untyped_defs = true
+warn_unused_ignores = true
+no_implicit_optional = true
+
 [tool.ruff]
 line-length = 120
 target-version = "py311"

@@ -45,9 +45,14 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
+            # Append-only audit trail (logs/audit.jsonl). Ephemeral by default (emptyDir): ship it to
+            # central storage for retention, or patch this volume to a PVC.
+            - name: logs
+              mountPath: /app/logs
           readinessProbe:
-            httpGet: { path: /healthz, port: http }
+            httpGet: { path: /readyz, port: http }
             periodSeconds: 10
+            timeoutSeconds: 4
           livenessProbe:
             httpGet: { path: /healthz, port: http }
             initialDelaySeconds: 20
@@ -65,6 +70,8 @@ spec:
               - { key: context.md, path: context/main.md }
               - { key: seed.yaml, path: seed/main.yaml }
         - name: tmp
+          emptyDir: { sizeLimit: 64Mi }
+        - name: logs
           emptyDir: { sizeLimit: 64Mi }
       {{- with .Values.nodeSelector }}
       nodeSelector:

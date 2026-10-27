@@ -77,7 +77,7 @@ async def test_source_tools():
     er = rt.get("demo")
     er.sources = _sources()
     from app.agent.tools import ToolBox
-    tb = ToolBox(er.env, er.ix, er.api, er.repo, mode="chat", sources=er.sources)
+    tb = ToolBox(er.env, er.ix, er.api, er.repo, mode="tools", sources=er.sources)
     for n in ("prom_query", "prom_range", "loki_query", "loki_labels", "k8s_get", "k8s_logs"):
         assert n in tb._handlers
     r = json.loads(await tb.call("prom_query", {"expr": "up"}))

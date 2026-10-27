@@ -2,6 +2,7 @@
 {% block title %}{{ _('rep.title') }} {{ run.started_at|ts }} · {{ env.name }}{% endblock %}
 {% block body %}
 {% set v = c.volume or {} %}{% set hl = c.health or {} %}{% set lvl = (c.env or {}).high_level or env.high_level %}
+{% set ctxt = _('rep.context', env=env.name, when=run.started_at|ts) %}
 <div class="page-head">
   <div class="titles">
     <div class="eyebrow"><a href="/e/{{ env.id }}">{{ env.name }}</a> · {{ _('nav.reports') }}</div>
@@ -58,6 +59,8 @@
     <div class="row">
       <span class="pill {{ LABEL_COLORS.get(f.label, 'gray') }}">{{ _('label.' ~ f.label) }}</span>
       <span class="pill outline">{{ _('sev.' ~ f.severity) }}</span>
+      <span class="spacer"></span>
+      <button class="btn small" data-copy-text="{{ ftext(f, context=ctxt) }}">{{ _('rep.copy') }}</button>
     </div>
     <h3 class="ftitle">{{ f.title }}</h3>
     <div class="detail">{{ f.detail|md }}</div>
@@ -81,7 +84,6 @@
       <input data-k="user_note" placeholder="{{ _('rep.note_ph') }}" value="{{ f.user_note or '' }}">
       <button class="btn small" data-save>{{ _('rep.save') }}</button><span class="saved small muted"></span>
       <span class="spacer"></span>
-      <button class="btn small" data-chat-finding="/api/e/{{ env.id }}/r/{{ run.run_id }}/f/{{ f.id }}/chat">{{ _('inbox.chat_btn') }}</button>
     </div>
     {% set run_id = run.run_id %}{% include "_incident.html" %}
   </article>
@@ -95,7 +97,11 @@
   <p class="muted small">{{ _('rep.questions_note') }}</p>
   {% for q in run.questions %}
   <div class="card q">
-    <p><b>{{ q.question }}</b>{% if q.why %}<br><span class="small muted">{{ q.why }}</span>{% endif %}</p>
+    <div class="row">
+      <div><b>{{ q.question }}</b>{% if q.why %}<br><span class="small muted">{{ q.why }}</span>{% endif %}</div>
+      <span class="spacer"></span>
+      <button class="btn small" data-copy-text="{{ qtext(q, context=ctxt) }}">{{ _('rep.copy') }}</button>
+    </div>
     {% if q.answer %}<p class="answer">✓ {{ q.answer }}</p>
     {% else %}
     <div class="row" data-answer="/api/e/{{ env.id }}/r/{{ run.run_id }}/q/{{ q.id }}">

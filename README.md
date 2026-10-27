@@ -8,7 +8,7 @@ Bring your own AI: Anthropic, OpenAI, Azure OpenAI or any OpenAI-compatible endp
 LiteLLM). One Docker container, read-only towards Wazuh by default. Critical alerts and run summaries go to
 e-mail, Telegram, Microsoft Teams, Slack, Discord, ntfy or a generic webhook.
 
-[Türkçe README](README.tr.md) · [AI providers](docs/providers.md) · [Notifications](docs/notifications.md) · [Permissions & network](docs/permissions.md) · [Rule deployment](docs/rule-deployment.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[English](README.md) · [Türkçe](README.tr.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [AI providers](docs/providers.md) · [Notifications](docs/notifications.md) · [Permissions & network](docs/permissions.md) · [Rule deployment](docs/rule-deployment.md) · [Architecture](docs/architecture.md) · [Compatibility](docs/compatibility.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ![Report](docs/screenshot-report.png)
 
@@ -49,8 +49,8 @@ of silencing.
   requests. AI proposals have **no effect until you approve them**. Bring your existing notes with YAML
   import/export (UI or `python -m app.kb`), repeatable without duplicates.
 - **Recommendation inbox** — findings one at a time, de-duplicated across runs; one decision settles every
-  occurrence. Findings that need a look on a server carry exact read-only commands, and **Investigate in chat**
-  opens a conversation where you paste the output and get the next step.
+  occurrence. Findings that need a look on a server carry exact read-only commands, and one click copies the
+  finding with those commands so you can paste the output where you work.
 - **Notifications by e-mail, Telegram, Microsoft Teams, Slack, Discord, ntfy or a generic webhook** — critical
   situations (SIEM silent, indexer red, real incidents) without repeating the same item every run, an optional
   short summary after every run, and rule deployments ([docs/notifications.md](docs/notifications.md)).
@@ -78,9 +78,11 @@ of silencing.
   data from your own assistant ([docs/mcp.md](docs/mcp.md)).
 - **Evaluation** — `python -m app.eval` replays days you reviewed yourself and scores the AI (recall, noise
   reported as incidents, tokens): compare models and prompts with numbers ([docs/eval.md](docs/eval.md)).
-- **Chat** — ask questions about an environment; answers use the same tools and show their tool calls.
-- **Stored in Wazuh itself** — `daily-triage-runs`, `daily-triage-knowledge`, `daily-triage-chat` indices in
-  each environment's own indexer. No extra database.
+- **Copy-ready output** — every finding and question has a copy button (plain text: evidence, recommendation,
+  commands) for tickets, mail or a terminal.
+- **Stored in Wazuh itself** — `daily-triage-runs` and `daily-triage-knowledge` indices in
+  each environment's own indexer. No extra database. Optional `run_retention_days` prunes old runs; the knowledge
+  base is never deleted.
 - **Multi-environment, multi-language** (English, Turkish, Spanish, German), per-environment AI override (e.g. a
   local model for regulated data), connection test in the UI and CLI.
 
@@ -250,19 +252,35 @@ Or use **Import / export** on the knowledge base page. Re-running never creates 
 
 ## Compatibility
 
-- Wazuh **4.x** (developed against 4.14) — all-in-one, distributed, Docker and Kubernetes deployments.
+See [docs/compatibility.md](docs/compatibility.md) for the full matrix (Wazuh, indexer, Python, providers,
+integrations, known limits). In short:
+
+- Wazuh **4.x** (developed and tested against 4.14) — all-in-one, distributed, Docker and Kubernetes deployments.
 - Wazuh Indexer / OpenSearch 2.x with the standard `wazuh-alerts-*` template. Index patterns are configurable.
 - Wazuh server API is optional; without it agent/daemon health, rule info and logtest are disabled.
-- Basic auth, private CA (`ca_file`) and mutual TLS (`client_cert`/`client_key`) are supported.
+- Python **3.11–3.13**; basic auth, private CA (`ca_file`) and mutual TLS (`client_cert`/`client_key`) supported.
 
 ## Security model
+
+> **Default posture:** no write access to Wazuh, no shell, no outbound requests from the model. Everything the
+> AI can do is a read query inside configured limits, or a *proposal* that waits for a human. Production startup
+> refuses example passwords, a missing `APP_SECRET`, insecure cookies and disabled TLS verification; every
+> state-changing request is written to a tamper-evident audit trail.
 
 - **Read-only towards Wazuh by default.** No active response, no config writes, no agent commands. The only
   index writes go to its own `daily-triage-*` indices. The opt-in rule deployment uses a separate API user that
   can only upload custom rules files and restart the manager; the application writes one dedicated file.
 - **Prompt injection.** Alert content (URLs, `full_log`, user agents, user names) is attacker-controlled. The
   prompt marks it as data, and even a fooled model can at most add a *proposal* to the knowledge base, which
-  does nothing until you approve it.
+  does nothing until you approve it. Field names, time windows, bucket counts and document sizes are capped by
+  `query_guard`, so injected text cannot turn into an expensive or arbitrary query.
+- **Least privilege in the UI.** Two roles (admin, read-only viewer) with a permission matrix, and an optional
+  per-role environment allow-list (`ADMIN_ENVS`, `VIEWER_ENVS`, `MCP_ENVS`) when production and staging share one
+  installation. Checks run server-side on every route, not in the template.
+- **Audit trail.** Logins, denials, decisions, deployments and every state-changing request are appended to
+  `logs/audit.jsonl` with actor, role, environment, result and a SHA-256 hash chain — tampering breaks the chain.
+- **Rule deployment fails closed.** Validation, restart and logtest are verified; a failed expectation *or* a
+  sample that cannot be reproduced rolls the change back, and a failed rollback is logged as critical.
 - **Data leaving your network.** With a hosted LLM, alert summaries and sample log lines are sent to that
   provider. For regulated data use a local model or `redact: true` (masks e-mails, passwords, tokens, card
   numbers; IP addresses are kept for analysis; not a full DLP).
@@ -270,8 +288,12 @@ Or use **Import / export** on the knowledge base page. Re-running never creates 
   scripts), model output rendered as markdown with HTML disabled. An optional read-only `VIEWER_PASSWORD` lets a
   team view everything without changing anything. The container runs as non-root with a read-only filesystem and
   all capabilities dropped. Put it behind TLS; with an SSO proxy set `AUTH_DISABLED=true`.
+- **Operations.** `/metrics` (admin session or `METRICS_TOKEN`) exposes run, error, duration, token and deploy
+  counters; `/healthz` is the liveness probe and `/readyz` the readiness probe (deliberately no Indexer call, so an
+  outage never pulls the UI that explains it); every log line and audit record carries an `X-Request-ID`.
 
-Report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
+Report vulnerabilities privately — see [SECURITY.md](SECURITY.md). Deliberate overrides are listed in
+[docs/security-exceptions.md](docs/security-exceptions.md).
 
 ## Architecture
 
@@ -286,14 +308,15 @@ schedule  │ Collector ──► deterministic summary + health flags          
           │      │                                                               │
           │      ▼                                                               │
           │ submit_report ──► daily-triage-runs ──► notify (mail/Telegram/Teams/Slack/Discord/ntfy/webhook) │
-          │ Web UI / chat ◄──► daily-triage-knowledge / -chat                    │
+          │ Web UI ◄──► daily-triage-runs / -knowledge                           │
           │ Approve & deploy (opt-in, separate API user) ──► etc/rules/wdt_rules │
           └───────────┬──────────────────────────────┬───────────────────────────┘
                       │ HTTPS 9200                   │ HTTPS 55000
                Wazuh Indexer                  Wazuh server API
 ```
 
-Python 3.12, FastAPI, Jinja2, httpx. No provider SDKs, no front-end build step.
+Python 3.12, FastAPI, Jinja2, httpx. No provider SDKs, no front-end build step. Module map, request flow and
+extension points: [docs/architecture.md](docs/architecture.md).
 
 ## Development
 
@@ -301,16 +324,34 @@ Python 3.12, FastAPI, Jinja2, httpx. No provider SDKs, no front-end build step.
 python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 pytest
+pytest --cov=app --cov-report=term-missing     # what CI uploads
+ruff check .
 WDT_DEMO=true APP_PASSWORD=x uvicorn app.main:app --reload
 ```
 
 `app/demo.py` contains a tiny OpenSearch query engine and synthetic data, so the collector and tools are tested
 without a cluster. Adding a UI language = adding a dictionary to `app/i18n.py`.
 
+### Measure it yourself
+
+There are no marketing numbers in this README: a recall figure from someone else's alerts says little about
+yours. The repository ships the instrument instead — `python -m app.eval` replays days you reviewed yourself
+and scores the AI against what you concluded:
+
+```sh
+python -m app.eval config/eval/demo.yaml               # demo cases, no Wazuh needed
+python -m app.eval cases.yaml --repeat 3 --out res.json
+```
+
+Per case it reports **recall** (expected items found), **missed** items, **noise violations** (known noise
+reported as an incident), findings, tool steps, tokens and wall time — so a prompt, model or threshold change
+is a measured decision. Write your own cases from real days (`docs/eval.md`); three to five are enough to spot a
+regression. CI runs the suite, not the evaluation (it needs a model and your data).
+
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) — the priority list includes a Helm chart, signed releases with SBOM, Jira and other
-ticketing, a read-only viewer role, PDF export, decoder drafts and more languages.
+See [ROADMAP.md](ROADMAP.md) — the priority list includes signed image releases (an SBOM is already produced
+per build), ServiceNow/GitHub ticketing, decoder drafts, embedded charts and more languages.
 
 ## Acknowledgements
 

@@ -28,7 +28,8 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
-      - uses: docker/build-push-action@v7
+      - id: build
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -37,6 +38,13 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # Traceability: the digest (immutable) next to the mutable tags, so a deployment can pin
+      # ghcr.io/<repo>@sha256:... and the release notes show exactly which image was built.
+      - name: Record image digest
+        run: |
+          echo "### Image digest" >> "$GITHUB_STEP_SUMMARY"
+          echo '`${{ steps.build.outputs.digest }}`' >> "$GITHUB_STEP_SUMMARY"
+          echo "source revision: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
       # SBOM of the released image, uploaded as a workflow artifact (SPDX JSON).
       # To also sign it, set a cosign key and add `cosign sign`/`cosign attest` steps.
       - uses: anchore/sbom-action@v0

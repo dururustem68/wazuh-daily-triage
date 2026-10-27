@@ -17,3 +17,11 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+# runtime state: audit trail (logs/audit.jsonl*), report exports
+logs/
+*.cdx.json
+# test/coverage artefacts
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/

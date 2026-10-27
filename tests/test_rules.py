@@ -82,19 +82,32 @@ async def test_deploy_flow():
         await rt.rule_deploy("demo", k2["id"], "alice")
     assert (await rt.rule_deploy("demo", k2["id"], "alice", confirm="100951"))["state"] == "deployed"
 
-    # validation failure → rolled back, file unchanged, no restart
+    # validation failure → the new file is rolled back, the previous content restored and verified
     before, restarts = api.files["wdt_rules.xml"], api.restarts
     k3 = await er.repo.add_knowledge("rule_draft", "x", "", extra={"xml": DETECT.replace("100950", "100952")})
-    api.fail_validation = True
+    api.broken_marker = "100952"
     rec = await rt.rule_deploy("demo", k3["id"], "alice")
-    api.fail_validation = False
-    assert rec["state"] == "failed" and api.files["wdt_rules.xml"] == before and api.restarts == restarts
+    api.broken_marker = ""
+    assert rec["state"] == "failed" and api.files["wdt_rules.xml"] == before
+    assert rec["rollback_state"] == "done" and "100950" in api.loaded
+    assert api.restarts == restarts + 1        # the restored configuration was validated and restarted
     assert any(st["step"] == "rollback" for st in rec["steps"])
 
     # remove
     rec = await rt.rule_deploy("demo", k["id"], "alice", remove=True)
     assert rec["state"] == "removed" and "100950" not in api.loaded
     assert (await er.repo.s.get("knowledge", k["id"]))["status"] == "closed"
+
+
+async def test_failed_rollback_is_reported():
+    rt = Runtime(load_settings(os.path.join(ROOT, "config/demo.yaml")), demo=True)
+    er = rt.get("demo")
+    k = await er.repo.add_knowledge("rule_draft", "d", "", extra={"xml": DETECT})
+    er.api.fail_validation = True          # every configuration is rejected, including the restore
+    rec = await rt.rule_deploy("demo", k["id"], "alice")
+    er.api.fail_validation = False
+    assert rec["state"] == "failed" and rec["rollback_state"] == "failed"
+    assert "rollback FAILED" in rec["error"]
 
 
 async def test_deploy_disabled_by_default(tmp_path):
@@ -157,10 +170,6 @@ async def test_upload_refused_changes_nothing(monkeypatch):
     names = [s["step"] for s in rec["steps"]]
     assert rec["state"] == "failed" and "rules:delete" in rec["error"]
     assert "nothing was changed" in names and "rollback" not in names and api.restarts == restarts
-    # the failed draft can be taken to chat
-    sid = await rt.chat_from_knowledge("demo", k["id"], "tr")
-    hist = await er.repo.chat_history(sid, 10)
-    assert any("rules:delete" in (m.get("text") or m.get("content") or "") for m in hist)
 
 
 ROOTCHECK = """<group name="local,rootcheck,">
@@ -179,16 +188,35 @@ async def test_internal_events_skip_logtest_and_inconclusive(monkeypatch):
     k = await er.repo.add_knowledge("rule_draft", "rc", "", extra={"xml": ROOTCHECK, "tests": tests})
     assert (await rt.rule_view("demo", k["id"]))["analysis"]["replayable"] is False
     rec = await rt.rule_deploy("demo", k["id"], "alice")
-    assert rec["state"] == "deployed" and any(s["step"] == "logtest skipped" for s in rec["steps"])
+    assert rec["state"] == "deployed" and any(s["step"] == "logtest" and s.get("state") == "not_run"
+                                             for s in rec["steps"])
 
-    # a sample no rule matches at all is inconclusive, not a failure
+    # a sample no rule matches at all is inconclusive: fail closed, the manager is restored
     async def nothing(event, log_format="syslog", location="daily-triage"):
         return {"output": {}}
     monkeypatch.setattr(er.api, "logtest", nothing)
     k2 = await er.repo.add_knowledge("rule_draft", "d", "", extra={"xml": DETECT, "tests": tests})
+    before = er.api.files.get("wdt_rules.xml")
     rec = await rt.rule_deploy("demo", k2["id"], "alice")
     lt = next(s for s in rec["steps"] if s["step"] == "logtest")
-    assert rec["state"] == "deployed" and lt["ok"] and "?" in lt["detail"]
+    assert rec["state"] == "failed" and not lt["ok"] and lt["state"] == "inconclusive"
+    assert rec["rollback_state"] == "done" and er.api.files.get("wdt_rules.xml") == before
+
+    # the same draft may be deployed only when the environment explicitly allows it
+    er.env.rule_deploy = er.env.rule_deploy.model_copy(update={"allow_inconclusive": True})
+    rec = await rt.rule_deploy("demo", k2["id"], "alice")
+    lt = next(s for s in rec["steps"] if s["step"] == "logtest")
+    assert rec["state"] == "deployed" and lt["ok"] and lt["state"] == "inconclusive"
+
+
+async def test_require_tests_blocks_untested_draft():
+    rt = Runtime(load_settings(os.path.join(ROOT, "config/demo.yaml")), demo=True)
+    er = rt.get("demo")
+    er.env.rule_deploy = er.env.rule_deploy.model_copy(update={"require_tests": True})
+    k = await er.repo.add_knowledge("rule_draft", "no samples", "", extra={"xml": DETECT})
+    with pytest.raises(ValueError, match="requires logtest samples"):
+        await rt.rule_deploy("demo", k["id"], "alice")
+    assert er.api.restarts == 0 and "100950" not in er.api.loaded
 
 
 async def test_range_error_also_reports_collision():

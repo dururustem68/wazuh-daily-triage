@@ -27,11 +27,21 @@ Deployment is **off by default**. With it off the application stays fully read-o
 5. **Restarts** — `PUT /manager/restart`, or `PUT /cluster/restart` when a cluster is running (rules are
    written on the master and synchronised to the workers). Event processing pauses for roughly 20–60 s.
 6. **Verifies** — waits until `wazuh-analysisd` runs and the new rule IDs are loaded from the file.
-7. **Logtest** — if the draft carries test events (the AI adds at least one that must match and one that must
-   not), each is run through `PUT /logtest`. Any wrong result rolls the change back.
+7. **Logtest (fail closed)** — if the draft carries test events (the AI adds at least one that must match and one
+   that must not), each is run through `PUT /logtest` and classified:
+   * `passed` — the expected outcome was observed,
+   * `failed` — a different rule matched (or none when one was expected): the change is rolled back,
+   * `inconclusive` — no rule matched the sample at all, so it cannot be replayed through logtest. **This is not a
+     pass:** the deployment is rolled back unless the environment sets `allow_inconclusive: true`,
+   * `not_run` — manager-internal events (rootcheck, FIM, SCA, vulnerability) that logtest cannot replay; the rule
+     is loaded and must be confirmed on the next real event.
+
+   With `require_tests: true` a draft without samples is refused before anything is written.
 8. **Records** who did it (the SSO user from `X-authentik-username`, `X-Forwarded-User`, `Remote-User` or
    `X-Auth-Request-User` when `AUTH_DISABLED=true` behind a proxy — configurable with `USER_HEADER`),
-   when, every step, and keeps the last 10 attempts on the knowledge entry.
+   when, every step with its state, the **rollback outcome** (not needed / done / **failed**) and keeps the last
+   10 attempts on the knowledge entry. A failed rollback is logged as `CRITICAL`: the manager needs a human.
+   Deployments are also written to the audit trail (`docs/permissions.md §5`).
 
 The AI is told which drafts are deployed (to measure their effect), which were removed and which the user
 rejected (so it does not propose them again).
@@ -49,10 +59,32 @@ rejected (so it does not propose them again).
       id_min: 100000             # drafts outside this range are refused
       id_max: 119999
       restart_timeout: 180       # seconds to wait for the manager to come back
+      require_tests: true        # fail closed: refuse drafts without logtest samples
+      allow_inconclusive: false  # true = deploy a sample that logtest cannot reproduce (documented exception)
 ```
 
 Single environment without YAML: `RULE_DEPLOY_ENABLED=true`, `WAZUH_DEPLOY_USER`, `WAZUH_DEPLOY_PASSWORD`,
-optionally `RULE_DEPLOY_FILE`, `RULE_DEPLOY_ID_MIN`, `RULE_DEPLOY_ID_MAX`.
+optionally `RULE_DEPLOY_FILE`, `RULE_DEPLOY_ID_MIN`, `RULE_DEPLOY_ID_MAX`, `RULE_DEPLOY_REQUIRE_TESTS`,
+`RULE_DEPLOY_ALLOW_INCONCLUSIVE`.
+
+## Test policy (fail closed)
+
+| Draft | Default (`require_tests: false`) | Strict (`require_tests: true`) |
+|---|---|---|
+| no samples | deployed, no logtest step | **refused** before the file is written |
+| samples pass | deployed | deployed |
+| a sample matches the wrong rule | rolled back | rolled back |
+| a sample matches nothing (`inconclusive`) | rolled back | rolled back |
+| `inconclusive` + `allow_inconclusive: true` | deployed, recorded as `inconclusive` | deployed, recorded as `inconclusive` |
+| manager-internal group (rootcheck/FIM/SCA/vulnerability) | deployed, logtest `not_run` | deployed, logtest `not_run` |
+
+Why `inconclusive` blocks by default: "no rule matched" usually means the sample never reaches the decoder or the
+parent rule, so the test proves nothing about the new rule. Treating it as a pass is how a silently broken rule
+reaches production. Turn on `allow_inconclusive` only for environment-specific cases you have verified by hand,
+and record the reason in [security-exceptions.md](security-exceptions.md).
+
+`require_tests: true` is recommended for production environments where the AI writes the drafts: it forces the
+model to add a matching **and** a non-matching sample, which is what makes the logtest step meaningful.
 
 The API URL and TLS settings are taken from the environment's `api:` block; only the credentials differ.
 Keep the read-only `daily-triage` user for everything else.

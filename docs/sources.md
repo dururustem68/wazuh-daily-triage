@@ -1,7 +1,7 @@
 # Other data sources — Prometheus, Loki, Kubernetes (read-only)
 
 Wazuh tells you *what* happened; the cause is often elsewhere (a pod restart, an OOM kill, a full disk, a
-service error). With these sources the AI — in daily runs, chat, incident drafts and over [MCP](mcp.md) — can
+service error). With these sources the AI — in daily runs, incident drafts and over [MCP](mcp.md) — can
 check it instead of asking you to.
 
 ```yaml

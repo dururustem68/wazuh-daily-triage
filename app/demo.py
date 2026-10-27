@@ -449,6 +449,13 @@ class FakeIndexer:
     async def delete_doc(self, index, doc_id):
         self.docs.get(index, {}).pop(doc_id, None)
 
+    async def delete_by_query(self, index, query):
+        docs = self.docs.get(index, {})
+        doomed = [doc_id for doc_id, d in docs.items() if _match(d, query)]
+        for doc_id in doomed:
+            docs.pop(doc_id, None)
+        return len(doomed)
+
 
 class FakeAPI:
     """Demo/test stand-in for the Wazuh API, including an in-memory custom rules directory."""
@@ -458,7 +465,8 @@ class FakeAPI:
         self.files: dict[str, str] = {}
         self.loaded: dict[str, dict] = {}     # rules "loaded" by the last restart
         self.restarts = 0
-        self.fail_validation = False
+        self.fail_validation = False          # True: every config is rejected
+        self.broken_marker = ""               # a file containing this text is rejected (simulates a bad rule)
 
     async def close(self):
         pass
@@ -546,7 +554,9 @@ class FakeAPI:
         self.files.pop(name, None)
 
     async def config_validation(self, cluster):
-        return [{"name": "demo-manager", "status": "KO" if self.fail_validation else "OK"}]
+        bad = self.fail_validation or (self.broken_marker and any(self.broken_marker in v
+                                                                for v in self.files.values()))
+        return [{"name": "demo-manager", "status": "KO" if bad else "OK"}]
 
     async def restart(self, cluster):
         import re as _re

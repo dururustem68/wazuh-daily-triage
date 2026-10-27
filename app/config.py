@@ -12,6 +12,7 @@ import os
 import re
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -73,6 +74,29 @@ class LivenessCfg(BaseModel):
     silence_minutes: int | None = None    # default: the environment's max_silence_minutes
     repeat_hours: float = 2               # remind while a problem persists
     notify_recovery: bool = True
+
+
+class QueryLimitsCfg(BaseModel):
+    """Hard limits for every query the AI (or an MCP client) can trigger.
+
+    The model can only narrow or widen a window inside these bounds; field names are checked against an
+    allow-list, so a prompt-injected instruction cannot turn into an expensive or arbitrary query.
+    """
+    max_range_hours: int = Field(24 * 14, ge=1, le=24 * 366)   # widest window per tool call
+    max_buckets: int = Field(200, ge=10, le=10_000)            # date_histogram buckets per query
+    max_terms_size: int = Field(50, ge=1, le=10_000)           # terms aggregation bucket count
+    max_size: int = Field(25, ge=1, le=1_000)                  # documents returned
+    min_interval: str = "1m"                                   # smallest histogram interval
+    max_concurrent: int = Field(8, ge=1, le=64)                # parallel queries per environment
+    request_timeout: float | None = Field(None, gt=0, le=600)  # overrides indexer.timeout when set
+    extra_fields: list[str] = Field(default_factory=list)      # allow-listed fields on top of the built-ins
+
+    @field_validator("min_interval")
+    @classmethod
+    def _interval(cls, v):
+        if not re.fullmatch(r"\d+[smhdw]", v):
+            raise ValueError("min_interval must look like 30s, 1m, 1h")
+        return v
 
 
 class MailCfg(BaseModel):
@@ -193,6 +217,10 @@ class RuleDeployCfg(BaseModel):
     id_min: int = 100000                 # drafts outside this ID range are refused
     id_max: int = 119999
     restart_timeout: int = 180           # seconds to wait for the manager to come back
+    # deployment gate (fail closed): a draft without logtest samples, or with a sample that cannot be
+    # reproduced, is not deployed automatically. Set require_tests: true to enforce samples for every draft.
+    require_tests: bool = False
+    allow_inconclusive: bool = False     # true = an unreproducible sample is still deployed (with a warning)
 
     @field_validator("file")
     @classmethod
@@ -270,7 +298,7 @@ class Environment(BaseModel):
     vuln_index: str = "wazuh-states-vulnerabilities-*"
     storage_prefix: str = "daily-triage"
     schedule: Schedule = Field(default_factory=Schedule)
-    # Window: since the last successful run, clamped to [min, max] hours
+    # Window: since the last successful run; min = fallback without a report, max = cap
     window_min_hours: int = 24
     window_max_hours: int = 96
     high_level: int = 7
@@ -288,6 +316,7 @@ class Environment(BaseModel):
     notify: NotifyCfg | None = None   # per-environment notification override
     rule_deploy: RuleDeployCfg = Field(default_factory=RuleDeployCfg)
     liveness: LivenessCfg = Field(default_factory=LivenessCfg)
+    query: QueryLimitsCfg = Field(default_factory=QueryLimitsCfg)
     mail: MailCfg | None = None          # set to analyse e-mail channel saturation
     vuln_sla: VulnSlaCfg = Field(default_factory=VulnSlaCfg)
     promote: PromoteCfg = Field(default_factory=PromoteCfg)
@@ -296,6 +325,7 @@ class Environment(BaseModel):
     sources: SourcesCfg = Field(default_factory=SourcesCfg)
     incident: IncidentCfg = Field(default_factory=IncidentCfg)
     anomaly: bool = True                  # deterministic rule×agent anomalies against a 14-day baseline
+    run_retention_days: int = Field(default=0, ge=0)   # 0 = keep runs forever; knowledge is never pruned
 
     @field_validator("id")
     @classmethod
@@ -344,6 +374,15 @@ class AppConfig(BaseModel):
     timezone: str = "UTC"
     language: str = "en"
     title: str = "Wazuh Daily Triage"
+
+    @field_validator("timezone")
+    @classmethod
+    def _tz(cls, v):
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError) as e:
+            raise ValueError(f"unknown timezone {v!r}; install the tzdata package") from e
+        return v
 
     @field_validator("language")
     @classmethod
@@ -467,7 +506,9 @@ def settings_from_env() -> dict:
                               "password": E("WAZUH_DEPLOY_PASSWORD", ""),
                               "file": E("RULE_DEPLOY_FILE") or "wdt_rules.xml",
                               "id_min": int(E("RULE_DEPLOY_ID_MIN") or 100000),
-                              "id_max": int(E("RULE_DEPLOY_ID_MAX") or 119999)}
+                              "id_max": int(E("RULE_DEPLOY_ID_MAX") or 119999),
+                              "require_tests": _bool(E("RULE_DEPLOY_REQUIRE_TESTS"), False),
+                              "allow_inconclusive": _bool(E("RULE_DEPLOY_ALLOW_INCONCLUSIVE"), False)}
     return {
         "app": {"timezone": E("TZ", "UTC"), "language": E("APP_LANGUAGE", "en")},
         "llm": llm_from_env(),

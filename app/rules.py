@@ -155,6 +155,7 @@ async def analyse(xml: str, cfg: RuleDeployCfg, api: WazuhAPI | None, high_level
     not_replayable = sorted(internal & INTERNAL_GROUPS)
     return {"ok": not errors, "errors": errors, "risky": sorted(set(risky)), "ids": ids,
             "replayable": not not_replayable, "internal_groups": not_replayable,
+            "test_policy": {"require_tests": cfg.require_tests, "allow_inconclusive": cfg.allow_inconclusive},
             "xml": _normalise(xml), "parents": {k: {"level": v.get("level"), "description": v.get("description"),
                                                     "filename": v.get("filename")} for k, v in parents_info.items()}}
 
@@ -213,6 +214,7 @@ def commands(kid: str, xml: str, cfg: RuleDeployCfg, title: str = "", ids: list[
 # ----------------------------------------------------------------------------- deployment
 class DeployError(RuntimeError):
     steps: list[dict] | None = None
+    rollback: str = "not_needed"          # done | failed | not_needed
 
 
 async def _wait_back(api: WazuhAPI, ids: list[str], file: str, timeout: int, present: bool = True) -> str:
@@ -238,25 +240,53 @@ async def _wait_back(api: WazuhAPI, ids: list[str], file: str, timeout: int, pre
 
 
 async def _run_tests(api: WazuhAPI, ids: list[str], tests: list[dict]) -> list[dict]:
+    """Run the draft's logtest samples and classify each one.
+
+    ``passed``      the expected outcome was observed,
+    ``failed``      the observed outcome differs from the expectation (the rule is wrong),
+    ``inconclusive`` no rule matched the sample at all, so the sample cannot be replayed through logtest,
+    ``not_run``     handed out by the caller (no samples, or manager-internal events).
+    """
     out = []
     for t in tests[:6]:
         d = await api.logtest(t["event"], t.get("log_format", "syslog"), t.get("location", "daily-triage"))
         rid = str(((d.get("output") or {}).get("rule") or {}).get("id", ""))
         want = t.get("expect", "match") == "match"
         # no rule at all matched the sample (not even a parent): the sample is not reproducible, not a rule failure
-        inconclusive = want and not rid
-        out.append({"expect": "match" if want else "no_match", "got_rule": rid, "ok": (rid in ids) == want,
-                    "inconclusive": inconclusive})
+        if want and not rid:
+            state = "inconclusive"
+        elif (rid in ids) == want:
+            state = "passed"
+        else:
+            state = "failed"
+        out.append({"expect": "match" if want else "no_match", "got_rule": rid, "state": state,
+                    "ok": state == "passed", "inconclusive": state == "inconclusive"})
     return out
 
 
-async def apply(api: WazuhAPI, cfg: RuleDeployCfg, kid: str, xml: str, ids: list[str], title: str = "",
-                tests: list[dict] | None = None, remove: bool = False, replayable: bool = True) -> list[dict]:
-    """Write (or remove) one draft's block, validate, restart, verify; roll back on any failure."""
-    steps: list[dict] = []
+def _test_summary(res: list[dict]) -> str:
+    sym = {"passed": "✓", "failed": "✗", "inconclusive": "?", "not_run": "–"}
+    return "; ".join(f"{r['expect']} → {r.get('got_rule') or '-'} {sym.get(r.get('state'), '?')}" for r in res)
 
-    def step(name, ok=True, detail=""):
-        steps.append({"step": name, "ok": ok, "detail": str(detail)[:500]})
+
+async def apply(api: WazuhAPI, cfg: RuleDeployCfg, kid: str, xml: str, ids: list[str], title: str = "",
+                tests: list[dict] | None = None, remove: bool = False, replayable: bool = True,
+                allow_inconclusive: bool | None = None) -> list[dict]:
+    """Write (or remove) one draft's block, validate, restart, verify; roll back on any failure.
+
+    Fail closed: a failed logtest expectation blocks deployment, and so does an inconclusive sample unless
+    ``allow_inconclusive`` is enabled for the environment. Manager-internal events (which logtest cannot
+    replay) are recorded as ``not_run`` rather than silently counted as a pass.
+    """
+    steps: list[dict] = []
+    if allow_inconclusive is None:
+        allow_inconclusive = cfg.allow_inconclusive
+
+    def step(name, ok=True, detail="", state=""):
+        d = {"step": name, "ok": ok, "detail": str(detail)[:500]}
+        if state:
+            d["state"] = state
+        steps.append(d)
 
     cluster = await api.cluster_running()
     step("cluster" if cluster else "standalone manager", True, "restart via /cluster/restart" if cluster else "")
@@ -267,7 +297,8 @@ async def apply(api: WazuhAPI, cfg: RuleDeployCfg, kid: str, xml: str, ids: list
         step("nothing to remove", True)
         return steps
 
-    async def rollback(reason: str):
+    async def rollback(reason: str) -> bool:
+        """Restore the previous file and verify the manager really came back; False when it did not."""
         step("rollback", True, reason)
         try:
             if old is not None:
@@ -278,12 +309,16 @@ async def apply(api: WazuhAPI, cfg: RuleDeployCfg, kid: str, xml: str, ids: list
                 except WazuhAPIError:
                     await api.rule_file_put(cfg.file, "<!-- Managed by wazuh-daily-triage. -->\n")
             v = await api.config_validation(cluster)
-            if all(x.get("status") == "OK" for x in v):
-                await api.restart(cluster)
-                await _wait_back(api, [], cfg.file, cfg.restart_timeout)
-            step("rollback done", True)
+            if not all(x.get("status") == "OK" for x in v):
+                step("rollback validation", False, v)
+                return False
+            await api.restart(cluster)
+            await _wait_back(api, [], cfg.file, cfg.restart_timeout)
+            step("rollback done", True, "previous content restored and the manager is back")
+            return True
         except (WazuhAPIError, DeployError) as e:
             step("rollback FAILED — check the manager now", False, e)
+            return False
 
     try:
         try:
@@ -304,38 +339,55 @@ async def apply(api: WazuhAPI, cfg: RuleDeployCfg, kid: str, xml: str, ids: list
         bad = [x for x in val if x.get("status") != "OK"]
         if bad:
             step("validation", False, bad)
-            await rollback("validation failed — restart skipped")
+            if not await rollback("validation failed — restart skipped"):
+                raise DeployError("manager rejected the configuration; rollback FAILED — check the manager now")
             raise DeployError("manager rejected the configuration")
         step("validation", True, "OK")
         await api.restart(cluster)
         step("restart requested", True)
         step("manager back", True, await _wait_back(api, ids, cfg.file, cfg.restart_timeout, present=not remove))
         if tests and not remove and not replayable:
-            step("logtest skipped", True, "manager-internal events (rootcheck / FIM / SCA / vulnerability) cannot be "
-                 "replayed through logtest — the rule is loaded; confirm it on the next real event")
+            step("logtest", True, "manager-internal events (rootcheck / FIM / SCA / vulnerability) cannot be "
+                 "replayed through logtest — the rule is loaded; confirm it on the next real event",
+                 state="not_run")
         elif tests and not remove:
             res = await _run_tests(api, ids, tests)
-            failed = [r for r in res if not r["ok"] and not r["inconclusive"]]
-            ok = not failed
-            detail = "; ".join(f"{r['expect']} → {r['got_rule'] or '-'} "
-                               f"{'?' if r['inconclusive'] else '✓' if r['ok'] else '✗'}" for r in res)
-            if ok and any(r["inconclusive"] for r in res):
-                detail += " — '?' = no rule matched the sample at all (it cannot be replayed through logtest); " \
-                          "the rule is loaded, confirm it on the next real event"
-            step("logtest", ok, detail)
-            if not ok:
-                await rollback("logtest expectations not met")
-                raise DeployError("logtest failed")
+            failed = [r for r in res if r["state"] == "failed"]
+            unclear = [r for r in res if r["state"] == "inconclusive"]
+            blocked = bool(failed) or (bool(unclear) and not allow_inconclusive)
+            detail = _test_summary(res)
+            if unclear and not failed:
+                detail += (" — '?' = no rule matched the sample at all (it cannot be replayed through logtest); "
+                           "confirm the rule on the next real event")
+                if not allow_inconclusive:
+                    detail += " — deployment blocked: a non-reproducible sample is not a pass " \
+                              "(rule_deploy.allow_inconclusive)"
+            step("logtest", not blocked, detail,
+                 state="failed" if failed else ("inconclusive" if unclear else "passed"))
+            if blocked:
+                reason = ("logtest expectations not met" if failed
+                          else "logtest inconclusive — sample could not be reproduced")
+                if not await rollback(reason):
+                    raise DeployError(f"{reason}; rollback FAILED — check the manager now")
+                raise DeployError(reason)
     except WazuhAPIError as e:
         step("error", False, e)
-        await rollback(str(e)[:200])
+        # The upload succeeded before this error (upload errors are handled above and change nothing),
+        # so the manager now holds a possibly broken file: restore it and verify the rollback.
+        if not await rollback(str(e)[:200]):
+            err = DeployError(f"{e}; rollback FAILED — check the manager now")
+            err.steps, err.rollback = steps, "failed"
+            raise err from e
         err = DeployError(str(e))
-        err.steps = steps
+        err.steps, err.rollback = steps, "done"
         raise err from e
     except DeployError as e:
         if not any(s["step"] in ("rollback", "nothing was changed") for s in steps):
             step("error", False, e)
-            await rollback("manager did not come back")
+            if not await rollback("manager did not come back"):
+                raise DeployError(f"{e}; rollback FAILED — check the manager now") from e
+        rb = [s for s in steps if str(s.get("step", "")).startswith("rollback")]
+        e.rollback = ("failed" if any(not s["ok"] for s in rb) else "done") if rb else "not_needed"
         e.steps = steps
         raise
     return steps

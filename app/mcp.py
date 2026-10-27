@@ -20,7 +20,7 @@ import os
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
-from . import __version__
+from . import __version__, auditlog, authz
 from .agent.tools import SPECS, ToolBox
 
 log = logging.getLogger("wdt.mcp")
@@ -51,9 +51,10 @@ def _authorized(request: Request) -> bool:
 
 
 def _tool_list(rt) -> list[dict]:
-    envs = list(rt.envs)
+    envs = sorted(authz.mcp_envs(rt.envs))
     names: dict[str, dict] = {}
-    for er in rt.envs.values():
+    for eid in envs:
+        er = rt.envs[eid]
         tb = ToolBox(er.env, er.ix, er.api, er.repo, mode="mcp", sources=er.sources)
         for n in tb._handlers:
             if n not in EXCLUDE and n in SPECS:
@@ -74,13 +75,14 @@ def _tool_list(rt) -> list[dict]:
 
 
 async def _call(rt, name: str, args: dict) -> str:
+    allowed = sorted(authz.mcp_envs(rt.envs))
     if name == "list_environments":
         return json.dumps([{"id": e.env.id, "name": e.env.name, "description": e.env.description,
                             "sources": sorted(e.sources), "wazuh_api": bool(e.api), "high_level": e.env.high_level}
-                           for e in rt.envs.values()], ensure_ascii=False)
-    env_id = args.pop("env", None) or (next(iter(rt.envs)) if len(rt.envs) == 1 else None)
-    if env_id not in rt.envs:
-        return json.dumps({"error": f"unknown or missing env; one of {list(rt.envs)}"})
+                           for e in (rt.envs[i] for i in allowed)], ensure_ascii=False)
+    env_id = args.pop("env", None) or (allowed[0] if len(allowed) == 1 else None)
+    if env_id not in allowed:
+        return json.dumps({"error": f"unknown, missing or not permitted env; one of {allowed}"})
     er = rt.envs[env_id]
     if name == "inbox":
         rows = await rt.inbox(env_id)
@@ -141,6 +143,11 @@ async def _handle(rt, msg: dict) -> dict | None:
         except Exception as e:  # noqa: BLE001
             log.exception("mcp tool %s failed", name)
             text, err = json.dumps({"error": f"{type(e).__name__}: {e}"}), True
+        if name == "propose_knowledge":
+            auditlog.record("mcp.propose_knowledge", actor="mcp-client", role="mcp", env="",
+                            target=str((p.get("arguments") or {}).get("env") or ""),
+                            result="error" if err else "ok", request_id="mcp",
+                            method="POST", path_="/mcp", detail={"tool": name})
         log.info("mcp %s %s", name, "error" if err else "ok")
         return _ok(mid, {"content": [{"type": "text", "text": text}], "isError": err})
     if method in ("resources/list", "prompts/list"):

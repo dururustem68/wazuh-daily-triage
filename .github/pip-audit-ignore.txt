@@ -1,0 +1,8 @@
+# Dependency vulnerabilities that are accepted temporarily.
+#
+# One advisory id per line. Comments (#) and blank lines are ignored.
+# Every entry needs an owner, an expiry date and a reason in docs/security-exceptions.md,
+# and an expired entry must be removed or re-justified before the next release.
+#
+# Example:
+# GHSA-xxxx-xxxx-xxxx

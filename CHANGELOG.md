@@ -3,6 +3,43 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Copy buttons** on every finding and question: one click copies title, classification, evidence, recommendation,
+  agents, rules and the read-only commands as plain text (tickets, mail, terminal). The copied text now starts with
+  the environment and report time, the button confirms through an `aria-live` region, and payloads are capped at
+  12 000 characters so a large rule draft cannot bloat the page.
+- **Run retention** (`run_retention_days`, default `0` = keep forever): old run documents are pruned once a day;
+  the knowledge base (decisions, baselines, lessons) is never deleted.
+- **README** in English, Turkish, German and Spanish, with a language switcher in each file.
+- **`/readyz`** readiness endpoint next to `/healthz` (liveness). Readiness covers startup and configuration only —
+  deliberately no Indexer call, so a Wazuh outage never removes the UI that explains it. Kubernetes and Helm probes
+  use `/readyz` for readiness and `/healthz` for liveness.
+- **Storage failures are visible**: a failed read on a page now logs the request id and renders a warning banner with
+  the failing message instead of silently showing an empty list.
+- **Coverage gate** at 80 % (`fail_under`) and a gradual, non-blocking `mypy` run in CI for the web layer and small
+  modules.
+
+### Changed
+- **Web layer split** out of `main.py` into `app/web/` (`auth`, `pages`, `api`, `common`, `ui`); `EnvRuntime` lives in
+  `app/services.py` and report normalisation in `app/reporting.py`. `main.py` now only builds the app, the lifespan and
+  the liveness/readiness/metrics endpoints; existing imports keep working through re-exports.
+- **Runtime split** into focused mixins: `runs`, `review`, `ruledeploy`, `incident_ops`, `diagnostics`,
+  `knowledgeio` and `scheduler`; `runtime.py` keeps only the composition and the shared caches (~90 lines). Existing
+  imports (`normalize_report`, `_compact`, `demo_enabled`, `build_sources`) are re-exported.
+- **`ToolBox` mode** is typed as `Literal["triage", "tools", "mcp"]` and a failing tool call is logged with its
+  traceback (the model still gets a short error and the run continues).
+
+### Fixed
+- **Timezone data is a declared dependency** (`tzdata`): `python:3.12-slim` has no system zoneinfo, so a clean
+  install could fail at startup. The configured timezone is now validated when the config is loaded.
+- **i18n parity is enforced** for all four catalogues at import time, not only English/Turkish.
+
+### Removed
+- **Chat feature** (page, API endpoints, store index and prompts). Findings and questions are now handled in the
+  report, the recommendation inbox and the incident record instead.
+
 ## [0.6.4] — 2026-10-27
 
 ### Fixed

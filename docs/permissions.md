@@ -6,13 +6,16 @@ Wazuh Daily Triage is **read-only towards Wazuh** by default. The only write per
 The optional "Approve and deploy" for rule drafts uses a **third, separate** API user that may only upload custom
 rules files and restart the manager — see [rule-deployment.md](rule-deployment.md).
 
+Sections 1–2 are about the Wazuh accounts; sections 4–6 cover the application's own controls (UI roles,
+environment scoping, audit trail, metrics).
+
 ## 1. Wazuh Indexer (OpenSearch) — user `daily-triage`
 
 | Permission | Scope | Why |
 |---|---|---|
 | `cluster_composite_ops_ro`, `cluster_monitor` | cluster | search, `_cluster/health`, `_cat/allocation` |
 | `read` | `wazuh-alerts-*`, `wazuh-states-vulnerabilities-*` | alert and vulnerability queries |
-| `indices_all` | `daily-triage-*` | reports, knowledge base, chat (including index creation) |
+| `indices_all` | `daily-triage-*` | reports and knowledge base (including index creation) |
 
 With the Security REST API (once, as an admin):
 
@@ -90,3 +93,119 @@ The container talks to the indexer (9200) and the API (55000) **directly over HT
   `verify_tls: false` only for a first test.
 
 Run `python -m app.check` (or the "Test connections" button) to verify each step.
+
+With `ENVIRONMENT=production` (or `WDT_ENV=production`) the application refuses to start when TLS verification is
+disabled for any endpoint, unless `WDT_ALLOW_INSECURE_TLS=1` is set deliberately. See
+[security-exceptions.md](security-exceptions.md).
+
+## 4. Web UI roles and environment scoping
+
+Two roles exist. There is no user database: the admin password is `APP_PASSWORD`, the optional read-only role
+uses `VIEWER_PASSWORD`. Behind an SSO proxy (`AUTH_DISABLED=true`) every request is an admin, identified by the
+proxy's user header.
+
+| Permission | Admin | Viewer | Covers |
+|---|---|---|---|
+| `read` | ✓ | ✓ | dashboards, reports, inbox, knowledge base, audit views |
+| `run` | ✓ | – | start a triage run, liveness check, connection test, notification test |
+| `decide` | ✓ | – | finding decisions, questions, inbox actions |
+| `knowledge` | ✓ | – | create/update/delete knowledge entries, import/export |
+| `deploy` | ✓ | – | rule deploy, undeploy, promote |
+| `admin` | ✓ | – | environment-level operations, `/metrics` without a token |
+
+The matrix lives in `app/authz.py`. Permissions are enforced in the HTTP middleware for every route
+(`app/main.py::_required_perm`), not by hiding buttons.
+
+When several environments share one installation (production + staging + customer instances), each role can be
+limited to a list of environment ids:
+
+```sh
+# .env — comma separated; empty means "all configured environments"
+ADMIN_ENVS=prod,staging
+VIEWER_ENVS=staging
+MCP_ENVS=staging            # environments MCP clients may query
+```
+
+A denied environment answers `403` (API) or the `auth.no_env` page, and the denial is audited. Environment
+scoping is additionally checked inside `_env()` and in the MCP tool dispatcher, so a crafted URL or tool call
+cannot reach an environment outside the list. The model/AI is only given the environments the session can see.
+
+### Query limits (AI and MCP)
+
+The model never sends raw queries: tools build them, and `app/query_guard.py` checks them first. Per environment:
+
+```yaml
+    query:
+      max_range_hours: 336     # widest window one tool call may use (14 days)
+      max_buckets: 200         # date_histogram buckets per query
+      max_terms_size: 50       # terms aggregation bucket count
+      max_size: 25             # documents returned
+      min_interval: 1m         # smallest histogram interval
+      max_concurrent: 8        # parallel queries per environment
+      request_timeout: 30      # seconds; falls back to indexer.timeout
+      extra_fields: [data.custom_field]   # adds to the built-in field allow-list
+```
+
+An unknown field, a window above the cap, too many buckets or an unparseable timestamp raises a
+`QueryError` that is returned to the model as a hint — the query is never sent to the cluster. The collector
+itself is not limited by these values (it uses fixed, reviewed queries), so a tight cap cannot break a run.
+
+## 5. Audit trail
+
+`logs/audit.jsonl` (override with `AUDIT_LOG_FILE`) is an **append-only JSON Lines** file, separate from the
+monthly ISMS report (`app/audit.py`, stored in the index). Each line carries:
+
+| Field | Example |
+|---|---|
+| `ts` | `2026-10-27T07:31:05+00:00` |
+| `action` | `login`, `login.failed`, `rule.deploy`, `rule.undeploy`, `http.post`, `denied`, `mcp.propose_knowledge` |
+| `actor`, `role` | proxy user or `ui`/`viewer`, and the role |
+| `env`, `target` | environment id and the object touched (rule id, path) |
+| `result` | `ok`, `deployed`, `failed (rollback: done)`, `denied:deploy` |
+| `request_id`, `method`, `path` | correlation with the application log line (`X-Request-ID`) |
+| `prev`, `hash` | SHA-256 chain over the previous hash and the record |
+
+Every state-changing HTTP request, every denial (including env scope), every login attempt, every rule
+deployment and MCP knowledge proposal is recorded. **No secrets, tokens, passwords or raw log lines** are
+written — only identifiers and the outcome.
+
+Integrity check:
+
+```sh
+python -c "from app import auditlog; print(auditlog.verify('logs/audit.jsonl'))"
+# {'ok': True, 'lines': 4213, 'broken': None, ...}
+```
+
+A broken chain means a line was modified, inserted or removed; compare with your log shipper's copy.
+
+**Rotation and retention.** The file rotates at 20 MB and keeps three generations (`.1` … `.3`), so the
+default footprint stays under ~80 MB. Each generation is a complete hash chain of its own (the first line of a
+new file has no `prev`), so verify every file you ship. For compliance, ship the files to central storage
+(Vector, Fluent Bit, Filebeat, a sidecar) and keep them according to your retention policy — the application
+does not delete history beyond rotation. The shipped manifests mount a writable directory at `/app/logs`
+(`docker-compose` bind-mounts `./logs`, Kubernetes an `emptyDir`), so records vanish with the pod there:
+ship them or replace the volume with a PVC. Set `AUDIT_LOG=false` only for tests: production startup then
+warns that there is no trail. If the path is not writable the application keeps running and logs a single
+warning; a mounted read-only volume is fine as long as the log directory itself is writable or shipped
+elsewhere.
+
+## 6. Metrics endpoint
+
+`GET /metrics` exposes an in-memory Prometheus text exposition: build info, uptime, HTTP requests and
+durations, runs by trigger/status, findings, LLM tokens, rule deploys and rollbacks, query errors.
+
+- Without `METRICS_TOKEN`, an **admin session** is required (the viewer gets `403`).
+- With `METRICS_TOKEN`, a `Authorization: Bearer <token>` header is required instead, so a scraper does not need
+  a session: `METRICS_TOKEN=...` and a `ServiceMonitor`/scrape config.
+
+Counters are per process and reset on restart; they are for health questions, not for long-term reporting.
+
+## 7. Startup checks
+
+`app/security.py` validates the security-relevant configuration when the process starts. In production it
+**refuses to start** on: `WDT_DEMO=true`, a missing/example `APP_PASSWORD`, a missing `APP_SECRET`,
+`VIEWER_PASSWORD` equal to the admin password, `COOKIE_SECURE=false`, TLS verification disabled for an
+endpoint, or `rule_deploy.enabled` without credentials. Warnings (not fatal): `AUTH_DISABLED=true`, the
+read-only client and the deploy user sharing one account, and `AUDIT_LOG=false`. Every message names the
+variable and the fix; all deliberate overrides are listed in
+[security-exceptions.md](security-exceptions.md).

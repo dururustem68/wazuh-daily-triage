@@ -3,6 +3,7 @@
 """Wazuh Indexer (OpenSearch) client — HTTPS with basic auth and/or client certificate."""
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -16,14 +17,18 @@ class IndexerError(RuntimeError):
 
 
 class Indexer:
-    def __init__(self, ep: Endpoint, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(self, ep: Endpoint, transport: httpx.AsyncBaseTransport | None = None, limits=None):
         self.ep = ep
+        self.limits = limits
+        # a hard ceiling on parallel queries keeps one runaway agent loop from saturating the cluster
+        self._sem = asyncio.Semaphore(int(getattr(limits, "max_concurrent", 8) or 8))
+        self._timeout = float(getattr(limits, "request_timeout", None) or ep.timeout)
         self._client = httpx.AsyncClient(
             base_url=ep.url.rstrip("/"),
             auth=(ep.username, ep.password) if ep.username else None,
             verify=ep.verify,
             cert=ep.cert,
-            timeout=ep.timeout,
+            timeout=httpx.Timeout(self._timeout, connect=min(10.0, self._timeout)),
             transport=transport,
             headers={"Content-Type": "application/json"},
         )
@@ -34,16 +39,21 @@ class Indexer:
     async def request(self, method: str, path: str, body: Any = None, params: dict | None = None,
                       ok_404: bool = False) -> Any:
         try:
-            r = await self._client.request(
-                method, path, params=params,
-                content=json.dumps(body) if body is not None else None,
-            )
+            async with self._sem:
+                r = await self._client.request(
+                    method, path, params=params,
+                    content=json.dumps(body) if body is not None else None,
+                )
+        except httpx.TimeoutException as e:
+            raise IndexerError(f"indexer query timed out after {self._timeout:.0f}s ({self.ep.url})") from e
         except httpx.HTTPError as e:
             raise IndexerError(f"cannot reach indexer ({self.ep.url}): {e}") from e
         if r.status_code == 404 and ok_404:
             return None
         if r.status_code in (401, 403):
             raise IndexerError(f"indexer authorization error {r.status_code} {path}: {r.text[:300]}")
+        if r.status_code == 429:
+            raise IndexerError(f"indexer rejected the query (429, too many requests): {r.text[:300]}")
         if r.status_code >= 400:
             raise IndexerError(f"indexer {r.status_code} {method} {path}: {r.text[:500]}")
         return r.json() if r.content else None
@@ -92,6 +102,12 @@ class Indexer:
         if not r or not r.get("found"):
             return None
         return r["_source"]
+
+    async def delete_by_query(self, index: str, query: dict) -> int:
+        r = await self.request("POST", f"/{index}/_delete_by_query", {"query": query},
+                               params={"ignore_unavailable": "true", "allow_no_indices": "true",
+                                       "refresh": "true"})
+        return int((r or {}).get("deleted", 0))
 
     async def delete_doc(self, index: str, doc_id: str):
         return await self.request("DELETE", f"/{index}/_doc/{doc_id}", params={"refresh": "true"}, ok_404=True)

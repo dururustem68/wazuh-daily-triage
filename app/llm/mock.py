@@ -15,9 +15,6 @@ TXT = {
            "detail": "Level {level}, agents: {agents}. Source IPs: {ips}", "dig": "Dig deeper with ip_profile and correlate_around.",
            "q": "SSH attempts against db01 from 198.51.100.23: should port 22/tcp on this server be reachable from the internet?",
            "why": "The server looks internal.", "open": "Measure the effect of an IP allow-list on Jenkins /manage",
-           "top": "*(demo answer)* Most frequent level 7+ rules in the last 24 hours:\n{rows}",
-           "ip": "*(demo answer)* This IP produced {total} alerts; rules: {rules}; {paths} distinct path(s), status codes {codes}.",
-           "got": "*(demo answer)* Tool result received.",
            "check_purpose": "how many invalid-user attempts sshd logged locally",
            "draft_title": "100960: invalid-user SSH attempts as root/admin (demo draft)",
            "draft_body": "*(demo)* Child rule of 5710 that raises attempts with privileged user names to level 10."},
@@ -27,9 +24,6 @@ TXT = {
            "detail": "Seviye {level}, ajanlar: {agents}. Kaynak IP'ler: {ips}", "dig": "ip_profile ve correlate_around ile derinleş.",
            "q": "db01'e 198.51.100.23'ten gelen SSH denemeleri: bu sunucunun 22/tcp portu internete açık mı olmalı?",
            "why": "Sunucu iç ağda görünüyor.", "open": "Jenkins /manage için IP kısıtının etkisini ölç",
-           "top": "*(demo yanıtı)* Son 24 saatte seviye 7+ en sık kurallar:\n{rows}",
-           "ip": "*(demo yanıtı)* Bu IP {total} alarm üretmiş; kurallar: {rules}; {paths} farklı yol, durum kodları {codes}.",
-           "got": "*(demo yanıtı)* Araç sonucu alındı.",
            "check_purpose": "sshd'nin yerelde kaydettiği geçersiz kullanıcı denemesi sayısı",
            "draft_title": "100960: root/admin adıyla geçersiz kullanıcı SSH denemeleri (demo taslak)",
            "draft_body": "*(demo)* 5710'un çocuk kuralı; ayrıcalıklı kullanıcı adlarıyla denemeleri seviye 10'a çıkarır."},
@@ -47,7 +41,7 @@ class MockLLM:
         tool_msgs = [m for m in messages if m["role"] == "tool"]
         if "submit_report" in names:
             return self._triage(L, messages, tool_msgs, names)
-        return self._chat(L, messages, tool_msgs)
+        return LLMResponse(text="OK")
 
     @staticmethod
     def _collected(messages):
@@ -102,23 +96,3 @@ class MockLLM:
                   "questions": [{"question": L["q"], "why": L["why"]}],
                   "open_items": [L["open"]], "closed_items": []}
         return LLMResponse(tool_calls=[ToolCall("t2", "submit_report", report)], input_tokens=1500, output_tokens=400)
-
-    def _chat(self, L, messages, tool_msgs):
-        last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
-        if not tool_msgs or messages[-1]["role"] == "user":
-            ip = re.search(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", last_user)
-            if ip:
-                return LLMResponse(tool_calls=[ToolCall("c1", "ip_profile", {"ip": ip.group(0), "from": "now-7d"})])
-            return LLMResponse(tool_calls=[ToolCall("c1", "aggregate_alerts",
-                                                    {"field": "rule.id", "min_level": 7, "from": "now-24h", "size": 5})])
-        raw = tool_msgs[-1]["content"]
-        data = json.loads(raw.split("… [truncated")[0]) if raw.startswith("{") else {}
-        if "buckets" in data:
-            rows = "\n".join(f"- `{b['key']}`: {b['count']}" for b in data["buckets"])
-            txt = L["top"].format(rows=rows)
-        elif "status_codes" in data:
-            txt = L["ip"].format(total=data["total"], rules=", ".join(f"{r['id']} ({r['n']})" for r in data["rules"]),
-                                 paths=data["distinct_urls"], codes=data["status_codes"])
-        else:
-            txt = L["got"]
-        return LLMResponse(text=txt)
