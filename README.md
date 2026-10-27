@@ -16,6 +16,8 @@ e-mail, Telegram, Microsoft Teams, Slack, Discord, ntfy or a generic webhook.
 |---|---|
 | ![Inbox](docs/screenshot-inbox.png) | ![Knowledge base](docs/screenshot-knowledge.png) |
 
+<img src="docs/screenshot-audit-pdf.png" alt="Monthly audit report (PDF)" width="430">
+
 ## Why
 
 If your mornings start with the same Wazuh routine — *is data flowing, are agents connected, what is at level

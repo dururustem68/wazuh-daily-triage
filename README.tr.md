@@ -16,6 +16,8 @@ koşu özetlerini e-posta, Telegram, Microsoft Teams, Slack, Discord, ntfy ya da
 |---|---|
 | ![Öneriler](docs/screenshot-inbox-tr.png) | ![Bilgi tabanı](docs/screenshot-knowledge-tr.png) |
 
+<img src="docs/screenshot-audit-pdf.png" alt="Aylık denetim raporu (PDF)" width="430">
+
 ## Ne yapar
 
 - **Zamanlanmış kontrol** (ortam başına günde bir ya da birkaç saat + gün). Pencere "son başarılı koşudan bu yana"; pazartesi
