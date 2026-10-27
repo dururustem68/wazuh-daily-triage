@@ -1,6 +1,6 @@
 [project]
 name = "wazuh-daily-triage"
-version = "0.6.3"
+version = "0.6.4"
 description = "AI-assisted daily triage for Wazuh SIEM"
 readme = "README.md"
 license = "AGPL-3.0-only"

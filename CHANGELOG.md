@@ -3,6 +3,12 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.6.4] — 2026-10-27
+
+### Fixed
+- The audit page now has a single **PDF** button (server-rendered); the second browser-print button produced a
+  different layout and was removed.
+
 ## [0.6.3] — 2026-10-27
 
 ### Added
@@ -30,8 +36,6 @@ All notable changes to this project are documented here. The format follows
 - `pypa/gh-action-pip-audit` was pinned to a non-existent tag (`v1.1.1`), which failed every `test` matrix job.
 - The chart-release workflow failed at the `chart-releaser` step; replaced with an explicit publish script.
 - The monthly audit PDF was redesigned (title band, KPI cards, zebra tables, page footer).
-- The audit page now has a single **PDF** button (server-rendered); the second browser-print button produced a
-  different layout and was removed.
 
 ## [0.6.1] — 2026-10-27
 
