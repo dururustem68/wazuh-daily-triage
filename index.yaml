@@ -1,0 +1,35 @@
+apiVersion: v1
+entries:
+  wazuh-daily-triage:
+  - annotations:
+      artifacthub.io/license: AGPL-3.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/dururustem68/wazuh-daily-triage
+    apiVersion: v2
+    appVersion: 0.6.3
+    created: "2026-10-27T06:59:03.053183856Z"
+    description: AI-assisted daily review for the Wazuh SIEM
+    digest: 2efdfdfeb0fbbe470929d2b509253734d74858ef908b7fbcfa882f56b810ce0b
+    home: https://github.com/dururustem68/wazuh-daily-triage
+    icon: https://raw.githubusercontent.com/dururustem68/wazuh-daily-triage/main/app/static/icon.svg
+    keywords:
+    - wazuh
+    - siem
+    - security
+    - soc
+    - llm
+    - triage
+    - opensearch
+    kubeVersion: '>=1.25-0'
+    maintainers:
+    - name: Rüstem Duru
+      url: https://github.com/dururustem68
+    name: wazuh-daily-triage
+    sources:
+    - https://github.com/dururustem68/wazuh-daily-triage
+    type: application
+    urls:
+    - https://dururustem68.github.io/wazuh-daily-triage/wazuh-daily-triage-0.1.1.tgz
+    version: 0.1.1
+generated: "2026-10-27T06:59:03.051987422Z"
