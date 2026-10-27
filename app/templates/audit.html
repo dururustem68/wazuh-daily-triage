@@ -10,8 +10,7 @@
   <div class="tools noprint">
     <form method="get" class="inline"><select name="month" data-autosubmit>{% for m in months %}<option value="{{ m }}" {{ 'selected' if m == a.month }}>{{ m }}</option>{% endfor %}</select></form>
     <a class="btn" href="/api/e/{{ env.id }}/audit.md?month={{ a.month }}">{{ _('au.download_md') }}</a>
-    <a class="btn" href="/api/e/{{ env.id }}/audit.pdf?month={{ a.month }}">{{ _('au.download_pdf') }}</a>
-    <button class="btn primary" data-print>{{ _('au.print') }}</button>
+    <a class="btn primary" href="/api/e/{{ env.id }}/audit.pdf?month={{ a.month }}">{{ _('au.download_pdf') }}</a>
   </div>
 </div>
 <p class="small muted">{{ _('au.intro') }}</p>

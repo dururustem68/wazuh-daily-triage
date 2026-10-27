@@ -120,7 +120,7 @@ def test_audit_pages():
         c.post("/login", data={"password": "pw"})
         assert c.get("/e/demo/audit?month=bad").status_code == 400
         page = c.get("/e/demo/audit").text
-        assert "data-print" in page and "abar" in page
+        assert "audit.pdf" in page and "abar" in page
         r = c.get("/api/e/demo/audit.md")
         assert r.status_code == 200 and r.text.startswith("# ")
         p = c.get("/api/e/demo/audit.pdf")

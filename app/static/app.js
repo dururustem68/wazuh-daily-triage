@@ -45,7 +45,6 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".hist .bar[data-h]").forEach(b => { b.style.height = b.dataset.h + "%"; });
   document.querySelectorAll("[data-w]").forEach(b => { b.style.width = b.dataset.w + "%"; });
   document.querySelectorAll("[data-ah]").forEach(b => { b.style.height = b.dataset.ah + "%"; });
-  document.querySelectorAll("[data-print]").forEach(b => b.addEventListener("click", () => window.print()));
   document.querySelectorAll("select[data-autosubmit]").forEach(s => s.addEventListener("change", () => s.form.submit()));
 
   // start a run
