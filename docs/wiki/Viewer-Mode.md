@@ -29,10 +29,10 @@ disables the role.
 
 | Permission | Admin | Viewer | Covers |
 |---|---|---|---|
-| `read` | ✓ | ✓ | dashboard, reports, recommendation inbox, knowledge base, audit report, copies and PDFs |
+| `read` | ✓ | ✓ | dashboard, reports, recommendation inbox, knowledge base and its YAML export, audit report, promotion package view, copies and PDFs |
 | `run` | ✓ | – | start a triage run, liveness check, connection test, notification test |
 | `decide` | ✓ | – | finding decisions, answering questions, inbox actions, incident records |
-| `knowledge` | ✓ | – | create/update/delete knowledge entries, import/export |
+| `knowledge` | ✓ | – | create/update/delete knowledge entries, import |
 | `deploy` | ✓ | – | approve/deploy/undeploy/promote rule drafts |
 | `admin` | ✓ | – | environment-level operations and `/metrics` without `METRICS_TOKEN` |
 
@@ -55,8 +55,7 @@ ADMIN_ENVS=prod,staging,lab    # optional, empty = all
 ```
 
 A viewer who opens a URL for an environment outside the list gets a `403` page, and the denial is audited. The
-same check runs inside the page handlers, so a guessed environment id does not leak data. The model is only
-given the environments the session can see.
+same check runs inside the page handlers, so a guessed environment id does not leak data.
 
 ## Verify
 
@@ -69,7 +68,7 @@ given the environments the session can see.
 
 ```sh
 tail -n 5 logs/audit.jsonl
-# {"action":"denied","actor":"viewer","role":"viewer","result":"denied:run",...}
+# {"action":"denied","actor":"ui","role":"viewer","result":"denied:run",...}
 ```
 
 6. `GET /metrics` with a viewer session returns `403` unless `METRICS_TOKEN` is configured (then the bearer
@@ -81,7 +80,8 @@ tail -n 5 logs/audit.jsonl
 - **Rotating the password does not end existing sessions.** The cookie contains the role and an expiry, not the
   password. Change `APP_SECRET` to invalidate every session immediately.
 - **The password is shared by all viewers.** There are no individual viewer accounts and no per-viewer audit
-  identity: the audit trail records the actor as `viewer`. If you need named read-only users, use an SSO proxy
+  identity: the audit trail records the role `viewer` with the shared actor `ui` (only login records say
+  `viewer`). If you need named read-only users, use an SSO proxy
   — but see the caveat below.
 - **No CSRF risk from GETs.** All state-changing operations are `POST`/`DELETE` and go through the same
   permission check.

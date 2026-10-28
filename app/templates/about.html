@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ _('ab.title') }} · {{ app_title }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div class="titles"><div class="eyebrow">{{ app_title }} {{ version }}</div><h1>{{ _('ab.title') }}</h1>
+    <div class="sub">{{ _('ab.intro') }}</div></div>
+  <div class="tools">
+    <a class="btn" href="{{ links.home }}" rel="noopener" target="_blank">{{ _('ab.wiki') }}</a>
+    <a class="btn" href="{{ SOURCE_URL }}/blob/main/CHANGELOG.md" rel="noopener" target="_blank">{{ _('ab.changelog') }}</a>
+    <a class="btn" href="{{ SOURCE_URL }}" rel="noopener" target="_blank">{{ _('nav.source') }}</a>
+  </div>
+</div>
+
+<div class="card table-card">
+  <h2 class="pad">{{ _('ab.features') }}</h2>
+  <div class="scrollx"><table class="tbl about-tbl">
+    <tr><th></th>{% for r in rows %}<th>{{ r.env.name }}</th>{% endfor %}<th>{{ _('ab.docs') }}</th></tr>
+    <tr><td>{{ _('ab.f.schedule') }}</td>{% for r in rows %}<td>{% if r.schedule %}{{ r.schedule }}{% else %}<span class="pill gray">{{ _('ab.off') }}</span>{% endif %}</td>{% endfor %}<td><a href="{{ links.config }}" target="_blank" rel="noopener">{{ _('ab.howto') }}</a></td></tr>
+    <tr><td>{{ _('ab.f.model') }}</td>{% for r in rows %}<td><code>{{ r.model }}</code></td>{% endfor %}<td><a href="{{ links.config }}" target="_blank" rel="noopener">{{ _('ab.howto') }}</a></td></tr>
+    <tr><td>{{ _('ab.f.deploy') }}</td>{% for r in rows %}<td><span class="pill {{ 'green' if r.deploy else 'gray' }}">{{ _('ab.on') if r.deploy else _('ab.off') }}</span></td>{% endfor %}<td><a href="{{ links.features }}" target="_blank" rel="noopener">{{ _('ab.howto') }}</a></td></tr>
+    <tr><td>{{ _('ab.f.privacy') }}</td>{% for r in rows %}<td><span class="pill {{ 'green' if r.privacy == 'mask' else 'gray' }}">{{ _('ab.masked') if r.privacy == 'mask' else _('ab.off') }}</span>
+      {% if r.detect %}<span class="pill blue">{{ _('ab.detect') }}</span>{% endif %}</td>{% endfor %}<td><a href="{{ links.privacy }}" target="_blank" rel="noopener">{{ _('ab.howto') }}</a></td></tr>
+    <tr><td>{{ _('ab.f.sources') }}</td>{% for r in rows %}<td>{% for s in r.sources %}<span class="pill blue">{{ s }}</span> {% else %}<span class="pill gray">{{ _('ab.off') }}</span>{% endfor %}</td>{% endfor %}<td><a href="{{ links.features }}" target="_blank" rel="noopener">{{ _('ab.howto') }}</a></td></tr>
+    <tr><td>{{ _('ab.f.liveness') }}</td>{% for r in rows %}<td><span class="pill {{ 'green' if r.liveness else 'gray' }}">{{ _('ab.on') if r.liveness else _('ab.off') }}</span></td>{% endfor %}<td><a href="{{ links.features }}" target="_blank" rel="noopener">{{ _('ab.howto') }}</a></td></tr>
+    <tr><td>{{ _('ab.f.notify') }}</td>{% for r in rows %}<td>{% for c in r.notify %}<span class="pill blue">{{ c }}</span> {% else %}<span class="pill gray">{{ _('ab.off') }}</span>{% endfor %}</td>{% endfor %}<td><a href="{{ links.config }}" target="_blank" rel="noopener">{{ _('ab.howto') }}</a></td></tr>
+    <tr><td>{{ _('ab.f.incident') }}</td>{% for r in rows %}<td>{% for c in r.incident %}<span class="pill blue">{{ c }}</span> {% else %}<span class="pill gray">{{ _('ab.draft_only') }}</span>{% endfor %}</td>{% endfor %}<td><a href="{{ links.features }}" target="_blank" rel="noopener">{{ _('ab.howto') }}</a></td></tr>
+    <tr><td>MCP</td>{% for r in rows %}<td><span class="pill {{ 'green' if r.mcp else 'gray' }}">{{ _('ab.on') if r.mcp else _('ab.off') }}</span></td>{% endfor %}<td><a href="{{ links.mcp }}" target="_blank" rel="noopener">{{ _('ab.howto') }}</a></td></tr>
+  </table></div>
+</div>
+
+<div class="card">
+  <h2>{{ _('ab.mcp_title') }}</h2>
+  <p>{{ _('ab.mcp_desc') }}</p>
+  {% if mcp_on %}
+  <p><span class="pill green">{{ _('ab.on') }}</span> {{ _('ab.mcp_on') }} <code>{{ mcp_url }}</code></p>
+  <p class="small muted">{{ _('ab.mcp_cfg') }}</p>
+  <pre class="code">{
+  "mcpServers": {
+    "wazuh-triage": {
+      "command": "python3",
+      "args": ["mcp_bridge.py", "{{ mcp_url }}", "--token-file", "/path/to/mcp.token"]
+    }
+  }
+}</pre>
+  {% else %}
+  <p><span class="pill gray">{{ _('ab.off') }}</span> {{ _('ab.mcp_off') }}</p>
+  {% endif %}
+  <p><a href="{{ links.mcp }}" target="_blank" rel="noopener">{{ _('ab.mcp_doc') }} →</a>
+    · <a href="{{ SOURCE_URL }}/blob/main/tools/mcp_bridge.py" target="_blank" rel="noopener">mcp_bridge.py</a></p>
+</div>
+
+<div class="card">
+  <h2>{{ _('ab.docs') }}</h2>
+  <ul class="links">
+    <li><a href="{{ links.install }}" target="_blank" rel="noopener">{{ _('ab.d.install') }}</a></li>
+    <li><a href="{{ links.config }}" target="_blank" rel="noopener">{{ _('ab.d.config') }}</a></li>
+    <li><a href="{{ links.features }}" target="_blank" rel="noopener">{{ _('ab.d.features') }}</a></li>
+    <li><a href="{{ links.privacy }}" target="_blank" rel="noopener">{{ _('ab.d.privacy') }}</a></li>
+    <li><a href="{{ links.sso }}" target="_blank" rel="noopener">{{ _('ab.d.sso') }}</a> · <a href="{{ links.viewer }}" target="_blank" rel="noopener">{{ _('ab.d.viewer') }}</a></li>
+  </ul>
+  <p class="small muted">{{ _('ab.license') }}</p>
+</div>
+{% endblock %}

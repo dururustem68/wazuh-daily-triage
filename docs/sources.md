@@ -26,5 +26,5 @@ environments:
 Kubernetes RBAC: add `components/rbac-readonly` to your overlay. It creates a service account with
 `get`/`list` on exactly the resources above and mounts its token into the pod only.
 
-Data from these sources goes to your LLM like alert data does; `redact: true` masks e-mail addresses, tokens
-and passwords in tool results. Logs can contain personal data — decide which namespaces the AI may read.
+Data from these sources goes to your LLM like alert data does; `privacy.mode: mask` pseudonymises personal data
+and removes secrets in everything sent to the model. Logs can contain personal data — decide which namespaces the AI may read.

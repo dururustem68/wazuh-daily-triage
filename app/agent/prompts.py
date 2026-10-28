@@ -41,6 +41,17 @@ METHOD = """\
 12. **Other sources:** when `prom_*`, `loki_*` or `k8s_*` tools exist, use them to explain what Wazuh alone cannot:
    pod restarts / OOM / node pressure (k8s_get pods|nodes|events), service logs around an alert (loki_query),
    resource trends (prom_range). Always narrow by namespace/labels and time.
+13. **Personal data in logs (`personal_data`, GDPR / KVKK):** counts of validated personal data found in clear
+   text in a sample of alerts, grouped by rule × agent × location (examples are already masked). Plaintext
+   passwords, tokens, national IDs, IBANs or card numbers are a finding (label `investigate`, severity at least
+   `medium`; `high` for secrets or national IDs): name the source (location/decoder/agent), why it is a leak
+   (data minimisation, GDPR Art. 5(1)(c) and 32 / KVKK Art. 12), and the fix at the source — mask in the
+   application log, drop the field in the shipper, or a Wazuh decoder/rule that does not store `full_log` for it —
+   plus reducing retention of what is already indexed. E-mail addresses/phone numbers in authentication logs are
+   usually legitimate: report them only if they appear where they should not (URLs, query strings, payloads).
+   `in_rule_description: true` means the Wazuh rule itself copies the value into `rule.description` (`$(field)`):
+   that puts it into every index, mail and dashboard — recommend fixed description text instead.
+   Values written as `<kind:hash>` are pseudonyms; use them as they are in tool arguments.
 
 ## Labels
 - `real_incident`: say so immediately and state the manual action required.

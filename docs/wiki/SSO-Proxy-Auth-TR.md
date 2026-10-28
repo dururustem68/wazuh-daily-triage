@@ -43,7 +43,7 @@ kural dağıtımı yine bu adla kaydedilir.
    Aksi halde istemci kendi admin adını seçebilir.
 3. **Her yerde TLS.** `COOKIE_SECURE=true`; uygulamayı asla düz HTTP ile dışarı açmayın.
 4. **Probe'ları açık tutun.** `/healthz` ve `/readyz` uygulamada kimlik doğrulaması istemez, ancak vekil de
-   kubelet'in bu yollara erişmesine izin vermeli; ya da probe'u doğrudan poda yönlendirin.
+   kubelet'in bu yollara erişmesine izin vermeli; ya da doğrudan poda giden `httpGet` probe'ları kullanın.
 5. **`/login` kararı.** Erişilebilir kalır; SSO tek yol olacaksa vekilde bu yolu kapatabilirsiniz.
 
 ## Seçenek 1 — Keycloak + oauth2-proxy
@@ -190,12 +190,13 @@ spec:
 Overlay'de etkinleştirin:
 
 ```yaml
-components:
-  - ../components/networkpolicy
-  - ../components/ingress-traefik-authentik
+components:   # uzak ve sürümü sabit — host adlarını düzenlemek için klasörleri overlay'in yanına kopyalayın
+  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/networkpolicy?ref=v0.7.0
+  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/ingress-traefik-authentik?ref=v0.7.0
 ```
 
-ve overlay'in ortam ConfigMap'inde `AUTH_DISABLED=true`, `COOKIE_SECURE=true` ve `FORWARDED_ALLOW_IPS` ayarlayın.
+Bileşen `AUTH_DISABLED=true`, `COOKIE_SECURE=true` ve `NOTIFY_UI_URL` değerlerini zaten ayarlar (host'u
+düzenleyin). `FORWARDED_ALLOW_IPS` (Traefik pod CIDR'ı) değerini overlay'in ortam ConfigMap'ine siz ekleyin.
 Namespace'ler arası servis referansları için Traefik'in
 `--providers.kubernetescrd.allowCrossNamespace=true` ayarı gerekir; yoksa uygulama namespace'ine bir
 `ExternalName` servisi ekleyin.
@@ -240,8 +241,8 @@ fiilen kimlik doğrulamasızdır. Dışarı açmadan önce ağ politikasını d�
 - **Grup → rol eşlemesi yok.** Vekilin doğruladığı her kullanıcı admin'dir. Kullanıcı bazlı salt okunur erişim
   [Görüntüleyici modu](Viewer-Mode-TR) (uygulama parolası) gerektirir, SSO değil.
 - **Ortam kapsamı rol bazlıdır, kullanıcı bazlı değil.** `ADMIN_ENVS` tüm SSO kullanıcıları için geçerlidir.
-- **Uygulama IdP oturumunu görmez.** Her istekte yalnızca başlığı görür; iptal edilen IdP oturumu, vekil
-  kontrol ettiği sürece geçerlidir.
+- **Uygulama IdP oturumunu görmez.** Her istekte yalnızca başlığı görür; IdP'de iptal edilen oturum ancak
+  vekil bunu kontrol ettiği sürece dikkate alınır; vekil kontrol etmezse uygulama oturumu kapatmaz.
 - **Kimlik, başlığın kendisidir.** İmza yoktur — kontrol ağ yoludur.
 
 ---

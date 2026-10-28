@@ -108,13 +108,16 @@ Bir kanal, alanları dolu olduğunda açıktır. Ayrıntılar: [docs/notificatio
 | `WAZUH_API_URL`, `WAZUH_API_USER`, `WAZUH_API_PASSWORD` | *(boş)* | İsteğe bağlı Wazuh API. |
 | `WAZUH_VERIFY_TLS` | `true` | Doğrulamayı kapatmak yerine `WAZUH_CA_FILE` kullanın. |
 | `WAZUH_CA_FILE` | *(boş)* | Konteyner içindeki özel CA yolu (`/app/config/certs/root-ca.pem`). |
-| `WAZUH_ALERTS_INDEX` | `wazuh-alerts-*` | Alarm indeks deseni. |
+| `WAZUH_ALERTS_INDEX` | `wazuh-alerts-4.x-*` | Alarm indeks deseni. |
 | `SCHEDULE_ENABLED` | `true` | Zamanlanmış koşular. |
 | `SCHEDULE_TIME` | `07:30` | Tek saat veya virgüllü liste (`07:30,19:30`). |
 | `SCHEDULE_DAYS` | `mon,tue,wed,thu,fri` | Haftanın günleri. |
 | `HIGH_LEVEL` | `7` | “Yüksek” sayılan seviye. |
 | `WINDOW_MIN_HOURS` | `24` | Önceki rapor yoksa geri dönüş penceresi. |
-| `REDACT` | `false` | E-posta, parola, token ve kart numaralarını modele gitmeden maskeler. |
+| `REDACT` | `false` | `PRIVACY_MODE=mask` ile aynı (uyumluluk için). |
+| `PRIVACY_MODE` | `off` | `mask`: kişisel veriyi modele gitmeden takma adla değiştirir — bkz. [Gizlilik](Privacy-TR). |
+| `PRIVACY_IPS` | `keep` | `public` / `all`: IP adreslerini de takma adla değiştirir. |
+| `PRIVACY_DETECT` | `true` | Alarmlarda açık duran kişisel veriyi işaretler. |
 | `INVENTORY` | *(boş)* | Beklenen ajan adları; eksik/fazla ajanlar bayrak olur. |
 | `RULE_DEPLOY_ENABLED` | `false` | İsteğe bağlı kural dağıtımı (ayrı API kullanıcısı gerekir). |
 | `WAZUH_DEPLOY_USER`, `WAZUH_DEPLOY_PASSWORD` | *(boş)* | O ayrı kullanıcı. |
@@ -176,7 +179,7 @@ environments:
     high_level: 7
     max_silence_minutes: 60
     liveness: {enabled: true, interval_minutes: 10}
-    redact: false
+    privacy: {mode: off, ips: keep, detect: true}   # KVKK / GDPR — bkz. Gizlilik
     context_file: context/prod.md
     seed_file: seed/prod.yaml
     inventory: [web01, db01]          # veya inventory_file
@@ -235,16 +238,17 @@ için `APP_SECRET` döndürün.
 ## Yeniden başlatmadan önce doğrulayın
 
 ```sh
-docker compose exec triage python -m app.check          # bağlantılar, model, bildirimler
+docker compose exec triage python -m app.check          # indexer, alarmlar, zafiyetler, depolama, API, ek kaynaklar, model (--no-llm atlar)
 docker compose exec triage python -c "from app.config import load_settings; s=load_settings(); print([e.id for e in s.environments])"
+# bildirimler ayrıca test edilir: ortam sayfası → "Test notification" (POST /api/e/<env>/notify-test)
 ```
 
 `app/security.py` güvenlikle ilgili ayarları açılışta doğrular. Üretimde örnek parolalar, eksik oturum
-anahtarı, güvensiz çerezler, kapatılmış TLS doğrulaması veya eksik kural dağıtımı kimlik bilgileri nedeniyle
-açılmayı reddeder; `AUTH_DISABLED=true`, salt okunur/dağıtım hesabının ortak olması ve `AUDIT_LOG=false`
+anahtarı, güvensiz çerezler, kapatılmış TLS doğrulaması veya eksik kural dağıtımı kimlik bilgileri ya da zayıf
+`rule_deploy` parolası nedeniyle açılmayı reddeder (üretim modu: `ENVIRONMENT=production`, eşdeğeri `WDT_ENV`); `AUTH_DISABLED=true`, salt okunur/dağıtım hesabının ortak olması ve `AUDIT_LOG=false`
 uyarı üretir.
 
-Sonraki: [SSO proxy kimlik doğrulama](SSO-Proxy-Auth-TR) · [Görüntüleyici modu](Viewer-Mode-TR) ·
+Sonraki: [Özellikler](Features-TR) · [Gizlilik](Privacy-TR) · [SSO proxy kimlik doğrulama](SSO-Proxy-Auth-TR) · [Görüntüleyici modu](Viewer-Mode-TR) ·
 [MCP sunucusu](MCP-TR)
 
 ---

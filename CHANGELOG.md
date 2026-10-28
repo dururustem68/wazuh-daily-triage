@@ -5,6 +5,48 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Personal data protection (GDPR / KVKK)** — `privacy:` per environment, [docs/privacy.md](docs/privacy.md).
+  - `mode: mask` pseudonymises personal data at the **LLM boundary**: system prompt, collected summary and tool
+    results. E-mail, phone, Turkish/Belgian/French national IDs, IBAN, card numbers (validated by check digits)
+    and, optionally, IP addresses (`ips: public|all`) become stable pseudonyms such as `<email:3f9a1c2b>`; secrets
+    (passwords, tokens, JWTs, private keys, AWS keys) are removed irreversibly. Tool arguments and the model's
+    answer are mapped back, so tools keep working and reports show real values to the reviewer. MCP output is
+    masked the same way. `redact: true` still works and means `mode: mask`.
+  - `detect: true` (default) scans a sample of every window's alerts (`detect_sample`, default 1000, spread over
+    the busiest log locations) for personal data stored in clear text — including rules that copy it into
+    `rule.description`. A `personal_data` flag and a report section name the source (rule × agent × location,
+    masked example), and the model recommends masking at the source.
+- `list_reports` / `get_report` (UI tools and MCP) include `status`, `error`/`ai_error`, model and steps, so a
+  failed run can be diagnosed remotely.
+
+- **Simple knowledge import**: download a template (TXT, Excel CSV or YAML) from the knowledge page, fill it in
+  with Notepad or Excel and upload it. TXT is one `[kind] title` block per entry with an optional `rules:` line;
+  kind names are accepted in the UI languages (`karar`, `gürültü`, `ders` …). `GET /api/kb/template?fmt=`.
+- **About page** (`/about`): version, documentation links and, per environment, which features are on (schedule,
+  model, rule deployment, privacy, extra sources, liveness, notifications, tickets, MCP), plus MCP setup for
+  Claude Desktop. No secrets are shown.
+- When rule deployment is off, the **Deploy** button is shown disabled with a link to the setup guide instead of
+  being hidden.
+
+### Changed
+- **Navigation moved to a top toolbar**: dashboard and environments in the first row, the current environment's
+  pages (inbox, reports, knowledge, audit) in the second; About, language and logout on the right. More room for
+  wide tables; scrolls horizontally on phones.
+- The recommendation inbox merges the same finding across runs even when the model rewords the title, changes the
+  label between `real_incident`/`investigate`/`detection_gap` or adds a rule id (rule or agent overlap, or title
+  similarity when there are no rule ids).
+- With a YAML config, `APP_LANGUAGE` and `TZ` now apply when the file has no `app:` block (previously only in
+  variable-only mode, so a deployment setting `APP_LANGUAGE=tr` still got English reports).
+
+### Fixed
+- A `seed_file` that is not a list of `{kind, title, body}` entries (e.g. a free-form YAML document) crashed the
+  first run or was silently ignored; it is now skipped with a warning naming the file, and invalid entries are
+  skipped individually.
+- Redaction turned run ids into `env-<card?>abc123` (the 14-digit timestamp looked like a card number), which made
+  `get_report` fail with an indexer 400. Card numbers now need a valid Luhn check **and** an issuer prefix, and
+  digits glued to an identifier (`-`, `_`, `/`, `:`) are never masked.
+
 ### Fixed
 - `.github/workflows/ci.yml` was invalid YAML — an unquoted colon in the `mypy` step name — so GitHub created the
   run under the file path with **no jobs**. The name is quoted now and `tests/test_ci.py` parses every workflow in

@@ -111,14 +111,18 @@ document.addEventListener("DOMContentLoaded", () => {
   if (ki) {
     const fileIn = ki.querySelector("[data-kfile]");
     fileIn.addEventListener("change", async () => {
-      if (fileIn.files[0]) ki.querySelector("textarea").value = await fileIn.files[0].text();
+      if (fileIn.files[0]) {
+        ki.querySelector("textarea").value = await fileIn.files[0].text();
+        ki.querySelector("[name=filename]").value = fileIn.files[0].name;
+      }
     });
     ki.addEventListener("submit", async ev => {
       ev.preventDefault();
       const f = new FormData(ki), out = ki.querySelector(".kimport-out");
       const dry = f.get("dry_run") === "on";
       try {
-        const r = await api(ki.dataset.kimport, "POST", { text: f.get("text"), update: f.get("update") === "on", dry_run: dry });
+        const r = await api(ki.dataset.kimport, "POST", { text: f.get("text"), update: f.get("update") === "on",
+                                                           dry_run: dry, filename: f.get("filename") || "" });
         out.innerHTML = (dry ? `<b>${escapeHtml(tr("kb_io_dry"))}:</b> ` : "")
           + escapeHtml(tr("kb_io_result").replace("{added}", r.added).replace("{updated}", r.updated)
                        .replace("{skipped}", r.skipped).replace("{errors}", r.errors.length))

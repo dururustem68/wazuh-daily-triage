@@ -18,13 +18,22 @@
   </form>
 </details>
 
-<details class="card">
+<details class="card" {{ 'open' if not rows }}>
   <summary><b>{{ _('kb.io') }}</b></summary>
+  <ol class="steps-h small">
+    <li>{{ _('kb.io_step1') }}
+      <a class="btn small" href="/api/kb/template?fmt=txt" download>TXT</a>
+      <a class="btn small" href="/api/kb/template?fmt=csv" download>Excel (CSV)</a>
+      <a class="btn small" href="/api/kb/template?fmt=yaml" download>YAML</a></li>
+    <li>{{ _('kb.io_step2') }}</li>
+    <li>{{ _('kb.io_step3') }}</li>
+  </ol>
   <p class="small muted">{{ _('kb.io_help') }}</p>
   <form class="kform" data-kimport="/api/e/{{ env.id }}/kb/import">
-    <textarea name="text" rows="8" placeholder="- kind: baseline&#10;  title: &quot;31101 web scanner noise&quot;&#10;  body: &quot;…&quot;&#10;  rule_ids: [&quot;31101&quot;]&#10;  key: &quot;noise-31101&quot;"></textarea>
+    <input type="hidden" name="filename" value="">
+    <textarea name="text" rows="8" placeholder="[baseline] 31101 web scanner noise&#10;rules: 31101&#10;Why it is normal…&#10;---&#10;[decision] …"></textarea>
     <div class="row small">
-      <input type="file" accept=".yaml,.yml,.json" data-kfile>
+      <input type="file" accept=".txt,.csv,.yaml,.yml,.json" data-kfile>
       <label><input type="checkbox" name="update"> {{ _('kb.io_update') }}</label>
       <label><input type="checkbox" name="dry_run" checked> {{ _('kb.io_dry') }}</label>
       <span class="spacer"></span>
@@ -82,6 +91,8 @@
   <div class="row small kactions">
     {% set deployed = r.kind == 'rule_draft' and r.deploy and r.deploy.state == 'deployed' %}
     {% if r.kind == 'rule_draft' and deploy_on and not deployed and r.status in ('proposed', 'active') %}<button class="btn small primary" data-deploy>{{ _('rd.deploy') }}</button>{% endif %}
+    {% if r.kind == 'rule_draft' and not deploy_on and not deployed and r.status in ('proposed', 'active') %}<button class="btn small" disabled title="{{ _('rd.off_hint') }}">{{ _('rd.deploy') }}</button>
+      <a class="small" href="{{ deploy_doc }}" target="_blank" rel="noopener">{{ _('rd.off_link') }}</a>{% endif %}
     {% if deployed and deploy_on %}<button class="btn small" data-undeploy>{{ _('rd.undeploy') }}</button>{% endif %}
     {% if r.kind == 'rule_draft' %}<button class="btn small" data-cmds>{{ _('rd.cmds') }}</button>
       {% if not r.promoted and (deployed or r.status == 'active') %}<button class="btn small" data-promote>{{ _('pr.btn') }}</button>{% endif %}

@@ -68,7 +68,12 @@ environments:
     watch_groups: [authentication_failed, web_scan, sshd]
     context_file: context/example.md    # free text describing the environment (given to the AI)
     seed_file: seed/example.yaml        # imported into the knowledge base once
-    redact: false               # true: mask e-mails/passwords/tokens before text reaches the LLM
+    privacy:                    # GDPR / KVKK — docs/privacy.md
+      mode: off                 # mask: pseudonymise personal data in everything sent to the LLM (and MCP clients)
+      ips: keep                 # keep | public (pseudonymise public IPs only) | all
+      detect: true              # flag personal data stored in clear text in the alerts (sampled every run)
+      detect_sample: 1000
+      allow: []                 # regexes never masked/reported, e.g. ['noreply@example\.com']
     rule_deploy:                # optional "Approve and deploy" for rule drafts — docs/rule-deployment.md
       enabled: false            # off: drafts show copy-paste commands only
       username: ${PROD_DEPLOY_USER:-}       # SEPARATE API user: update one rules file + restart, nothing else

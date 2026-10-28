@@ -28,10 +28,10 @@ Konteyneri yeniden başlatın. Giriş sayfası artık salt okunur görüntüleyi
 
 | İzin | Admin | Görüntüleyici | Kapsam |
 |---|---|---|---|
-| `read` | ✓ | ✓ | pano, raporlar, öneri gelen kutusu, bilgi tabanı, denetim raporu, kopyalar ve PDF'ler |
+| `read` | ✓ | ✓ | pano, raporlar, öneri gelen kutusu, bilgi tabanı ve YAML dışa aktarımı, denetim raporu, terfi paketi görüntüleme, kopyalar ve PDF'ler |
 | `run` | ✓ | – | triage koşusu, canlılık kontrolü, bağlantı testi, bildirim testi |
 | `decide` | ✓ | – | bulgu kararları, soruları yanıtlama, gelen kutusu işlemleri, olay kayıtları |
-| `knowledge` | ✓ | – | bilgi kaydı oluşturma/güncelleme/silme, içe/dışa aktarma |
+| `knowledge` | ✓ | – | bilgi kaydı oluşturma/güncelleme/silme, içe aktarma |
 | `deploy` | ✓ | – | kural taslağı onaylama/dağıtma/geri alma/kalıcılaştırma |
 | `admin` | ✓ | – | ortam düzeyi işlemler ve `METRICS_TOKEN` olmadan `/metrics` |
 
@@ -54,8 +54,7 @@ ADMIN_ENVS=prod,staging,lab    # isteğe bağlı, boş = tümü
 ```
 
 Liste dışındaki bir ortamın URL'sini açan görüntüleyici `403` sayfası görür ve ret denetlenir. Aynı kontrol
-sayfa işleyicilerinin içinde de çalışır; tahmin edilen bir ortam kimliği veri sızdırmaz. Model yalnızca
-oturumun görebildiği ortamları alır.
+sayfa işleyicilerinin içinde de çalışır; tahmin edilen bir ortam kimliği veri sızdırmaz.
 
 ## Doğrulama
 
@@ -67,7 +66,7 @@ oturumun görebildiği ortamları alır.
 
 ```sh
 tail -n 5 logs/audit.jsonl
-# {"action":"denied","actor":"viewer","role":"viewer","result":"denied:run",...}
+# {"action":"denied","actor":"ui","role":"viewer","result":"denied:run",...}
 ```
 
 6. Görüntüleyici oturumuyla `GET /metrics` `403` döner; `METRICS_TOKEN` tanımlıysa kimlik bilgisi oturum
@@ -79,7 +78,8 @@ tail -n 5 logs/audit.jsonl
 - **Parolayı değiştirmek mevcut oturumları bitirmez.** Çerezde rol ve son kullanma tarihi var, parola yok.
   Hepsini hemen geçersiz kılmak için `APP_SECRET` değiştirin.
 - **Parola tüm görüntüleyiciler tarafından paylaşılır.** Bireysel görüntüleyici hesabı ve kişi bazlı denetim
-  kimliği yoktur: denetim kaydı aktörü `viewer` olarak yazar. Adlandırılmış salt okunur kullanıcılar
+  kimliği yoktur: denetim kaydı rolü `viewer`, aktörü ortak `ui` olarak yazar (yalnızca giriş kayıtlarında
+  aktör `viewer`). Adlandırılmış salt okunur kullanıcılar
   gerekiyorsa SSO proxy kullanın — ama aşağıdaki sınırlamaya bakın.
 - **GET isteklerinden CSRF riski yoktur.** Tüm durum değiştiren işlemler `POST`/`DELETE`'tir ve aynı izin
   kontrolünden geçer.

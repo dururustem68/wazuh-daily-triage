@@ -110,7 +110,8 @@ async def knowledge_page(request: Request, env_id: str, kind: str | None = None,
     ctx_md = er.env.context_text(_rt(request).settings.base_dir) if kind in (None, "context") and not status else ""
     return tpl.TemplateResponse(request, "knowledge.html", _ctx(request, er=er, env=er.env, rows=rows,
                                                                 kind=kind, status=status, ctx_md=ctx_md,
-                                                                deploy_on=_rt(request).deploy_ready(er.env)))
+                                                                deploy_on=_rt(request).deploy_ready(er.env),
+                                                                deploy_doc=wiki_url(ui_lang(request), "Features")))
 
 
 @router.get("/e/{env_id}/audit", response_class=HTMLResponse)
@@ -126,3 +127,42 @@ async def audit_page(request: Request, env_id: str, month: str | None = None):
         months.append(f"{y:04d}-{m:02d}")
         y, m = (y - 1, 12) if m == 1 else (y, m - 1)
     return tpl.TemplateResponse(request, "audit.html", _ctx(request, er=er, env=er.env, a=d, months=months))
+
+
+def wiki_url(lang: str, page: str = "Home") -> str:
+    from .ui import SOURCE_URL
+    return f"{SOURCE_URL}/wiki/{page}{'-TR' if lang == 'tr' else ''}"
+
+
+@router.get("/about", response_class=HTMLResponse)
+async def about_page(request: Request):
+    """Version, documentation links and what is switched on in each environment (no secrets)."""
+    from .. import authz
+    from ..mcp import token as mcp_token
+    rt = _rt(request)
+    lang = ui_lang(request)
+    mcp_on = bool(mcp_token())
+    mcp_ids = authz.mcp_envs(list(rt.envs))
+    rows = []
+    for er in _visible(request):
+        e = er.env
+        llm = rt.llm_cfg(e)
+        rows.append({
+            "env": e,
+            "schedule": ", ".join(e.schedule.all_times) if e.schedule.enabled else "",
+            "model": f"{llm.provider} · {llm.model}",
+            "deploy": rt.deploy_ready(e),
+            "privacy": e.privacy.mode,
+            "detect": e.privacy.detect and e.privacy.detect_sample > 0,
+            "sources": sorted(er.sources),
+            "liveness": e.liveness.enabled,
+            "notify": rt.settings.notify_for(e).channels,
+            "incident": [n for n, c in (("Zammad", e.incident.zammad), ("Jira", e.incident.jira)) if c],
+            "mcp": mcp_on and e.id in mcp_ids,
+        })
+    base = str(request.base_url).rstrip("/")
+    links = {k: wiki_url(lang, p) for k, p in (("home", "Home"), ("install", "Installation"), ("features", "Features"),
+                                                ("privacy", "Privacy"), ("mcp", "MCP"), ("viewer", "Viewer-Mode"),
+                                                ("sso", "SSO-Proxy-Auth"), ("config", "Configuration"))}
+    return tpl.TemplateResponse(request, "about.html", _ctx(request, rows=rows, mcp_on=mcp_on, mcp_url=f"{base}/mcp",
+                                                            links=links))

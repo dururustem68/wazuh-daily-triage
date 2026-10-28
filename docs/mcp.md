@@ -12,7 +12,8 @@ It exposes the same **read-only** tools the built-in AI uses, for every environm
 | `list_reports`, `get_report`, `inbox`, `knowledge`, `audit_report` | this application's runs, waiting recommendations, knowledge base, monthly report |
 | `validate_rule_xml`, `propose_knowledge` | check a rule draft; add a **proposal** (no effect until approved in the UI) |
 
-Nothing else can be written. `redact: true` applies to MCP results as well.
+Nothing else can be written. `privacy.mode: mask` applies to MCP results as well: personal data comes back as
+pseudonyms (`<email:3f9a1c2b>`), which the server resolves again when they are passed as tool arguments.
 
 ## Enable
 

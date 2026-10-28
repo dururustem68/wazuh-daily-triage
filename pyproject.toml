@@ -39,7 +39,7 @@ exclude_lines = [
 
 [tool.mypy]
 python_version = "3.11"
-files = ["app/web", "app/runtime.py", "app/authz.py", "app/formatting.py", "app/reporting.py", "app/services.py"]
+files = ["app/web", "app/privacy.py", "app/runtime.py", "app/authz.py", "app/formatting.py", "app/reporting.py", "app/services.py"]
 ignore_missing_imports = true
 follow_imports = "silent"      # gradual: legacy modules keep their types but their errors are not in scope
 check_untyped_defs = true

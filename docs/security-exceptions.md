@@ -47,7 +47,7 @@ conscious decision, and `security.check()` reports them at startup.
 |---|---|
 | The deploy API user can overwrite **any** custom rules file (`rules:update` cannot be scoped) | Separate account, credentials only in a secret, the application writes only `rule_deploy.file`, every deploy audited |
 | Alert content is attacker-controlled (prompt injection) | Read-only tool set, field allow-list and query caps, proposals require human approval, deploys require a typed rule id for silencing rules |
-| A hosted LLM receives alert summaries and log samples | `redact: true`, a local model, or a provider with a data-processing agreement; documented in the README |
+| A hosted LLM receives alert summaries and log samples | `privacy.mode: mask` (pseudonymised at the LLM boundary, [privacy.md](privacy.md)), a local model, or a provider with a data-processing agreement |
 | Shared admin login: the audit trail records the role, not the person | Use `AUTH_DISABLED=true` behind an SSO proxy so `actor(request)` carries the proxy user, and correlate with proxy logs |
 | The audit file lives on the same volume as the app | Ship it to write-once/central storage; the hash chain makes later modification detectable, not impossible |
 

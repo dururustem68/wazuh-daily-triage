@@ -27,6 +27,8 @@ findings, questions and rule drafts that a human decides on.
 | Put Keycloak or Authentik in front (SSO proxy) | [SSO proxy authentication](SSO-Proxy-Auth) |
 | Give a colleague read-only access | [Viewer mode](Viewer-Mode) |
 | Use the investigation tools from Claude Desktop or another MCP client | [MCP server](MCP) |
+| Rule deploy, promotion, incident records, extra sources, audit report, eval | [Features](Features) |
+| Keep personal data away from the LLM and find it in your logs (GDPR / KVKK) | [Privacy](Privacy) |
 | Understand the security model | [docs/security-exceptions.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/security-exceptions.md), [docs/permissions.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/permissions.md) |
 | Deploy to Kubernetes | [deploy/kubernetes/README.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/deploy/kubernetes/README.md), [Helm chart](https://github.com/dururustem68/wazuh-daily-triage/blob/main/deploy/helm/wazuh-daily-triage/README.md) |
 
@@ -59,7 +61,7 @@ flowchart LR
 
 ## Where the documentation lives
 
-- This wiki: installation, configuration, SSO, viewer mode, MCP.
+- This wiki: installation, configuration, features, privacy, SSO, viewer mode, MCP.
 - Repository docs: [architecture](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/architecture.md), [permissions](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/permissions.md),
   [rule deployment](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/rule-deployment.md), [notifications](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/notifications.md),
   [providers](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/providers.md), [sources](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/sources.md), [compatibility](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/compatibility.md),

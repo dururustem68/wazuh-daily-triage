@@ -10,18 +10,9 @@ from __future__ import annotations
 
 import re
 
-_PATTERNS = [
-    (re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"), "<email>"),
-    (re.compile(r"(?i)(pass(word)?|pwd|secret|token|api[_-]?key)(\s*[=:]\s*|\"\s*:\s*\")([^\s\"&,;]+)"),
-     lambda m: f"{m.group(1)}{m.group(3)}<redacted>"),
-    (re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._\-]+"), "Bearer <redacted>"),
-    (re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}"), "<jwt>"),
-    (re.compile(r"\b(?:\d[ -]?){13,19}\b"), "<card?>"),
-    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"), "<private-key>"),
-]
-
 
 def redact(text: str) -> str:
-    for rx, rep in _PATTERNS:
-        text = rx.sub(rep, text)
-    return text
+    """Irreversible masking (kept for compatibility; the app now uses :mod:`app.privacy`)."""
+    from .privacy import Masker
+    out = Masker().mask(text)
+    return re.sub(r"<([a-z_]+):[0-9a-f]{6,12}>", r"<\1>", out)

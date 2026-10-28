@@ -108,13 +108,16 @@ A channel is on when its fields are set. See [docs/notifications.md](https://git
 | `WAZUH_API_URL`, `WAZUH_API_USER`, `WAZUH_API_PASSWORD` | *(empty)* | Optional Wazuh API. |
 | `WAZUH_VERIFY_TLS` | `true` | Prefer `WAZUH_CA_FILE` over disabling verification. |
 | `WAZUH_CA_FILE` | *(empty)* | Private CA path inside the container (`/app/config/certs/root-ca.pem`). |
-| `WAZUH_ALERTS_INDEX` | `wazuh-alerts-*` | Alert index pattern. |
+| `WAZUH_ALERTS_INDEX` | `wazuh-alerts-4.x-*` | Alert index pattern. |
 | `SCHEDULE_ENABLED` | `true` | Scheduled runs. |
 | `SCHEDULE_TIME` | `07:30` | One time or a comma-separated list (`07:30,19:30`). |
 | `SCHEDULE_DAYS` | `mon,tue,wed,thu,fri` | Days of the week. |
 | `HIGH_LEVEL` | `7` | Level considered “high”. |
 | `WINDOW_MIN_HOURS` | `24` | Fallback window when no previous report exists. |
-| `REDACT` | `false` | Mask e-mails, passwords, tokens and card numbers before text reaches the model. |
+| `REDACT` | `false` | Same as `PRIVACY_MODE=mask` (kept for compatibility). |
+| `PRIVACY_MODE` | `off` | `mask`: pseudonymise personal data before it reaches the model — see [Privacy](Privacy). |
+| `PRIVACY_IPS` | `keep` | `public` / `all`: pseudonymise IP addresses too. |
+| `PRIVACY_DETECT` | `true` | Flag personal data stored in clear text in the alerts. |
 | `INVENTORY` | *(empty)* | Expected agent names; missing/unexpected agents become flags. |
 | `RULE_DEPLOY_ENABLED` | `false` | Opt-in rule deployment (needs a separate API user). |
 | `WAZUH_DEPLOY_USER`, `WAZUH_DEPLOY_PASSWORD` | *(empty)* | That separate user. |
@@ -176,7 +179,7 @@ environments:
     high_level: 7
     max_silence_minutes: 60
     liveness: {enabled: true, interval_minutes: 10}
-    redact: false
+    privacy: {mode: off, ips: keep, detect: true}   # GDPR / KVKK — see Privacy
     context_file: context/prod.md
     seed_file: seed/prod.yaml
     inventory: [web01, db01]          # or inventory_file
@@ -236,16 +239,17 @@ rotate `APP_SECRET` for that.
 ## Validate before you restart
 
 ```sh
-docker compose exec triage python -m app.check          # connections, model, notifications
+docker compose exec triage python -m app.check          # indexer, alerts, vulnerabilities, storage, API, extra sources, model (--no-llm skips it)
 docker compose exec triage python -c "from app.config import load_settings; s=load_settings(); print([e.id for e in s.environments])"
+# notifications are tested separately: environment page → "Test notification" (POST /api/e/<env>/notify-test)
 ```
 
 `app/security.py` validates the security-relevant settings at startup. In production it refuses to start on
 example passwords, a missing session key, insecure cookies, disabled TLS verification or incomplete rule
-deployment credentials; warnings cover `AUTH_DISABLED=true`, a shared read-only/deploy account and
-`AUDIT_LOG=false`.
+deployment credentials or a weak `rule_deploy` password; warnings cover `AUTH_DISABLED=true`, a shared
+read-only/deploy account and `AUDIT_LOG=false`. Production mode is `ENVIRONMENT=production` (alias `WDT_ENV`).
 
-Next: [SSO proxy authentication](SSO-Proxy-Auth) · [Viewer mode](Viewer-Mode) · [MCP server](MCP)
+Next: [Features](Features) · [Privacy](Privacy) · [SSO proxy authentication](SSO-Proxy-Auth) · [Viewer mode](Viewer-Mode) · [MCP server](MCP)
 
 ---
 

@@ -251,7 +251,9 @@ Ya da bilgi tabanı sayfasındaki **İçe / dışa aktar** kutusunu kullanın. T
   beklenti *ya da* yeniden üretilemeyen bir örnek değişikliği geri alır; geri alma da başarısız olursa kritik
   seviyede loglanır.
 - Harici bir LLM kullanıyorsanız alarm özetleri o sağlayıcıya gider. Düzenlemeye tabi ortamlarda (BDDK, KVKK,
-  GDPR) yerel model ya da `redact: true` kullanın.
+  GDPR) yerel model ya da `privacy.mode: mask` kullanın: kişisel veriler (e-posta, telefon, TCKN, IBAN, kart;
+  istenirse IP) modele gitmeden takma adla değiştirilir, gizli bilgiler silinir. `privacy.detect` loglarda açık
+  duran kişisel veriyi işaretler ([docs/privacy.md](docs/privacy.md)).
 - Arayüz: parola + imzalı çerez, deneme sınırı, sıkı CSP; konteyner root olmayan kullanıcıyla ve salt okunur
   dosya sistemiyle çalışır. İsteğe bağlı salt okunur `VIEWER_PASSWORD` ile ekip hiçbir şeyi değiştirmeden her
   şeyi görüntüleyebilir.

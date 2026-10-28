@@ -24,33 +24,34 @@
 <script src="/static/app.js?v={{ version }}" defer></script>
 </head>
 <body>
-<div class="shell">
-<aside class="side">
-  <a class="brand" href="/"><img src="/static/icon.svg" alt="" width="24" height="24"><span>{{ app_title }}</span></a>
-  {% if demo %}<span class="pill amber demo">DEMO</span>{% endif %}
-  {% if viewer %}<span class="pill gray demo">{{ _('nav.viewer') }}</span>{% endif %}
-  <nav class="nav">
-    <a href="/" class="{{ 'on' if path == '/' }}"><svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z"/></svg>{{ _('dash.title') }}</a>
-    {% for e in envs %}
-    {% set cur = env is defined and env.id == e.id %}
-    <div class="envgrp {{ 'cur' if cur }}">
-      <a href="/e/{{ e.id }}" class="envname {{ 'on' if cur and path == '/e/' ~ e.id }}"><span class="dot"></span>{{ e.name }}</a>
-      {% if cur %}
-      <a href="/e/{{ e.id }}/inbox" class="sub {{ 'on' if path.endswith('/inbox') }}"><svg viewBox="0 0 24 24"><path d="M4 4h16v10h-5l-2 3h-2l-2-3H4zM4 16h4l2 3h4l2-3h4v4H4z"/></svg>{{ _('nav.inbox') }}</a>
-      <a href="/e/{{ e.id }}" class="sub {{ 'on' if path == '/e/' ~ e.id or '/r/' in path }}"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 3v5h5M9 12h8M9 16h8"/></svg>{{ _('nav.reports') }}</a>
-      <a href="/e/{{ e.id }}/k" class="sub {{ 'on' if path.endswith('/k') }}"><svg viewBox="0 0 24 24"><path d="M5 3h12a2 2 0 0 1 2 2v16H7a2 2 0 0 1-2-2zM5 17a2 2 0 0 1 2-2h12"/></svg>{{ _('nav.knowledge') }}</a>
-      <a href="/e/{{ e.id }}/audit" class="sub {{ 'on' if path.endswith('/audit') }}"><svg viewBox="0 0 24 24"><path d="M9 3h6v3H9zM6 5h12v16H6zM9 11l2 2 4-4M9 17h6"/></svg>{{ _('nav.audit') }}</a>
-      {% endif %}
-    </div>
-    {% endfor %}
-  </nav>
-  <div class="side-foot">
+<header class="top">
+  <div class="topbar">
+    <a class="brand" href="/"><img src="/static/icon.svg" alt="" width="24" height="24"><span>{{ app_title }}</span></a>
+    {% if demo %}<span class="pill amber demo">DEMO</span>{% endif %}
+    {% if viewer %}<span class="pill gray demo">{{ _('nav.viewer') }}</span>{% endif %}
+    <nav class="tnav" aria-label="{{ _('nav.main') }}">
+      <a href="/" class="{{ 'on' if path == '/' }}"><svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z"/></svg>{{ _('dash.title') }}</a>
+      {% for e in envs %}{% set cur = env is defined and env and env.id == e.id %}
+      <a href="/e/{{ e.id }}" class="envtab {{ 'on' if cur }}"><span class="dot"></span>{{ e.name }}</a>
+      {% endfor %}
+    </nav>
+    <span class="spacer"></span>
+    <a href="/about" class="tlink {{ 'on' if path == '/about' }}"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v6M12 7.5v.5"/></svg><span>{{ _('nav.about') }}</span></a>
     <form method="post" action="/lang" class="inline langsw">
       {% for code, name in LANGS.items() %}<button name="lang" value="{{ code }}" class="linkbtn {{ 'on' if code == lang }}" title="{{ name }}">{{ code|upper }}</button>{% endfor %}
     </form>
     {% if auth %}<form method="post" action="/logout" class="inline"><button class="linkbtn">{{ _('nav.logout') }}</button></form>{% endif %}
   </div>
-</aside>
+  {% if env is defined and env %}
+  <nav class="subbar" aria-label="{{ env.name }}">
+    <span class="envlabel"><span class="dot"></span>{{ env.name }}</span>
+    <a href="/e/{{ env.id }}/inbox" class="{{ 'on' if path.endswith('/inbox') }}"><svg viewBox="0 0 24 24"><path d="M4 4h16v10h-5l-2 3h-2l-2-3H4zM4 16h4l2 3h4l2-3h4v4H4z"/></svg>{{ _('nav.inbox') }}</a>
+    <a href="/e/{{ env.id }}" class="{{ 'on' if path == '/e/' ~ env.id or '/r/' in path }}"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 3v5h5M9 12h8M9 16h8"/></svg>{{ _('nav.reports') }}</a>
+    <a href="/e/{{ env.id }}/k" class="{{ 'on' if path.endswith('/k') }}"><svg viewBox="0 0 24 24"><path d="M5 3h12a2 2 0 0 1 2 2v16H7a2 2 0 0 1-2-2zM5 17a2 2 0 0 1 2-2h12"/></svg>{{ _('nav.knowledge') }}</a>
+    <a href="/e/{{ env.id }}/audit" class="{{ 'on' if path.endswith('/audit') }}"><svg viewBox="0 0 24 24"><path d="M9 3h6v3H9zM6 5h12v16H6zM9 11l2 2 4-4M9 17h6"/></svg>{{ _('nav.audit') }}</a>
+  </nav>
+  {% endif %}
+</header>
 <div class="content">
   {% if storage_errors %}
   <div class="banner banner-warn" role="alert" aria-live="polite">
@@ -63,8 +64,7 @@
   </div>
   {% endif %}
   <main>{% block body %}{% endblock %}</main>
-  <footer>Wazuh Daily Triage {{ version }} · {{ _('footer.deploy') if deploy_any else _('footer') }} · <a href="{{ SOURCE_URL }}" rel="noopener">{{ _('nav.source') }}</a> (AGPL-3.0)</footer>
-</div>
+  <footer>Wazuh Daily Triage {{ version }} · {{ _('footer.deploy') if deploy_any else _('footer') }} · <a href="/about">{{ _('nav.about') }}</a> · <a href="{{ SOURCE_URL }}" rel="noopener">{{ _('nav.source') }}</a> (AGPL-3.0)</footer>
 </div>
 </body>
 </html>

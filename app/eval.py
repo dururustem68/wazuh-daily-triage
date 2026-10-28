@@ -150,6 +150,10 @@ async def _main(a) -> int:
             if a.max_steps:
                 llm_cfg = llm_cfg.model_copy(update={"max_tool_steps": a.max_steps})
             llm = make_llm(llm_cfg)
+            from .privacy import MaskingLLM, masker_for
+            mk = masker_for(er.env)
+            if mk:
+                llm = MaskingLLM(llm, mk)
             for i in range(a.repeat):
                 try:
                     r = await run_case(rt, case, llm, llm_cfg)

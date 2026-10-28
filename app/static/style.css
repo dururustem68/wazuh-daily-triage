@@ -34,26 +34,28 @@ h3 { font-size: 13px; margin: 16px 0 8px; text-transform: uppercase; letter-spac
 p { margin: 8px 0; }
 ul, ol { margin: 6px 0; }
 
-/* ---------- shell ---------- */
-.shell { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh;
-  background: linear-gradient(to right, var(--side) 248px, transparent 248px); }
-.side { background: var(--side); color: var(--side-ink); display: flex; flex-direction: column; gap: 10px;
-  padding: 16px 12px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-.brand { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 700; font-size: 15px; padding: 4px 8px 10px; }
+/* ---------- shell: top toolbar ---------- */
+.top { position: sticky; top: 0; z-index: 20; background: var(--side); color: var(--side-ink); box-shadow: var(--shadow-l); }
+.topbar { display: flex; align-items: center; gap: 10px; padding: 8px 20px; max-width: 1400px; margin: 0 auto; }
+.brand { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 700; font-size: 15px; padding: 4px 10px 4px 0;
+  white-space: nowrap; }
 .brand:hover { text-decoration: none; }
-.side .demo { align-self: flex-start; margin: 0 8px; }
-.nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
-.nav a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; color: var(--side-ink); font-size: 13.5px; }
-.nav a:hover { background: var(--side-hover); text-decoration: none; color: #fff; }
-.nav a.on { background: var(--side-on); color: #fff; font-weight: 600; }
-.nav svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; stroke-linecap: round; flex: none; opacity: .9; }
-.envgrp { margin-top: 10px; }
-.envgrp .envname { font-weight: 600; color: #fff; }
-.envgrp .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--side-muted); flex: none; margin: 0 4px; }
-.envgrp.cur .dot { background: #4ade80; box-shadow: 0 0 0 3px rgba(74, 222, 128, .18); }
-.envgrp .sub { padding-left: 30px; color: var(--side-muted); }
-.side-foot { display: flex; justify-content: space-between; align-items: center; padding: 10px 8px 0; border-top: 1px solid var(--side-hover); font-size: 12.5px; }
-.side-foot .linkbtn { color: var(--side-muted); } .side-foot .linkbtn:hover, .side-foot .linkbtn.on { color: #fff; }
+.top .demo { flex: none; }
+.tnav, .subbar { display: flex; align-items: center; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.tnav::-webkit-scrollbar, .subbar::-webkit-scrollbar { display: none; }
+.tnav a, .subbar a, .tlink { display: flex; align-items: center; gap: 8px; padding: 7px 11px; border-radius: 8px;
+  color: var(--side-ink); font-size: 13.5px; white-space: nowrap; }
+.tnav a:hover, .subbar a:hover, .tlink:hover { background: var(--side-hover); text-decoration: none; color: #fff; }
+.tnav a.on, .subbar a.on, .tlink.on { background: var(--side-on); color: #fff; font-weight: 600; }
+.top svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round;
+  stroke-linecap: round; flex: none; opacity: .9; }
+.top .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--side-muted); flex: none; }
+.envtab.on .dot, .envlabel .dot { background: #4ade80; box-shadow: 0 0 0 3px rgba(74, 222, 128, .18); }
+.top .spacer { flex: 1; }
+.top .linkbtn { color: var(--side-muted); } .top .linkbtn:hover, .top .linkbtn.on { color: #fff; }
+.subbar { max-width: 1400px; margin: 0 auto; padding: 4px 20px 8px; border-top: 1px solid var(--side-hover); }
+.envlabel { display: flex; align-items: center; gap: 8px; color: #fff; font-weight: 600; font-size: 13.5px; padding: 0 12px 0 2px;
+  margin-right: 6px; border-right: 1px solid var(--side-hover); white-space: nowrap; }
 .content { min-width: 0; display: flex; flex-direction: column; }
 main { width: 100%; max-width: 1180px; margin: 0 auto; padding: 28px 32px 48px; flex: 1; }
 footer { text-align: center; padding: 18px; color: var(--muted); font-size: 12px; }
@@ -248,6 +250,9 @@ form.inline { display: inline; margin: 0; }
 .steps { list-style: none; padding-left: 0; font-family: var(--mono); font-size: 12px; }
 .steps li { padding: 2px 0; } .steps .ok { color: var(--green); }
 .kimport-out .bad { color: var(--red); }
+.steps-h { margin: 0 0 8px; padding-left: 20px; } .steps-h li { margin: 6px 0; } .steps-h .btn { margin-left: 4px; }
+.scrollx { overflow-x: auto; } .about-tbl td:first-child { font-weight: 600; white-space: nowrap; }
+.card h2.pad { padding: 16px 20px 6px; margin: 0; } ul.links { padding-left: 18px; } ul.links li { margin: 4px 0; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 980px) {
@@ -255,12 +260,11 @@ form.inline { display: inline; margin: 0; }
   .decide { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 860px) {
-  .shell { grid-template-columns: 1fr; background: none; }
-  .side { position: sticky; top: 0; height: auto; z-index: 10; flex-direction: row; align-items: center; padding: 8px 12px; overflow-x: auto; gap: 6px; }
-  .brand span, .side .demo { display: none; } .brand { padding: 4px; }
-  .nav { flex-direction: row; gap: 2px; } .envgrp { display: flex; margin: 0; } .envgrp:not(.cur) { display: none; }
-  .nav a, .envgrp .sub { padding: 6px 8px; white-space: nowrap; } .envgrp .envname { display: none; }
-  .side-foot { border: 0; padding: 0 0 0 8px; gap: 8px; }
+  .topbar { padding: 6px 12px; gap: 6px; } .subbar { padding: 4px 12px 6px; }
+  .brand span, .top .demo, .tlink span { display: none; } .brand { padding: 4px; }
+  .tnav a, .subbar a { padding: 6px 8px; } .envlabel { display: none; }
+  .top .spacer { display: none; } .tnav { flex: 1; min-width: 0; } .langsw, .top form.inline { flex: none; white-space: nowrap; }
+  .langsw .linkbtn { padding: 2px 3px; }
   main { padding: 18px 16px 40px; }
   .grid.cards { grid-template-columns: 1fr; }
   .tbl { display: block; overflow-x: auto; } .env-card .stats { grid-template-columns: repeat(2, 1fr); }
@@ -313,7 +317,7 @@ textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, mono
 .promo ol { padding-left: 20px; }
 .verify { margin: 6px 0; }
 @media print {
-  .side, .noprint, .kactions, .tools { display: none !important; }
+  .top, .noprint, .kactions, .tools { display: none !important; }
   .content, main { margin: 0 !important; padding: 0 !important; max-width: none !important; }
   .card, .kpi { box-shadow: none !important; break-inside: avoid; }
   body { background: #fff !important; color: #000 !important; }

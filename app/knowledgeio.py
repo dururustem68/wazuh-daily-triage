@@ -29,9 +29,20 @@ class KnowledgeIOMixin:
         if await rt.store.get("knowledge", marker):
             return 0
         items = yaml.safe_load(path.read_text(encoding="utf-8")) or []
+        if not isinstance(items, list):
+            log.warning("%s: seed file %s is not a list of {kind, title, body} entries — not imported", rt.env.id,
+                        path.name)
+            return 0
+        bad = 0
         for it in items:
+            if not isinstance(it, dict) or it.get("kind") not in KNOWLEDGE_KINDS or not str(it.get("title", "")).strip():
+                bad += 1
+                continue
             await rt.repo.add_knowledge(it["kind"], it["title"], it.get("body", ""), status=it.get("status", "active"),
                                         created_by="seed", rule_ids=it.get("rule_ids"))
+        if bad:
+            log.warning("%s: skipped %d invalid seed entries in %s (kind/title missing or unknown kind)",
+                        rt.env.id, bad, path.name)
         # marker doc: env "__meta__" keeps it out of every listing; deleted seed entries never come back
         await rt.store.put("knowledge", marker, {"id": marker, "env": "__meta__", "kind": "seed_marker",
                                                  "status": "closed", "title": path.name, "created_at": now_iso(),
@@ -54,6 +65,9 @@ class KnowledgeIOMixin:
             by_key.setdefault(f"{d['kind']}|{d['title'].strip().lower()}", d)
         res = {"added": 0, "updated": 0, "skipped": 0, "errors": []}
         for n, it in enumerate(items, 1):
+            if isinstance(it, dict) and it.get("_error"):
+                res["errors"].append(f"#{n}: {it['_error']}")
+                continue
             if not isinstance(it, dict) or not it.get("kind") or not str(it.get("title", "")).strip():
                 res["errors"].append(f"#{n}: kind and title are required")
                 continue

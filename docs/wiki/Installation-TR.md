@@ -45,7 +45,8 @@ docker compose up -d --build
 
 <http://127.0.0.1:8080> adresini açın, giriş yapın ve bir kez **Run check now** düğmesine basın. Demo
 `config/demo.yaml` ve sentetik veri kullanır; Wazuh'a bağlanmaz. `WDT_DEMO=true` ile
-`ENVIRONMENT=production` birlikte kullanılamaz — uygulama açılmaz.
+`ENVIRONMENT=production` birlikte kullanılamaz — uygulama açılmaz. Yerel derleme yerine **hazır 0.7.0 imajını**
+çalıştırıyorsanız ayrıca `WDT_CONFIG=config/demo.yaml` verin (0.7.0 sonrasında düzeltildi).
 
 ### A2. Gerçek Wazuh (tek ortam)
 
@@ -64,7 +65,7 @@ ENVIRONMENT=production
 APP_PASSWORD=<güçlü ve benzersiz parola>
 APP_SECRET=<openssl çıktısı>
 COOKIE_SECURE=true
-FORWARDED_ALLOW_IPS=127.0.0.1
+FORWARDED_ALLOW_IPS=172.16.0.0/12
 
 LLM_PROVIDER=anthropic
 LLM_MODEL=<model kimliği>
@@ -80,6 +81,12 @@ WAZUH_API_PASSWORD=<api parolası>
 WAZUH_CA_FILE=/app/config/certs/root-ca.pem
 ```
 
+`FORWARDED_ALLOW_IPS`, **konteynerin** proxy'yi gördüğü adres olmalıdır. Host üzerindeki bir proxy, yayınlanan
+`127.0.0.1:8080` adresine bağlandığında konteynere `127.0.0.1`'den değil Docker köprü ağ geçidinden (ör.
+`172.18.0.1`) gelir; `docker network inspect <proje>_default` ile bakıp aralığı bu adrese daraltın. Yanlışsa
+yönlendirme başlıkları yok sayılır: giriş sınırlaması ve denetim kaydında herkes tek IP görünür. Asla `*`
+kullanmayın.
+
 CA'yı kopyalayın:
 
 ```sh
@@ -94,8 +101,9 @@ docker compose up -d
 docker compose exec triage python -m app.check
 ```
 
-`python -m app.check` (veya ortam sayfasındaki **Test connections**) Indexer, API, model ve bildirimleri koşu
-başlatmadan doğrular.
+`python -m app.check [ortam…] [--no-llm]` (veya ortam sayfasındaki **Test connections**) Indexer'ı (alarm,
+zafiyet ve depolama indeksleri), API'yi, yapılandırılmış ek kaynakları ve modeli koşu başlatmadan doğrular.
+Bildirimlerin kendi **Test notification** düğmesi vardır.
 
 > `.env` içindeki yorumlar kendi satırında olmalıdır: `docker compose`, değer satırında `#` sonrasını değerin
 > parçası sayar.
@@ -183,6 +191,8 @@ Depodan doğrudan: `helm install wazuh-daily-triage ./deploy/helm/wazuh-daily-tr
 ```sh
 cp -r deploy/kubernetes/example ~/triage-overlay
 cd ~/triage-overlay
+# depo dışında göreli "../base" çözülmez — sürümü sabitlenmiş uzak base'i gösterin:
+sed -i 's#^  - ../base.*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.7.0#' kustomization.yaml
 cp secret.env.example secret.env
 vi secret.env environments.yaml context.md
 kubectl apply -k .
@@ -306,7 +316,7 @@ dokunmaz.
 |---|---|
 | Konteyner `refusing to start in production` ile çıkıyor | Mesaj değişkeni söyler. Gerçek `APP_PASSWORD`, `APP_SECRET`, `COOKIE_SECURE=true` ayarlayın veya TLS doğrulamasını düzeltin. |
 | `FileNotFoundError: no config file and WAZUH_INDEXER_URL is not set` | Ne `config/environments.yaml` ne de `WAZUH_INDEXER_URL` var. Birini oluşturun. |
-| Vekilden `502`, konteyner sağlıklı | Vekil yanlış porta/hosta gidiyor; `docker compose ps` kontrol edin. |
+| Vekilden `502`, konteyner sağlıklı | Vekil yanlış porta (8080) ya da hosta gidiyor; `docker compose ps` kontrol edin. |
 | Giriş sürekli `/login`'e dönüyor | Düz HTTP üzerinde `COOKIE_SECURE=true` veya vekil çerezleri siliyor. HTTPS kullanın; yerel testte geçici olarak `COOKIE_SECURE=false`. |
 | `ZoneInfoNotFoundError` / bilinmeyen saat dilimi | `TZ`'yi IANA adı yapın (`Europe/Istanbul`) ve `tzdata` kurulu kalsın. |
 | Wazuh'a TLS hatası | CA'yı `config/certs/` altına koyup `ca_file` (veya `WAZUH_CA_FILE`) ayarlayın; üretimde `verify_tls: false` kullanmayın. |

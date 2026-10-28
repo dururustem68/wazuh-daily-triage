@@ -332,6 +332,7 @@ class ImportReq(BaseModel):
     text: str
     update: bool = False
     dry_run: bool = False
+    filename: str = ""          # .txt / .csv / .yaml / .json — picks the parser
 
 
 @router.post("/api/e/{env_id}/kb/import")
@@ -339,8 +340,9 @@ async def api_k_import(request: Request, env_id: str, body: ImportReq):
     _env(request, env_id)
     if len(body.text) > 2_000_000:
         raise HTTPException(413, "too large")
+    from ..kbformats import parse_import
     try:
-        items = yaml.safe_load(body.text) or []
+        items = parse_import(body.text, body.filename)
     except yaml.YAMLError as e:
         raise HTTPException(400, f"YAML: {e}") from e
     try:
@@ -348,6 +350,16 @@ async def api_k_import(request: Request, env_id: str, body: ImportReq):
                                             created_by=actor(request))
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+
+
+@router.get("/api/kb/template")
+async def api_k_template(request: Request, fmt: str = "txt"):
+    """Downloadable import template (txt | csv | yaml) in the UI language, with examples."""
+    from ..kbformats import template
+    if fmt not in ("txt", "csv", "yaml"):
+        raise HTTPException(400, "fmt must be txt, csv or yaml")
+    text, media, name = template(fmt, ui_lang(request))
+    return Response(text, media_type=media, headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 @router.get("/api/e/{env_id}/kb/export")

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -211,29 +212,53 @@ class ReviewMixin:
             return f"{f.get('label')}|{rules}|{agents}"
         return f"{f.get('label')}|{(f.get('title') or '').strip().lower()[:80]}"
 
+    ATTENTION = {"real_incident", "investigate", "detection_gap"}
+
+    @classmethod
+    def same_finding(cls, a: dict, b: dict) -> bool:
+        """Fuzzy match across runs: the model rewords titles and changes labels or rule lists between runs."""
+        la, lb = a.get("label"), b.get("label")
+        if la != lb and not (la in cls.ATTENTION and lb in cls.ATTENTION):
+            return False
+        ra, rb = set(map(str, a.get("rule_ids") or [])), set(map(str, b.get("rule_ids") or []))
+        aa, ab = set(a.get("agents") or []), set(b.get("agents") or [])
+        agents_ok = not aa or not ab or bool(aa & ab)
+        if ra and rb:
+            return bool(ra & rb) and agents_ok
+        if ra or rb:
+            return False
+        if aa and ab and not aa & ab:
+            return False
+        wa = set(re.findall(r"\w{3,}", (a.get("title") or "").lower()))
+        wb = set(re.findall(r"\w{3,}", (b.get("title") or "").lower()))
+        return bool(wa and wb) and len(wa & wb) / len(wa | wb) >= 0.5
+
     async def inbox(self, env_id: str) -> list[dict]:
         """Unreviewed findings of recent runs, de-duplicated, most severe and newest first."""
         rt = self.get(env_id)
         runs = await rt.repo.list_runs(self.INBOX_RUNS, status="done", light=True)
-        groups: dict[str, dict] = {}
-        handled: set[str] = set()
+        groups: list[dict] = []
+        handled: list[dict] = []
         for r in runs:  # newest first
             for f in r.get("findings") or []:
                 if f.get("label") in self.INBOX_SKIP:
                     continue
-                key = self.finding_key(f)
                 if f.get("user_status", "new") != "new":
-                    handled.add(key)  # a decision on any occurrence settles the group
+                    handled.append(f)  # a decision on any occurrence settles the group
                     continue
-                g = groups.setdefault(key, {"key": key, "finding": f, "run_id": r["run_id"],
-                                            "run_started": r.get("started_at"), "refs": [], "seen": 0,
-                                            "first_seen": r.get("started_at")})
+                g = next((g for g in groups if g["key"] == self.finding_key(f) or self.same_finding(g["finding"], f)),
+                         None)
+                if g is None:
+                    g = {"key": self.finding_key(f), "finding": f, "run_id": r["run_id"],
+                         "run_started": r.get("started_at"), "refs": [], "seen": 0, "first_seen": r.get("started_at")}
+                    groups.append(g)
                 g["refs"].append({"run_id": r["run_id"], "fid": f.get("id")})
                 g["seen"] += 1
                 g["first_seen"] = r.get("started_at")
         sev = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
         lab = {"real_incident": 0, "detection_gap": 1, "baseline_increase": 2, "investigate": 3, "false_positive": 4}
-        items = [g for k, g in groups.items() if k not in handled]
+        items = [g for g in groups
+                 if not any(self.finding_key(h) == g["key"] or self.same_finding(h, g["finding"]) for h in handled)]
         items.sort(key=lambda g: (lab.get(g["finding"].get("label"), 5), sev.get(g["finding"].get("severity"), 5),
                                   _neg_ts(g["run_started"])))
         return items
