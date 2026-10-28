@@ -193,13 +193,13 @@ spec:
 Enable it in your overlay:
 
 ```yaml
-components:
-  - ../components/networkpolicy
-  - ../components/ingress-traefik-authentik
+components:   # remote, pinned — or copy the folders next to your overlay to edit the host names
+  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/networkpolicy?ref=v0.7.0
+  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/ingress-traefik-authentik?ref=v0.7.0
 ```
 
-and set `AUTH_DISABLED=true`, `COOKIE_SECURE=true` and `FORWARDED_ALLOW_IPS` in the overlay's environment
-ConfigMap. Cross-namespace service references need Traefik's
+The component already sets `AUTH_DISABLED=true`, `COOKIE_SECURE=true` and `NOTIFY_UI_URL` (edit the host). Add
+`FORWARDED_ALLOW_IPS` (your Traefik pod CIDR) to the overlay's environment ConfigMap yourself. Cross-namespace service references need Traefik's
 `--providers.kubernetescrd.allowCrossNamespace=true`; otherwise add an `ExternalName` service in the app
 namespace.
 

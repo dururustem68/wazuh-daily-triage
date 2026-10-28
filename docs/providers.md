@@ -146,4 +146,5 @@ environments:
   week of reports before optimising cost.
 - A daily run is typically 5–15 model calls; `max_tool_steps` caps it. Token counts per run are shown at the
   top of every report.
-- For regulated data prefer a local model or `redact: true`; read your provider's data-retention terms.
+- For regulated data prefer a local model or `privacy.mode: mask` ([privacy.md](privacy.md)); read your provider's
+  data-retention terms.

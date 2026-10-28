@@ -72,6 +72,9 @@ class Collector:
             tasks["anomalies"] = self._anomalies(frm, to)
         if self.api:
             tasks["coverage"] = self._coverage(to)
+        pv = self.env.privacy
+        if pv.detect and pv.detect_sample:
+            tasks["personal_data"] = self._personal_data(frm, to, pv.detect_sample)
         res = await asyncio.gather(*(self._safe(k, v) for k, v in tasks.items()))
         out = dict(zip(tasks.keys(), res, strict=True))
         out["window"] = {"from": iso(frm), "to": iso(to), "hours": hours}
@@ -449,6 +452,30 @@ class Collector:
                 "saturated_hours": hours[-48:], "excess": sum(h["over"] for h in hours),
                 "possibly_unmailed": sorted(buried.values(), key=lambda x: (-x["level"], -x["n"]))[:25]}
 
+    # ------------------------------------------------------------------ personal data in logs (GDPR / KVKK)
+    async def _personal_data(self, frm, to, sample: int) -> dict:
+        """Scan the newest ``sample`` alerts of the window (plus a share of the high-level ones) for personal data
+        stored in clear text. Only counts and fully masked examples leave this function."""
+        from .privacy import scan_alerts
+        src = ["full_log", "data", "rule.id", "rule.description", "agent.name", "location", "decoder.name"]
+        q = {"bool": {"filter": [rng(frm, to)]}}
+        r = await self.ix.search(self.env.alerts_index, {"size": sample, "query": q, "_source": src,
+                                                         "sort": [{TS: "desc"}]})
+        hits = r["hits"]["hits"]
+        # spread the sample over the window: the newest alerts alone are often one noisy source
+        r2 = await self.ix.search(self.env.alerts_index, {
+            "size": 0, "query": q,
+            "aggs": {"loc": {"terms": {"field": "location", "size": 40},
+                             "aggs": {"s": {"top_hits": {"size": 5, "_source": src, "sort": [{TS: "desc"}]}}}}}})
+        seen = {h.get("_id") for h in hits}
+        for b in _b(r2["aggregations"]["loc"]):
+            for h in b["s"]["hits"]["hits"]:
+                if h.get("_id") not in seen:
+                    seen.add(h.get("_id"))
+                    hits.append(h)
+        pv = self.env.privacy
+        return scan_alerts(hits, set(pv.kinds) if pv.kinds else None, pv.allow)
+
     # ------------------------------------------------------------------ agent coverage
     async def _coverage(self, now: datetime) -> dict:
         agents = [a for a in await self.api.agents(limit=5000) if str(a.get("id")) != "000"]
@@ -538,6 +565,14 @@ class Collector:
         if over:
             add("warn" if over.get("Critical") else "info", "vuln_overdue",
                 s=", ".join(f"{k} {n}" for k, n in over.items()))
+        pd = d.get("personal_data") or {}
+        if pd.get("affected_alerts"):
+            from .privacy import SENSITIVE
+            kinds = pd.get("kinds") or {}
+            sens = any(k in SENSITIVE for k in kinds)
+            add("warn" if sens else "info", "personal_data", n=pd["affected_alerts"], s=pd.get("sampled", 0),
+                k=", ".join(f"{k} {n}" for k, n in sorted(kinds.items(), key=lambda x: -x[1])),
+                src=", ".join(f"{x['location'] or x['agent']} (rule {x['rule_id']})" for x in pd["sources"][:3]))
         if self.errors:
             add("warn", "collector_errors", n=len(self.errors))
         return f

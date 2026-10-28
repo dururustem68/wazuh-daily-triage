@@ -11,16 +11,17 @@ Uç nokta **varsayılan olarak kapalıdır**. `MCP_TOKEN` yoksa `404` döner.
 | Grup | Araçlar | Gerekli |
 |---|---|---|
 | Keşif | `list_environments` | her zaman — önce bunu çağırın |
-| Alarmlar | `search_alerts`, `aggregate_alerts`, `rule_timeline`, `ip_profile`, `correlate_around` | Indexer |
-| Wazuh API | `vulnerabilities`, `agent_info`, `rule_info`, `logtest` | Wazuh API yapılandırılmış olmalı |
-| Diğer kaynaklar | `prom_query`, `prom_range`, `loki_query`, `loki_labels`, `k8s_get`, `k8s_logs` | o kaynak yapılandırılmış olmalı |
+| Alarmlar | `search_alerts`, `aggregate_alerts`, `rule_timeline`, `ip_profile`, `correlate_around`, `vulnerabilities` | Indexer |
+| Wazuh API | `agent_info`, `rule_info`, `logtest` | Wazuh API yapılandırılmış olmalı |
+| Diğer kaynaklar | `prom_query`, `prom_range`, `loki_query`, `loki_labels`, `k8s_get`, `k8s_logs` | o kaynak yapılandırılmış olmalı; `k8s_logs` için ayrıca `sources.kubernetes.pod_logs: true` (varsayılan) |
 | Bu uygulama | `list_reports`, `get_report`, `inbox`, `knowledge`, `audit_report` | her zaman |
 | Kural taslakları | `validate_rule_xml`, `propose_knowledge` | her zaman |
 
 - **Salt okunur.** Wazuh'u değiştiren, kural dağıtan veya bilgi tabanını düzenleyen araç yoktur.
 - `propose_knowledge` yalnızca bir **öneri** ekler; siz arayüzde onaylayana kadar etkisi olmaz.
 - `submit_report` (modelin kendi çıktı kanalı) bilinçli olarak sunulmaz.
-- Ortamdaki `redact: true` ayarı MCP sonuçlarına da uygulanır.
+- Ortamdaki `privacy.mode: mask` (ya da eski `redact: true`) ayarı MCP sonuçlarına da uygulanır: kişisel veri
+  takma adla döner, takma adı araç argümanı olarak verdiğinizde yeniden çözülür. Bkz. [Gizlilik](Privacy-TR).
 - `propose_knowledge` dışındaki tüm araçlar `readOnlyHint` taşır.
 
 ## Etkinleştirme
@@ -168,7 +169,7 @@ giriş sayfasına yönlendirilir).
   yoktur. `propose_knowledge` insan onayı bekleyen bir öneri oluşturur.
 - **Ortam başına izin listesi** (`MCP_ENVS`) yalnızca şemada değil, araç dağıtıcısında da kontrol edilir.
 - **Sorgu koruması** alanları, pencereleri, kovaları ve belge sayılarını sınırlar.
-- **Maskeleme** (`redact: true`) istemciye dönen JSON'a uygulanır.
+- **Maskeleme** (`privacy.mode: mask`) istemciye dönen JSON'a uygulanır.
 - **Denetim.** `mcp.propose_knowledge` `logs/audit.jsonl` dosyasına yazılır; her araç çağrısı adı ve sonucuyla
   (`mcp search_alerts ok`) INFO seviyesinde loglanır. Argümanlar ve alarm içerikleri denetim kaydına yazılmaz.
 - **İstemci enjeksiyonu (prompt injection).** Alarm içeriği saldırgan kontrolündedir; sunucu talimatları

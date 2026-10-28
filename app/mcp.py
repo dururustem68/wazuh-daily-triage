@@ -100,14 +100,15 @@ async def _call(rt, name: str, args: dict) -> str:
     tb = ToolBox(er.env, er.ix, er.api, er.repo, mode="mcp", sources=er.sources)
     if name in EXCLUDE or name not in tb._handlers:
         return json.dumps({"error": f"tool {name} is not available for {env_id}"})
-    return await tb.call(name, args)
+    from .privacy import Masker
+    return _red(er, await tb.call(name, Masker.unmask_obj(args)))
 
 
 def _red(er, text: str) -> str:
-    if er.env.redact:
-        from .redact import redact
-        return redact(text)
-    return text
+    """MCP clients are external LLMs too: apply the environment's privacy masking (pseudonyms resolve back)."""
+    from .privacy import masker_for
+    m = masker_for(er.env)
+    return m.mask(text) if m else text
 
 
 def _ok(mid, result) -> dict:

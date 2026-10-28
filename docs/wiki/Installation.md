@@ -45,7 +45,8 @@ docker compose up -d --build
 
 Open <http://127.0.0.1:8080>, sign in, press **Run check now** once. The demo uses `config/demo.yaml` and
 synthetic data; no Wazuh connection is attempted. `WDT_DEMO=true` must never be combined with
-`ENVIRONMENT=production` — startup refuses it.
+`ENVIRONMENT=production` — startup refuses it. Running the **pulled 0.7.0 image** instead of a local build? Also
+set `WDT_CONFIG=config/demo.yaml` (fixed after 0.7.0).
 
 ### A2. A real Wazuh (single environment)
 
@@ -64,7 +65,7 @@ ENVIRONMENT=production
 APP_PASSWORD=<strong unique password>
 APP_SECRET=<output of openssl rand -hex 32>
 COOKIE_SECURE=true
-FORWARDED_ALLOW_IPS=127.0.0.1
+FORWARDED_ALLOW_IPS=172.16.0.0/12
 
 LLM_PROVIDER=anthropic
 LLM_MODEL=<model id>
@@ -80,6 +81,12 @@ WAZUH_API_PASSWORD=<api password>
 WAZUH_CA_FILE=/app/config/certs/root-ca.pem
 ```
 
+`FORWARDED_ALLOW_IPS` must be the address the **container** sees the proxy coming from. A proxy on the host that
+connects to the published `127.0.0.1:8080` arrives from the Docker bridge gateway (for example `172.18.0.1`),
+not from `127.0.0.1`; check it with `docker network inspect <project>_default` and narrow the range to it. If it
+is wrong, forwarded headers are ignored: every user shares one IP in the login throttle and the audit log. Never
+use `*`.
+
 Copy the CA:
 
 ```sh
@@ -94,8 +101,9 @@ docker compose up -d
 docker compose exec triage python -m app.check
 ```
 
-`python -m app.check` (or **Test connections** on the environment page) verifies the Indexer, the API, the
-model and the notifications without starting a run.
+`python -m app.check [env…] [--no-llm]` (or **Test connections** on the environment page) verifies the Indexer
+(alerts, vulnerabilities, storage indices), the API, configured extra sources and the model without starting a
+run. Notifications have their own **Test notification** button.
 
 > Comments in `.env` must be on their own line: `docker compose` treats everything after `#` on a value line as
 > part of the value.
@@ -182,6 +190,8 @@ placeholders.
 ```sh
 cp -r deploy/kubernetes/example ~/triage-overlay
 cd ~/triage-overlay
+# outside the repository the relative "../base" no longer resolves — point it at the pinned remote base:
+sed -i 's#^  - ../base.*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.7.0#' kustomization.yaml
 cp secret.env.example secret.env
 vi secret.env environments.yaml context.md
 kubectl apply -k .

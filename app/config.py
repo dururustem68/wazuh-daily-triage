@@ -15,7 +15,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .notify import NotifyCfg
 
@@ -97,6 +97,25 @@ class QueryLimitsCfg(BaseModel):
         if not re.fullmatch(r"\d+[smhdw]", v):
             raise ValueError("min_interval must look like 30s, 1m, 1h")
         return v
+
+
+class PrivacyCfg(BaseModel):
+    """Personal data (GDPR / KVKK). ``mode: mask`` pseudonymises personal data in everything sent to the model
+    (e-mail, phone, national IDs, IBAN, card, secrets; IPs per ``ips``) and maps it back in tool calls and reports.
+    ``detect`` scans a sample of each window's alerts for personal data stored in clear text."""
+    mode: Literal["off", "mask"] = "off"
+    ips: Literal["keep", "public", "all"] = "keep"   # IPs are personal data under GDPR, but the analysis needs them
+    kinds: list[str] = Field(default_factory=list)   # empty = all detectors (app/privacy.py KINDS)
+    allow: list[str] = Field(default_factory=list)   # regexes never masked / reported (e.g. "noreply@example\\.com")
+    detect: bool = True
+    detect_sample: int = Field(default=1000, ge=0, le=5000)   # alerts scanned per run (0 = off)
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def _mode(cls, v):   # YAML 1.1 reads a bare `off` / `on` as a boolean
+        if isinstance(v, bool):
+            return "mask" if v else "off"
+        return str(v).lower()
 
 
 class MailCfg(BaseModel):
@@ -310,7 +329,8 @@ class Environment(BaseModel):
     watch_groups: list[str] = Field(default_factory=list)
     context_file: str | None = None
     seed_file: str | None = None      # imported into the knowledge base once, on first use
-    redact: bool = False
+    redact: bool = False              # legacy alias for privacy.mode: mask
+    privacy: PrivacyCfg = Field(default_factory=PrivacyCfg)
     language: str | None = None       # report language override (en|tr)
     llm: LLMConfig | None = None      # per-environment model override (e.g. local model for regulated data)
     notify: NotifyCfg | None = None   # per-environment notification override
@@ -333,6 +353,13 @@ class Environment(BaseModel):
         if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,40}", v):
             raise ValueError("id must be lowercase letters/digits/-/_")
         return v
+
+    @model_validator(mode="after")
+    def _redact_alias(self):
+        if self.redact and self.privacy.mode == "off":
+            self.privacy.mode = "mask"
+        self.redact = self.privacy.mode == "mask"
+        return self
 
     @field_validator("watch_rules", mode="before")
     @classmethod
@@ -488,6 +515,8 @@ def settings_from_env() -> dict:
         "high_level": int(E("HIGH_LEVEL", "7")),
         "window_min_hours": int(E("WINDOW_MIN_HOURS", "24")),
         "redact": _bool(E("REDACT"), False),
+        "privacy": {"mode": E("PRIVACY_MODE") or ("mask" if _bool(E("REDACT"), False) else "off"),
+                    "ips": E("PRIVACY_IPS", "keep"), "detect": _bool(E("PRIVACY_DETECT"), True)},
     }
     if E("WAZUH_API_URL"):
         env["api"] = {"url": E("WAZUH_API_URL"), "username": E("WAZUH_API_USER", ""),
@@ -537,6 +566,16 @@ def load_settings(path: str | os.PathLike | None = None) -> Settings:
             raw["llm"] = llm_from_env()
         if "notify" not in raw:  # no notify block → NOTIFY_*/SMTP_*/TELEGRAM_*/TEAMS_*
             raw["notify"] = notify_from_env()
+        app_cfg = dict(raw.get("app") or {})   # app.language / app.timezone fall back to APP_LANGUAGE / TZ
+        if "language" not in app_cfg and os.environ.get("APP_LANGUAGE") in LANGUAGES:
+            app_cfg["language"] = os.environ["APP_LANGUAGE"]
+        if "timezone" not in app_cfg and os.environ.get("TZ"):
+            try:
+                ZoneInfo(os.environ["TZ"])
+                app_cfg["timezone"] = os.environ["TZ"]
+            except (ZoneInfoNotFoundError, ValueError):
+                pass
+        raw["app"] = app_cfg
         base = path.parent
     else:
         raw = settings_from_env()

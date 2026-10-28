@@ -282,8 +282,10 @@ integrations, known limits). In short:
 - **Rule deployment fails closed.** Validation, restart and logtest are verified; a failed expectation *or* a
   sample that cannot be reproduced rolls the change back, and a failed rollback is logged as critical.
 - **Data leaving your network.** With a hosted LLM, alert summaries and sample log lines are sent to that
-  provider. For regulated data use a local model or `redact: true` (masks e-mails, passwords, tokens, card
-  numbers; IP addresses are kept for analysis; not a full DLP).
+  provider. For regulated data use a local model or `privacy.mode: mask` — personal data (e-mail, phone,
+  national IDs, IBAN, cards; optionally IPs) is pseudonymised before it reaches the model and mapped back in tool
+  calls and reports, secrets are removed; `privacy.detect` flags personal data stored in clear text in your logs
+  ([docs/privacy.md](docs/privacy.md); best effort, not a full DLP).
 - **Web UI.** Password + signed `HttpOnly`/`SameSite=Strict` cookie, login throttling, strict CSP (no inline
   scripts), model output rendered as markdown with HTML disabled. An optional read-only `VIEWER_PASSWORD` lets a
   team view everything without changing anything. The container runs as non-root with a read-only filesystem and

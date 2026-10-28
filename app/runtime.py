@@ -87,7 +87,9 @@ class Runtime(KnowledgeIOMixin, RunMixin, ReviewMixin, RuleDeployMixin, Incident
         key = id(cfg)
         if key not in self._llms:
             self._llms[key] = make_llm(cfg)
-        return self._llms[key]
+        from .privacy import MaskingLLM, masker_for
+        m = masker_for(env)
+        return MaskingLLM(self._llms[key], m) if m else self._llms[key]
 
     def lang(self, env: Environment) -> str:
         return self.settings.lang_for(env)

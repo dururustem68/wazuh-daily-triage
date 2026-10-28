@@ -26,7 +26,6 @@ from defusedxml.common import DefusedXmlException
 from ..collector import TS, _b, _parse, iso
 from ..config import Environment
 from ..query_guard import QueryError, check_interval, field, histogram_buckets, query_string, size, time_range
-from ..redact import redact
 from ..store import KNOWLEDGE_KINDS, Repo
 from ..wazuh.api import WazuhAPI
 from ..wazuh.indexer import Indexer
@@ -152,8 +151,6 @@ class ToolBox:
             log.warning("tool %s failed (env=%s, mode=%s): %s", name, self.env.id, self.mode, e, exc_info=True)
             res = {"error": f"{type(e).__name__}: {e}"}
         txt = json.dumps(res, ensure_ascii=False, default=str)
-        if self.env.redact:
-            txt = redact(txt)
         if len(txt) > MAX_RESULT_CHARS:
             txt = txt[:MAX_RESULT_CHARS] + f'… [truncated, {len(txt)} chars in total — narrow the filter]'
         return txt
@@ -382,7 +379,10 @@ class ToolBox:
         runs = await self.repo.list_runs(int(min(a.get("size", 10), 30)))
         return [{"run_id": r["run_id"], "started_at": r.get("started_at"), "status": r.get("status"),
                  "health": r.get("health"), "window": r.get("window"), "metrics": r.get("metrics"),
-                 "headline": (r.get("summary_md") or "")[:200]} for r in runs]
+                 "headline": (r.get("summary_md") or "")[:200],
+                 **({"error": str(r.get("error") or r.get("ai_error"))[:300]} if r.get("error") or r.get("ai_error") else {}),
+                 "model": (r.get("agent") or {}).get("model"),
+                 "steps": (r.get("agent") or {}).get("steps")} for r in runs]
 
     async def get_report(self, a):
         if a.get("run_id"):
@@ -391,8 +391,8 @@ class ToolBox:
             r = await self.repo.last_success()
         if not r:
             return {"error": "report not found"}
-        return {k: r.get(k) for k in ("run_id", "started_at", "window", "health", "metrics", "summary_md",
-                                       "findings", "questions", "flags")}
+        return {k: r.get(k) for k in ("run_id", "started_at", "status", "window", "health", "metrics", "summary_md",
+                                       "findings", "questions", "flags", "error", "ai_error")}
 
     async def knowledge(self, a):
         rows = await self.repo.list_knowledge(kinds=a.get("kinds"), status=a.get("status") or ["active", "proposed"])

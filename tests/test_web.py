@@ -194,3 +194,20 @@ def test_edit_rule_draft_xml(c):
     page = c.get("/e/demo/k").text
     assert "data-copy-report" in page, page[:300]
     assert "119001" in c.get("/e/demo/k?kind=rule_draft").text
+
+
+def test_about_templates_and_simple_import(c):
+    assert c.post("/login", data={"password": "pw"}, follow_redirects=False).status_code == 303
+    page = c.get("/about")
+    assert page.status_code == 200 and "MCP" in page.text and 'class="topbar"' in page.text
+    for fmt in ("txt", "csv", "yaml"):
+        r = c.get(f"/api/kb/template?fmt={fmt}")
+        assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
+    txt = c.get("/api/kb/template?fmt=txt").text
+    r = c.post("/api/e/demo/kb/import", json={"text": txt, "dry_run": True, "filename": "x.txt"}).json()
+    assert r["added"] == 4 and not r["errors"], r
+    csv_t = c.get("/api/kb/template?fmt=csv").text
+    r = c.post("/api/e/demo/kb/import", json={"text": csv_t, "dry_run": True, "filename": "x.csv"}).json()
+    assert r["added"] == 3 and not r["errors"], r
+    k = c.get("/e/demo/k?kind=rule_draft")
+    assert k.status_code == 200

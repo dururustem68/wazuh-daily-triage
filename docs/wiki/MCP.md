@@ -11,16 +11,17 @@ The endpoint is **off by default**. Without `MCP_TOKEN` it answers `404`.
 | Group | Tools | Needs |
 |---|---|---|
 | Discovery | `list_environments` | always — call this first |
-| Alerts | `search_alerts`, `aggregate_alerts`, `rule_timeline`, `ip_profile`, `correlate_around` | Indexer |
-| Wazuh API | `vulnerabilities`, `agent_info`, `rule_info`, `logtest` | Wazuh API configured |
-| Other sources | `prom_query`, `prom_range`, `loki_query`, `loki_labels`, `k8s_get`, `k8s_logs` | that source configured |
+| Alerts | `search_alerts`, `aggregate_alerts`, `rule_timeline`, `ip_profile`, `correlate_around`, `vulnerabilities` | Indexer |
+| Wazuh API | `agent_info`, `rule_info`, `logtest` | Wazuh API configured |
+| Other sources | `prom_query`, `prom_range`, `loki_query`, `loki_labels`, `k8s_get`, `k8s_logs` | that source configured; `k8s_logs` also needs `sources.kubernetes.pod_logs: true` (default) |
 | This application | `list_reports`, `get_report`, `inbox`, `knowledge`, `audit_report` | always |
 | Rule drafts | `validate_rule_xml`, `propose_knowledge` | always |
 
 - **Read-only.** There is no tool that changes Wazuh, deploys a rule or edits the knowledge base.
 - `propose_knowledge` adds a **proposal** only; it has no effect until a human approves it in the UI.
 - `submit_report` (the model's own output channel) is deliberately not exposed.
-- `redact: true` on an environment applies to MCP results as well.
+- `privacy.mode: mask` (or the older `redact: true`) applies to MCP results as well: personal data comes back as
+  pseudonyms, which resolve again when you pass them as tool arguments. See [Privacy](Privacy).
 - Every tool carries `readOnlyHint` except `propose_knowledge`.
 
 ## Enable it
@@ -168,7 +169,7 @@ internet. Rotate the token by changing `MCP_TOKEN` and restarting.
   knowledge edit. `propose_knowledge` creates a proposal that waits for a human.
 - **Per-environment allow-list** (`MCP_ENVS`) is checked in the tool dispatcher, not only in the schema.
 - **Query guard** caps fields, windows, buckets and document counts.
-- **Redaction** (`redact: true`) is applied to the JSON returned to the client.
+- **Masking** (`privacy.mode: mask`) is applied to the JSON returned to the client.
 - **Audit.** `mcp.propose_knowledge` is written to `logs/audit.jsonl`; every tool call is logged at INFO with
   its name and outcome (`mcp search_alerts ok`). Arguments and alert contents are not written to the audit log.
 - **Prompt injection.** Alert content is attacker-controlled; the server instructions tell the client to treat

@@ -26,6 +26,8 @@ bulgulara, sorulara ve kural taslaklarına dönüştürür.
 | Keycloak veya Authentik'i öne koymak (SSO proxy) | [SSO proxy kimlik doğrulama](SSO-Proxy-Auth-TR) |
 | Bir meslektaşa salt okunur erişim vermek | [Görüntüleyici modu](Viewer-Mode-TR) |
 | Claude Desktop'tan araştırma araçlarını kullanmak | [MCP sunucusu](MCP-TR) |
+| Kural dağıtımı, terfi, olay kaydı, ek kaynaklar, denetim raporu, eval | [Özellikler](Features-TR) |
+| Kişisel veriyi LLM'den uzak tutmak ve loglarda bulmak (KVKK / GDPR) | [Gizlilik](Privacy-TR) |
 | Güvenlik modelini anlamak | [docs/permissions.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/permissions.md), [docs/security-exceptions.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/security-exceptions.md) |
 | Kubernetes'e kurmak | [deploy/kubernetes/README.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/deploy/kubernetes/README.md), [Helm chart](https://github.com/dururustem68/wazuh-daily-triage/blob/main/deploy/helm/wazuh-daily-triage/README.md) |
 
@@ -58,7 +60,7 @@ flowchart LR
 
 ## Belgeler nerede?
 
-- Bu wiki: kurulum, yapılandırma, SSO, görüntüleyici modu, MCP.
+- Bu wiki: kurulum, yapılandırma, özellikler, gizlilik, SSO, görüntüleyici modu, MCP.
 - Depo belgeleri: [mimari](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/architecture.md), [izinler](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/permissions.md),
   [kural dağıtımı](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/rule-deployment.md), [bildirimler](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/notifications.md),
   [sağlayıcılar](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/providers.md), [kaynaklar](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/sources.md), [uyumluluk](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/compatibility.md),

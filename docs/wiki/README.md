@@ -1,6 +1,6 @@
 # Wiki source (bilingual)
 
-This folder holds the source of the project wiki: six pages in English, six in Turkish, one screenshot
+This folder holds the source of the project wiki: eight pages in English, eight in Turkish, one screenshot
 folder. The pages are plain Markdown and are published to the GitHub wiki repository; they are not built by
 any tool.
 
@@ -9,6 +9,8 @@ any tool.
 | Landing page | [`Home.md`](Home.md) | [`Home-TR.md`](Home-TR.md) | everyone |
 | Installation | [`Installation.md`](Installation.md) | [`Installation-TR.md`](Installation-TR.md) | operator installing it |
 | Configuration | [`Configuration.md`](Configuration.md) | [`Configuration-TR.md`](Configuration-TR.md) | operator, day 2 |
+| Features | [`Features.md`](Features.md) | [`Features-TR.md`](Features-TR.md) | operator, SOC lead |
+| Privacy (GDPR / KVKK) | [`Privacy.md`](Privacy.md) | [`Privacy-TR.md`](Privacy-TR.md) | DPO, auditor, operator |
 | SSO proxy authentication | [`SSO-Proxy-Auth.md`](SSO-Proxy-Auth.md) | [`SSO-Proxy-Auth-TR.md`](SSO-Proxy-Auth-TR.md) | platform / identity team |
 | Viewer mode | [`Viewer-Mode.md`](Viewer-Mode.md) | [`Viewer-Mode-TR.md`](Viewer-Mode-TR.md) | SOC lead, auditor |
 | MCP server | [`MCP.md`](MCP.md) | [`MCP-TR.md`](MCP-TR.md) | AI tooling, integrator |
@@ -26,6 +28,7 @@ taken from a running 0.7.0 demo instance.
 | `images/inbox.png` | — | the recommendation inbox |
 | `images/knowledge.png` | — | the knowledge base |
 | `images/viewer-mode.png` | Viewer mode | the same UI signed in with `VIEWER_PASSWORD` |
+| `images/about.png` | Features | the About page: features per environment, MCP setup |
 
 They were captured headlessly with Playwright against the demo (`WDT_DEMO=true`, `LLM_PROVIDER=mock`, synthetic
 data), 1280×900 at device scale 1.5. To refresh them, start the demo, run one check, then capture the same
@@ -69,7 +72,7 @@ across whenever they change.
 ```sh
 # from the project root
 WIKI=../wazuh-daily-triage.wiki
-for p in Home Home-TR Installation Installation-TR Configuration Configuration-TR \
+for p in Home Home-TR Installation Installation-TR Configuration Configuration-TR Features Features-TR Privacy Privacy-TR \
          SSO-Proxy-Auth SSO-Proxy-Auth-TR Viewer-Mode Viewer-Mode-TR MCP MCP-TR _Sidebar; do
   cp "docs/wiki/$p.md" "$WIKI/"
 done
@@ -86,7 +89,7 @@ In PowerShell:
 
 ```powershell
 $wiki = '..\wazuh-daily-triage.wiki'
-'Home','Home-TR','Installation','Installation-TR','Configuration','Configuration-TR',
+'Home','Home-TR','Installation','Installation-TR','Configuration','Configuration-TR','Features','Features-TR','Privacy','Privacy-TR',
 'SSO-Proxy-Auth','SSO-Proxy-Auth-TR','Viewer-Mode','Viewer-Mode-TR','MCP','MCP-TR','_Sidebar' |
   ForEach-Object { Copy-Item "docs\wiki\$_.md" $wiki -Force }
 New-Item -ItemType Directory -Force "$wiki\images" | Out-Null
@@ -116,7 +119,7 @@ otherwise the next sync silently reverts it.
 
 ## Türkçe özet
 
-`docs/wiki/` bu wiki'nin kaynağıdır: altı İngilizce, altı Türkçe sayfa ve `images/` altında ekran görüntüleri.
+`docs/wiki/` bu wiki'nin kaynağıdır: sekiz İngilizce, sekiz Türkçe sayfa ve `images/` altında ekran görüntüleri.
 Yayınlamak için GitHub'da wiki'yi bir kez açın (Settings → Wikis ve Wiki sekmesinde ilk sayfa), sonra
 `wazuh-daily-triage.wiki.git` deposunu klonlayıp bu dizindeki `*.md` ve `images/` içeriğini kopyalayın, commit
 edip push edin. Sayfa bağlantıları `Configuration` gibi çıplak adlarla yazılır (`.md` eklenmez); depo
