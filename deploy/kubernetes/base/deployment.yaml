@@ -20,7 +20,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: triage
-          image: ghcr.io/dururustem68/wazuh-daily-triage:0.7.0
+          image: ghcr.io/dururustem68/wazuh-daily-triage:0.8.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
