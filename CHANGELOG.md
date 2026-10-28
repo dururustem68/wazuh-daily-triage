@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-10-28
+
 ### Added
 - **Personal data protection (GDPR / KVKK)** — `privacy:` per environment, [docs/privacy.md](docs/privacy.md).
   - `mode: mask` pseudonymises personal data at the **LLM boundary**: system prompt, collected summary and tool
