@@ -56,31 +56,59 @@ def _rules(v) -> list[str]:
     return [x for x in re.split(r"[\s,;]+", str(v or "")) if x]
 
 
-_HEAD = re.compile(r"^\[(?P<k>[^\]]+)\]\s*(?P<t>.+)$")
-_RULES = re.compile(r"^(?:rules?|kurallar?|reglas?|regeln?|rule_ids)\s*[:=]\s*(?P<v>.*)$", re.I)
-_KEY = re.compile(r"^(?:key|anahtar)\s*[:=]\s*(?P<v>\S.*)$", re.I)
+_RULE_KEYS = {"rule", "rules", "kural", "kurallar", "regla", "reglas", "regel", "regeln", "rule_ids"}
+_KEY_KEYS = {"key", "anahtar"}
+
+
+def _head(line: str) -> tuple[str, str] | None:
+    """`[kind] title` → (kind, title). Plain string operations: no regex on user-supplied text."""
+    line = line.strip()
+    if not line.startswith("["):
+        return None
+    end = line.find("]")
+    kind, title = line[1:end].strip(), line[end + 1:].strip()
+    return (kind, title) if end > 1 and kind and title else None
+
+
+def _field(line: str, names: set[str]) -> str | None:
+    """`name: value` / `name = value` when name is one of `names`; otherwise None."""
+    cut = min((i for i in (line.find(":"), line.find("=")) if i > 0), default=-1)
+    if cut < 0 or line[:cut].strip().lower() not in names:
+        return None
+    return line[cut + 1:].strip()
+
+
+def _blocks(text: str) -> list[list[str]]:
+    out: list[list[str]] = [[]]
+    for ln in text.splitlines():
+        st = ln.strip()
+        if len(st) >= 3 and set(st) == {"-"}:
+            out.append([])
+        else:
+            out[-1].append(ln)
+    return out
 
 
 def parse_txt(text: str) -> list[dict]:
     items: list[dict] = []
-    for block in re.split(r"^\s*---+\s*$", text, flags=re.M):
-        lines = [ln.rstrip() for ln in block.splitlines() if not ln.lstrip().startswith("#")]
+    for block in _blocks(text):
+        lines = [ln.rstrip()[:10_000] for ln in block if not ln.lstrip().startswith("#")]
         while lines and not lines[0].strip():
             lines.pop(0)
         if not lines:
             continue
-        m = _HEAD.match(lines[0].strip())
-        if not m:
+        h = _head(lines[0])
+        if not h:
             items.append({"_error": f"first line must look like [kind] title — got {lines[0].strip()[:60]!r}"})
             continue
-        it: dict = {"kind": norm_kind(m["k"]), "title": m["t"].strip()}
+        it: dict = {"kind": norm_kind(h[0]), "title": h[1]}
         body = []
         for ln in lines[1:]:
-            r, k = _RULES.match(ln.strip()), _KEY.match(ln.strip())
-            if r and "rule_ids" not in it:
-                it["rule_ids"] = _rules(r["v"])
+            r, k = _field(ln, _RULE_KEYS), _field(ln, _KEY_KEYS)
+            if r is not None and "rule_ids" not in it:
+                it["rule_ids"] = _rules(r)
             elif k and "key" not in it:
-                it["key"] = k["v"].strip()
+                it["key"] = k
             else:
                 body.append(ln)
         it["body"] = "\n".join(body).strip()
@@ -119,8 +147,8 @@ def parse_import(text: str, filename: str = "") -> list:
     if name.endswith(".txt"):
         return parse_txt(text)
     stripped = text.lstrip("﻿").lstrip()
-    if not name and _HEAD.match(next((ln.strip() for ln in stripped.splitlines()
-                                      if ln.strip() and not ln.strip().startswith("#")), "")):
+    if not name and _head(next((ln for ln in stripped.splitlines()
+                                if ln.strip() and not ln.strip().startswith("#")), "")):
         return parse_txt(text)
     if stripped.startswith(("[", "{")):
         try:

@@ -38,7 +38,7 @@ Konteyneri yeniden başlatın. Giriş sayfası artık salt okunur görüntüleyi
 Matris `app/authz.py` içindedir; HTTP middleware **her** rotada kontrol eder. Düğmeyi gizlemek kontrol değildir:
 elle hazırlanmış bir `POST` `403` alır ve denetim kaydına `denied:<izin>` olarak yazılır.
 
-### 0.7.0'da bilinen kozmetik sınır
+### Bilinen kozmetik sınır
 
 Bazı yazma kontrolleri (örneğin **Run check now** ve karar düğmeleri) görüntüleyiciye hâlâ gösterilir.
 Kapalı davranırlar — sunucu isteği reddeder — ama görünürler. Sınır olarak düğmenin yokluğunu değil, 403'ü

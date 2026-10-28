@@ -6,7 +6,7 @@ bulgulara, sorulara ve kural taslaklarına dönüştürür.
 
 ![İzleme panosu](images/dashboard.png)
 
-**Sürüm:** 0.7.0 · **Lisans:** AGPL-3.0-only · **Python:** 3.11–3.13 · **Wazuh:** 4.x
+**Sürüm:** 0.8.0 · **Lisans:** AGPL-3.0-only · **Python:** 3.11–3.13 · **Wazuh:** 4.x
 
 ## Neler yapar?
 

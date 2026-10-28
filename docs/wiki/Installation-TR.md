@@ -45,8 +45,8 @@ docker compose up -d --build
 
 <http://127.0.0.1:8080> adresini açın, giriş yapın ve bir kez **Run check now** düğmesine basın. Demo
 `config/demo.yaml` ve sentetik veri kullanır; Wazuh'a bağlanmaz. `WDT_DEMO=true` ile
-`ENVIRONMENT=production` birlikte kullanılamaz — uygulama açılmaz. Yerel derleme yerine **hazır 0.7.0 imajını**
-çalıştırıyorsanız ayrıca `WDT_CONFIG=config/demo.yaml` verin (0.7.0 sonrasında düzeltildi).
+`ENVIRONMENT=production` birlikte kullanılamaz — uygulama açılmaz. (Hazır 0.7.0 imajı ayrıca
+`WDT_CONFIG=config/demo.yaml` istiyordu; 0.8.0'da düzeltildi.)
 
 ### A2. Gerçek Wazuh (tek ortam)
 
@@ -109,7 +109,7 @@ Bildirimlerin kendi **Test notification** düğmesi vardır.
 > parçası sayar.
 
 > **Üretimde imajı sabitleyin.** `docker-compose.yml` demoyu kolaylaştırmak için `:latest` kullanır. Üretimde
-> `ghcr.io/dururustem68/wazuh-daily-triage:0.7.0` (veya kendi digest'inizi) yazın; böylece yükseltme bilinçli
+> `ghcr.io/dururustem68/wazuh-daily-triage:0.8.0` (veya kendi digest'inizi) yazın; böylece yükseltme bilinçli
 > bir adım olur.
 
 ### A3. Birden çok Wazuh ortamı
@@ -192,7 +192,7 @@ Depodan doğrudan: `helm install wazuh-daily-triage ./deploy/helm/wazuh-daily-tr
 cp -r deploy/kubernetes/example ~/triage-overlay
 cd ~/triage-overlay
 # depo dışında göreli "../base" çözülmez — sürümü sabitlenmiş uzak base'i gösterin:
-sed -i 's#^  - ../base.*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.7.0#' kustomization.yaml
+sed -i 's#^  - ../base.*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.8.0#' kustomization.yaml
 cp secret.env.example secret.env
 vi secret.env environments.yaml context.md
 kubectl apply -k .

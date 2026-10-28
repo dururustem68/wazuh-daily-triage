@@ -1,6 +1,6 @@
 # Gizlilik (KVKK / GDPR)
 
-*0.7.0'dan sonraki sürümle gelir.* `privacy:` altında ortam bazında ayarlanan iki özellik vardır:
+*0.8.0 ile gelir.* `privacy:` altında ortam bazında ayarlanan iki özellik vardır:
 
 | Özellik | Cevapladığı soru | Varsayılan |
 |---|---|---|

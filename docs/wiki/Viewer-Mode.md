@@ -39,7 +39,7 @@ disables the role.
 The matrix lives in `app/authz.py`; the HTTP middleware checks it for **every** route. Hiding a button is never
 the control: a crafted `POST` gets `403` and is written to the audit trail as `denied:<permission>`.
 
-### Known cosmetic limitation in 0.7.0
+### Known cosmetic limitation
 
 Some write controls (for example **Run check now** and the decision buttons) are still rendered for a viewer.
 They fail closed — the server rejects the request — but they are visible. Treat the 403 as the boundary, not

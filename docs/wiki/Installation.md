@@ -45,8 +45,8 @@ docker compose up -d --build
 
 Open <http://127.0.0.1:8080>, sign in, press **Run check now** once. The demo uses `config/demo.yaml` and
 synthetic data; no Wazuh connection is attempted. `WDT_DEMO=true` must never be combined with
-`ENVIRONMENT=production` — startup refuses it. Running the **pulled 0.7.0 image** instead of a local build? Also
-set `WDT_CONFIG=config/demo.yaml` (fixed after 0.7.0).
+`ENVIRONMENT=production` — startup refuses it. (The pulled 0.7.0 image additionally needed
+`WDT_CONFIG=config/demo.yaml`; fixed in 0.8.0.)
 
 ### A2. A real Wazuh (single environment)
 
@@ -109,7 +109,7 @@ run. Notifications have their own **Test notification** button.
 > part of the value.
 
 > **Pin the image for production.** `docker-compose.yml` uses `:latest` so the demo always works. Replace it with
-> `ghcr.io/dururustem68/wazuh-daily-triage:0.7.0` (or your own digest) so an upgrade is a deliberate change.
+> `ghcr.io/dururustem68/wazuh-daily-triage:0.8.0` (or your own digest) so an upgrade is a deliberate change.
 
 ### A3. Several Wazuh environments
 
@@ -191,7 +191,7 @@ placeholders.
 cp -r deploy/kubernetes/example ~/triage-overlay
 cd ~/triage-overlay
 # outside the repository the relative "../base" no longer resolves — point it at the pinned remote base:
-sed -i 's#^  - ../base.*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.7.0#' kustomization.yaml
+sed -i 's#^  - ../base.*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.8.0#' kustomization.yaml
 cp secret.env.example secret.env
 vi secret.env environments.yaml context.md
 kubectl apply -k .

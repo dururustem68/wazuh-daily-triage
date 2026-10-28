@@ -5,6 +5,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+- CodeQL `py/polynomial-redos` (3 alerts) in the knowledge TXT import: the `[kind] title`, `rules:` and `key:`
+  lines are now parsed with plain string operations instead of regular expressions, so a crafted upload cannot
+  make the parser backtrack. A regression test feeds 200 000-character hostile lines.
+
 ## [0.8.0] — 2026-10-28
 
 ### Added

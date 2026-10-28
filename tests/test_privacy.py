@@ -124,3 +124,13 @@ def test_kb_txt_and_csv_formats():
     rows = parse_import(csv_text, "k.csv")
     assert rows[1]["kind"] == "baseline" and rows[1]["rule_ids"] == ["31101", "100211"]
     assert parse_import("- kind: Karar\n  title: x\n")[0]["kind"] == "decision"
+
+
+def test_import_parsers_linear_on_hostile_input():
+    import time
+
+    from app.kbformats import parse_import
+    t0 = time.time()
+    for s in ("[" + " " * 200_000 + "x", "[a] b\nrules" + " " * 200_000 + ":" + " " * 200_000, "[a]" + " " * 200_000):
+        parse_import(s, "x.txt")
+    assert time.time() - t0 < 1

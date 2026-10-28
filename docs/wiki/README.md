@@ -16,7 +16,7 @@ any tool.
 | MCP server | [`MCP.md`](MCP.md) | [`MCP-TR.md`](MCP-TR.md) | AI tooling, integrator |
 
 `_Sidebar.md` is the navigation that GitHub renders on every wiki page. `images/` holds the screenshots,
-taken from a running 0.7.0 demo instance.
+taken from a running 0.8.0 demo instance.
 
 ## Screenshots
 
@@ -81,7 +81,7 @@ cp docs/wiki/images/*.png "$WIKI/images/"
 
 cd "$WIKI"
 git add -A
-git commit -m "wiki: sync from docs/wiki (0.7.0)"
+git commit -m "wiki: sync from docs/wiki (0.8.0)"
 git push
 ```
 
@@ -95,7 +95,7 @@ $wiki = '..\wazuh-daily-triage.wiki'
 New-Item -ItemType Directory -Force "$wiki\images" | Out-Null
 Copy-Item docs\wiki\images\*.png "$wiki\images" -Force
 git -C $wiki add -A
-git -C $wiki commit -m "wiki: sync from docs/wiki (0.7.0)"
+git -C $wiki commit -m "wiki: sync from docs/wiki (0.8.0)"
 git -C $wiki push
 ```
 
@@ -111,7 +111,7 @@ otherwise the next sync silently reverts it.
 
 - One topic per page; do not add a page without adding it to `_Sidebar.md` (both languages).
 - Every page ends with `[English](Page) · [Türkçe](Page-TR)`.
-- Keep commands copy-pasteable and version-pinned: `0.7.0`, chart `0.1.3`.
+- Keep commands copy-pasteable and version-pinned: `0.8.0`, chart `0.1.3`.
 - Update the version string in `Home.md`, `Home-TR.md`, `_Sidebar.md` when the release changes.
 - Never put a real password, token, hostname or customer alert in a page or a screenshot.
 
@@ -124,4 +124,4 @@ Yayınlamak için GitHub'da wiki'yi bir kez açın (Settings → Wikis ve Wiki s
 `wazuh-daily-triage.wiki.git` deposunu klonlayıp bu dizindeki `*.md` ve `images/` içeriğini kopyalayın, commit
 edip push edin. Sayfa bağlantıları `Configuration` gibi çıplak adlarla yazılır (`.md` eklenmez); depo
 belgelerine giden bağlantılar ise wiki ayrı bir depo olduğu için mutlak GitHub adresi olarak durur. Ekran
-görüntüleri 0.7.0 demo örneğinden alınmıştır; gerçek müşteri verisi içeren görüntü kullanmayın.
+görüntüleri 0.8.0 demo örneğinden alınmıştır; gerçek müşteri verisi içeren görüntü kullanmayın.

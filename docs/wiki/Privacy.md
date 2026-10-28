@@ -1,6 +1,6 @@
 # Privacy (GDPR / KVKK)
 
-*Since the release after 0.7.0.* Two features, set per environment under `privacy:`.
+*Since 0.8.0.* Two features, set per environment under `privacy:`.
 
 | Feature | Question it answers | Default |
 |---|---|---|

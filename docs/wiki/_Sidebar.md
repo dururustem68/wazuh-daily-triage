@@ -1,4 +1,4 @@
-**Wazuh Daily Triage 0.7.0**
+**Wazuh Daily Triage 0.8.0**
 
 **English**
 - [Home](Home)
