@@ -12,6 +12,12 @@ All notable changes to this project are documented here. The format follows
 - The CodeQL workflow re-added in 0.7.0 collided with GitHub's default setup ("CodeQL analyses from advanced
   configurations cannot be processed when the default setup is enabled"). Removed again, so default setup keeps
   scanning python, actions and javascript-typescript.
+- The container image refused to start with `WDT_DEMO=true` alone: the image sets `WDT_CONFIG` globally, so demo
+  mode looked for `/app/config/environments.yaml` and failed with "no config file and WAZUH_INDEXER_URL is not
+  set". `config_path()` now falls back to `config/demo.yaml` and logs the fallback once.
+- `test_inbox_dedupe_and_act` could fail depending on the wall clock: demo alerts are generated once relative to
+  "now" while the run window ends at the start of every run, so an hourly alert sitting exactly on the window
+  start dropped out of the second run. The test now freezes the clock.
 
 ## [0.7.0] — 2026-10-27
 

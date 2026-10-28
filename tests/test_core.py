@@ -250,6 +250,18 @@ def test_settings_from_env(monkeypatch, tmp_path):
     assert e.schedule.days == ["mon", "fri"] and s.app.language == "tr"
 
 
+def test_demo_config_does_not_need_an_environments_file(monkeypatch, tmp_path):
+    """The image sets WDT_CONFIG globally; WDT_DEMO=true must still find config/demo.yaml."""
+    from app.config import config_path
+    missing = str(tmp_path / "environments.yaml")
+    monkeypatch.setenv("WDT_CONFIG", missing)
+    assert config_path(demo=True) == "config/demo.yaml"
+    assert config_path(demo=False) == missing
+    monkeypatch.delenv("WDT_CONFIG")
+    assert config_path(demo=True) == "config/demo.yaml"
+    assert config_path(demo=False) == "config/environments.yaml"
+
+
 def test_i18n_catalogs_match():
     from app.i18n import CATALOG, EN
     for lang, catalog in CATALOG.items():
@@ -346,7 +358,21 @@ def test_schedule_times(tmp_path):
         Schedule(times=["7:5"])
 
 
-async def test_inbox_dedupe_and_act(settings):
+async def test_inbox_dedupe_and_act(settings, monkeypatch):
+    # The demo indexer builds its alerts once, relative to "now", while the window ends at the start of
+    # every run. With the real clock an alert that sits exactly on the window start (an hourly event whose
+    # minute/second matches the current one) drops out of the second run, so fix the clock for both.
+    from app import demo as demo_mod
+    from app import runs as runs_mod
+    fixed = datetime(2026, 10, 27, 12, 0, tzinfo=UTC)
+
+    class FrozenClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed.astimezone(tz) if tz else fixed.replace(tzinfo=None)
+
+    monkeypatch.setattr(runs_mod, "datetime", FrozenClock)
+    monkeypatch.setattr(demo_mod, "datetime", FrozenClock)
     rt = Runtime(settings, demo=True)
     er = rt.get("demo")
     await rt.run_triage(er, "ib-1")

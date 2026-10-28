@@ -517,6 +517,18 @@ def settings_from_env() -> dict:
     }
 
 
+def config_path(demo: bool) -> str:
+    """Configuration file to read: ``WDT_CONFIG`` when set, otherwise the demo or the normal YAML file.
+
+    Demo mode must never require a configuration file. The container image sets ``WDT_CONFIG`` globally, so
+    ``WDT_DEMO=true`` alone would otherwise look for ``/app/config/environments.yaml`` and refuse to start.
+    """
+    want = os.environ.get("WDT_CONFIG") or ("config/demo.yaml" if demo else "config/environments.yaml")
+    if demo and not Path(want).is_file():
+        want = "config/demo.yaml"
+    return want
+
+
 def load_settings(path: str | os.PathLike | None = None) -> Settings:
     path = Path(path or os.environ.get("WDT_CONFIG", "config/environments.yaml"))
     if path.exists():

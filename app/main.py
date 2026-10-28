@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__, auditlog, authz, security
-from .config import load_settings
+from .config import config_path, load_settings
 from .observability import install_logging, metrics
 from .runtime import Runtime, demo_enabled
 from .web import api as api_routes
@@ -34,7 +34,10 @@ log = logging.getLogger("wdt")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     demo = demo_enabled()
-    cfg = os.environ.get("WDT_CONFIG") or ("config/demo.yaml" if demo else "config/environments.yaml")
+    want = os.environ.get("WDT_CONFIG")
+    cfg = config_path(demo)                                 # WDT_CONFIG, else the demo or normal YAML file
+    if demo and want and cfg != want:
+        log.warning("WDT_DEMO=true: %s not found, using %s", want, cfg)
     settings = load_settings(cfg)
     warnings = security.check(settings, demo=demo)          # refuses to start on fatal problems
     for w in warnings:
