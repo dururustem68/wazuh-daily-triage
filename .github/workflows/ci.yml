@@ -27,7 +27,7 @@ jobs:
         continue-on-error: true
         run: mypy
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ matrix.python }}
           path: coverage.xml
@@ -60,7 +60,7 @@ jobs:
           # cyclonedx-py >= 4 takes the requirements file positionally; there is no -r flag any more.
           cyclonedx-py requirements requirements.txt -o sbom-python.cdx.json --of JSON
       - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-python
           path: sbom-python.cdx.json
@@ -98,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with:
           version: v3.15.0
       - name: Lint and render the chart
@@ -114,10 +114,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with:
           version: v3.15.0
-      - uses: helm/kind-action@v1.12.0
+      - uses: helm/kind-action@v1.15.1
         with:
           cluster_name: wdt
       - name: Install the chart on a real cluster
