@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 LABEL org.opencontainers.image.title="wazuh-daily-triage" \
       org.opencontainers.image.description="AI-assisted daily triage for Wazuh SIEM" \
