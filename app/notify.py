@@ -106,6 +106,9 @@ class NotifyCfg(BaseModel):
     on_run_summary: bool = False        # a short summary after EVERY run (health, counts, waiting recommendations)
     on_rule_deploy: bool = True         # a rule draft was deployed, failed (rolled back) or removed
     on_liveness: bool = True            # liveness check: problem / still failing / recovered
+    on_pending: bool = True             # weekday reminder: recommendations waiting for a decision too long
+    pending_days: int = 7               # … older than this many days (first seen)
+    pending_time: str = "09:30"         # … sent once a day after this local time (Mon-Fri)
     repeat_hours: int = 24              # do not repeat the same item within this period
     ui_url: str = ""                    # base URL used for links, e.g. http://127.0.0.1:18080
     email: EmailCfg = Field(default_factory=EmailCfg)
@@ -230,8 +233,11 @@ async def _send_teams(cfg: TeamsCfg, msg: dict, client: httpx.AsyncClient):
     body += [{"type": "TextBlock", "text": f"• {x}", "wrap": True} for x in msg["lines"][:20]]
     card = {"$schema": "http://adaptivecards.io/schemas/adaptive-card.json", "type": "AdaptiveCard",
             "version": "1.4", "body": body}
+    acts = [{"type": "Action.OpenUrl", "title": a["title"][:40], "url": a["url"]} for a in msg.get("actions") or []]
     if msg["link"]:
-        card["actions"] = [{"type": "Action.OpenUrl", "title": "Report", "url": msg["link"]}]
+        acts = [{"type": "Action.OpenUrl", "title": msg.get("link_title") or "Report", "url": msg["link"]}] + acts
+    if acts:
+        card["actions"] = acts[:5]
     payload = {"type": "message", "attachments": [
         {"contentType": "application/vnd.microsoft.card.adaptive", "contentUrl": None, "content": card}]}
     r = await client.post(cfg.webhook_url, json=payload)
@@ -243,8 +249,11 @@ async def _send_slack(cfg: SlackCfg, msg: dict, client: httpx.AsyncClient):
     blocks = [{"type": "header", "text": {"type": "plain_text", "text": msg["title"][:150]}},
               {"type": "section", "text": {"type": "mrkdwn",
                                            "text": "\n".join(f"• {x}" for x in msg["lines"][:30])[:2900]}}]
-    if msg["link"]:
-        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"<{msg['link']}|Open report>"}})
+    links = ([(msg.get("link_title") or "Open report", msg["link"])] if msg["link"] else []) + \
+        [(a["title"], a["url"]) for a in msg.get("actions") or []]
+    if links:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+                                                   "text": " · ".join(f"<{u}|{x}>" for x, u in links[:6])}})
     r = await client.post(cfg.webhook_url, json={"blocks": blocks})
     if r.status_code >= 400:
         raise RuntimeError(f"Slack {r.status_code}: {r.text[:200]}")

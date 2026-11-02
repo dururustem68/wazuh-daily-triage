@@ -70,7 +70,8 @@
 
   <ol class="inbox-list card">
     {% for it in items %}<li class="{{ 'on' if loop.index0 == i }}"><a href="/e/{{ env.id }}/inbox?i={{ loop.index0 }}">
-      <span class="pill {{ LABEL_COLORS.get(it.finding.label, 'gray') }}">{{ _('label.' ~ it.finding.label) }}{% if it.seen > 1 %} ×{{ it.seen }}{% endif %}</span><br>
+      <span class="pill {{ LABEL_COLORS.get(it.finding.label, 'gray') }}">{{ _('label.' ~ it.finding.label) }}{% if it.seen > 1 %} ×{{ it.seen }}{% endif %}</span>
+      {% if it.age_days and it.age_days >= 7 %}<span class="pill amber" title="{{ _('pend.waiting') }}">{{ _('pend.days', d=it.age_days) }}</span>{% endif %}<br>
       {{ it.finding.title|truncate(90) }}</a></li>{% endfor %}
   </ol>
 </div>

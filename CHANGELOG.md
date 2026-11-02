@@ -5,6 +5,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-02
+
+### Added
+- **"What would it do?" for rule drafts** — replays a child-rule draft (`if_sid`) against the last 14 days of real
+  alerts before anything is deployed: estimated alerts per day it takes over, the new level, how many of them
+  were at or above the high level (before → after), top agents / source IPs / log locations, matching examples
+  and parent alerts it would *not* match. `<match>`/`<regex>` (OS_Match, OS_Regex, PCRE2), `<field>`, `<srcip>`,
+  `<user>`, `<url>`, `<location>`, `<decoded_as>` … are evaluated on a random sample (exact when the parents had
+  ≤ 2 000 alerts); CDB lists, time windows and frequency are listed as not evaluated. Button on every rule draft,
+  `GET /api/e/{env}/k/{id}/whatif`, and the read-only tool **`simulate_rule`** — the AI is told to run it before
+  proposing a draft and to put the numbers in the proposal (also available over MCP).
+- **Noise map** (`/e/{env}/noise`, no AI): the busiest rules of the last 1/7/14/30 days with alerts per day,
+  share of all alerts and of the high-level band, change against the previous period and the dominant agent /
+  location; a 28-day daily chart of all vs high-level alerts; level-reduction candidates (high level and ≥ 5 %
+  of the high band or ≥ 100 a day). Per rule: **Ask AI for a draft** (queues a request the next run answers with
+  a measured child rule) or **Skeleton draft** (an editable child rule in the knowledge base, next free id).
+- **Reminder for waiting decisions**: on weekdays after `notify.pending_time` (09:30) one message per environment
+  lists the recommendations that have waited longer than `notify.pending_days` (7) — label, severity, age and how
+  often they were seen. Teams cards get buttons that open the inbox and the three oldest items directly
+  (`/e/{env}/inbox?key=…`); Slack gets the same links. Once a day, also across restarts and replicas.
+  `NOTIFY_ON_PENDING`, `NOTIFY_PENDING_DAYS`, `NOTIFY_PENDING_TIME`. The inbox marks items older than 7 days.
+
 ### Security
 - CodeQL `py/polynomial-redos` (3 alerts) in the knowledge TXT import: the `[kind] title`, `rules:` and `key:`
   lines are now parsed with plain string operations instead of regular expressions, so a crafted upload cannot

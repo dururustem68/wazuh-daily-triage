@@ -58,6 +58,7 @@ class Runtime(KnowledgeIOMixin, RunMixin, ReviewMixin, RuleDeployMixin, Incident
         self._fired: set[str] = set()
         self._seeded: set[str] = set()
         self._pruned: set[str] = set()
+        self._pending_sent: set[str] = set()
         self._prune_last: dict[str, float] = {}
         self._tasks: set[asyncio.Task] = set()
         self._run_locks: dict[str, asyncio.Lock] = {}

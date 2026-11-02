@@ -266,6 +266,8 @@ def _match(doc, q: dict) -> bool:
         return bool(_vals(doc, body["field"]))
     if kind == "query_string":
         return _qs(doc, body["query"])
+    if kind == "function_score":    # random sampling: the order does not matter for the demo
+        return _match(doc, body.get("query") or {})
     raise ValueError(f"demo engine does not support: {kind}")
 
 

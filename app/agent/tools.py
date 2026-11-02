@@ -115,6 +115,7 @@ class ToolBox:
             "vulnerabilities": self.vulnerabilities,
             "propose_knowledge": self.propose_knowledge,
             "validate_rule_xml": self.validate_rule_xml,
+            "simulate_rule": self.simulate_rule,
         }
         if api:
             self._handlers.update({"agent_info": self.agent_info, "rule_info": self.rule_info,
@@ -295,6 +296,11 @@ class ToolBox:
         out = d.get("output", {})
         return {"rule": out.get("rule"), "decoder": out.get("decoder"), "data": out.get("data"),
                 "alert": d.get("alert"), "messages": d.get("messages")}
+
+    async def simulate_rule(self, a):
+        from ..whatif import simulate
+        return await simulate(self.env, self.ix, a["xml"], days=max(1, min(int(a.get("days") or 14), 30)),
+                              sample=1000)
 
     async def validate_rule_xml(self, a):
         xml = a["xml"]
@@ -484,6 +490,12 @@ SPECS: dict[str, dict] = {
     "validate_rule_xml": {"name": "validate_rule_xml", "description":
         "Check a rule draft for XML syntax, OS_Regex pitfalls and rule ID collisions. Never applies it.",
         "parameters": _obj({"xml": {"type": "string"}}, ["xml"])},
+    "simulate_rule": {"name": "simulate_rule", "description":
+        "Replay a child-rule draft (if_sid) against the last N days of real alerts: estimated alerts/day it would "
+        "take over, how many were at or above the high level, affected agents/IPs/locations, matched and "
+        "unmatched examples. Use it before proposing a rule_draft and put the numbers in the proposal body.",
+        "parameters": _obj({"xml": {"type": "string"}, "days": {"type": "integer", "description": "1-30, default 14"}},
+                           ["xml"])},
     "propose_knowledge": {"name": "propose_knowledge", "description":
         "Add a PROPOSAL to the knowledge base (baseline, decision, open item, lesson, rule draft). It has no "
         "effect until the user approves it. Only for durable, reusable knowledge. For kind=rule_draft put the full "

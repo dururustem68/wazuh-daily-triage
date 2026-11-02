@@ -90,6 +90,7 @@
   {% endif %}
   <div class="row small kactions">
     {% set deployed = r.kind == 'rule_draft' and r.deploy and r.deploy.state == 'deployed' %}
+    {% if r.kind == 'rule_draft' %}<button class="btn small" data-whatif title="{{ _('wi.hint') }}">{{ _('wi.btn') }}</button>{% endif %}
     {% if r.kind == 'rule_draft' and deploy_on and not deployed and r.status in ('proposed', 'active') %}<button class="btn small primary" data-deploy>{{ _('rd.deploy') }}</button>{% endif %}
     {% if r.kind == 'rule_draft' and not deploy_on and not deployed and r.status in ('proposed', 'active') %}<button class="btn small" disabled title="{{ _('rd.off_hint') }}">{{ _('rd.deploy') }}</button>
       <a class="small" href="{{ deploy_doc }}" target="_blank" rel="noopener">{{ _('rd.off_link') }}</a>{% endif %}

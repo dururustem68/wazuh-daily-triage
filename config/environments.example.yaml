@@ -23,6 +23,9 @@ llm:
 
 notify:                         # critical alerts only — see docs/notifications.md
   ui_url: ${NOTIFY_UI_URL:-}
+  on_pending: true              # Mon-Fri reminder: recommendations waiting for a decision longer than pending_days
+  pending_days: 7
+  pending_time: "09:30"         # local time (app.timezone)
   email: {host: "${SMTP_HOST:-}", username: "${SMTP_USER:-}", password: "${SMTP_PASSWORD:-}", sender: "${SMTP_FROM:-}", to: []}
   telegram: {bot_token: "${TELEGRAM_BOT_TOKEN:-}", chat_id: "${TELEGRAM_CHAT_ID:-}"}
   teams: {webhook_url: "${TEAMS_WEBHOOK_URL:-}"}

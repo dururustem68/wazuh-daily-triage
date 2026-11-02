@@ -188,6 +188,38 @@ class KReq(BaseModel):
     xml: str | None = None          # rule drafts: edited rule XML
 
 
+class NoiseDraftReq(BaseModel):
+    rule_id: str
+    mode: str = "request"      # request: ask the next run's AI for a measured draft · skeleton: a draft to edit
+
+
+@router.post("/api/e/{env_id}/k/noise-draft")
+async def api_noise_draft(request: Request, env_id: str, body: NoiseDraftReq):
+    """From the noise map: queue an AI request for a level-reduction draft, or create an editable skeleton."""
+    from ..noise import next_rule_id, noise_map, skeleton
+    er = _env(request, env_id)
+    lang = ui_lang(request)
+    nm = await noise_map(er.env, er.ix, days=7)
+    row = next((x for x in nm["rules"] if x["id"] == body.rule_id), None)
+    if not row:
+        raise HTTPException(404, "rule not in the noise map")
+    facts = (f"rule {row['id']} (L{row['level']}) {row['desc']}: {row['per_day']}/day over 7 days, "
+             f"{round(row['share'] * 100, 1)}% of all alerts, {round(row['high_share'] * 100, 1)}% of level "
+             f"{nm['high_level']}+; top agent {row['top_agent']} ({round(row['top_agent_share'] * 100)}%), "
+             f"top location {row['top_location']} ({round(row['top_location_share'] * 100)}%).")
+    if body.mode == "skeleton":
+        drafts = await er.repo.list_knowledge(kinds=["rule_draft"], size=1000)
+        rid = next_rule_id(drafts, er.env.rule_deploy)
+        level = 5 if row["level"] > 5 else max(3, row["level"] - 1)
+        xml = skeleton(row, rid, level, lang)
+        return await er.repo.add_knowledge("rule_draft", t(lang, "nm.draft_title", id=row["id"], n=row["per_day"]),
+                                           facts + "\n\n" + t(lang, "nm.draft_body"), status="proposed",
+                                           created_by=actor(request), rule_ids=[row["id"], str(rid)], extra={"xml": xml})
+    return await er.repo.add_knowledge("request", t(lang, "nm.req_title", id=row["id"]),
+                                       facts + " " + t(lang, "nm.req_body"), created_by=actor(request),
+                                       rule_ids=[row["id"]])
+
+
 @router.post("/api/e/{env_id}/k")
 async def api_k_add(request: Request, env_id: str, body: KReq):
     er = _env(request, env_id)
@@ -228,6 +260,15 @@ async def api_rule_view(request: Request, env_id: str, kid: str):
     _env(request, env_id)
     try:
         return await _rt(request).rule_view(env_id, kid)
+    except KeyError as e:
+        raise HTTPException(404) from e
+
+
+@router.get("/api/e/{env_id}/k/{kid}/whatif")
+async def api_rule_whatif(request: Request, env_id: str, kid: str, days: int = 14):
+    _env(request, env_id)
+    try:
+        return await _rt(request).rule_whatif(env_id, kid, days)
     except KeyError as e:
         raise HTTPException(404) from e
 

@@ -88,9 +88,11 @@ async def report_page(request: Request, env_id: str, run_id: str):
 
 
 @router.get("/e/{env_id}/inbox", response_class=HTMLResponse)
-async def inbox_page(request: Request, env_id: str, i: int = 0):
+async def inbox_page(request: Request, env_id: str, i: int = 0, key: str | None = None):
     er = _env(request, env_id)
     items = await _safe(_rt(request).inbox(env_id), [], request=request)
+    if key:   # deep link from a notification: the item may have moved since the message was sent
+        i = next((n for n, g in enumerate(items) if g["key"] == key), i)
     i = max(0, min(i, len(items) - 1)) if items else 0
     return tpl.TemplateResponse(request, "inbox.html", _ctx(request, er=er, env=er.env, items=items, i=i,
                                                             item=items[i] if items else None))
@@ -166,3 +168,13 @@ async def about_page(request: Request):
                                                 ("sso", "SSO-Proxy-Auth"), ("config", "Configuration"))}
     return tpl.TemplateResponse(request, "about.html", _ctx(request, rows=rows, mcp_on=mcp_on, mcp_url=f"{base}/mcp",
                                                             links=links))
+
+
+@router.get("/e/{env_id}/noise", response_class=HTMLResponse)
+async def noise_page(request: Request, env_id: str, days: int = 7):
+    from ..noise import noise_map
+    er = _env(request, env_id)
+    days = days if days in (1, 7, 14, 30) else 7
+    nm = await _safe(noise_map(er.env, er.ix, days=days), None, request=request)
+    peak = max((s["total"] for s in (nm or {}).get("series", [])), default=0)
+    return tpl.TemplateResponse(request, "noise.html", _ctx(request, er=er, env=er.env, nm=nm, days=days, peak=peak))

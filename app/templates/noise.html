@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ _('nm.title') }} · {{ env.name }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div class="titles"><div class="eyebrow">{{ env.name }}</div><h1>{{ _('nm.title') }}</h1>
+    <div class="sub">{{ _('nm.intro') }}</div></div>
+  <div class="tools">
+    {% for d in (1, 7, 14, 30) %}<a class="btn small {{ 'primary' if d == days }}" href="?days={{ d }}">{{ _('nm.days', d=d) }}</a>{% endfor %}
+  </div>
+</div>
+{% if not nm %}<div class="card"><p class="bad">{{ _('nm.error') }}</p></div>{% else %}
+<div class="kpis">
+  <div class="kpi"><b>{{ nm.total|n }}</b><span>{{ _('nm.total', d=days) }}</span></div>
+  <div class="kpi"><b>{{ nm.high_total|n }}</b><span>{{ _('nm.high', l=nm.high_level) }}</span></div>
+  <div class="kpi {{ 'warn' if nm.high_ratio > 0.1 }}"><b>%{{ (nm.high_ratio * 100)|round(1) }}</b><span>{{ _('nm.ratio', l=nm.high_level) }}</span></div>
+  <div class="kpi"><b>%{{ (nm.high_ratio_without_candidates * 100)|round(1) }}</b><span>{{ _('nm.ratio_after') }}</span></div>
+</div>
+
+<div class="card">
+  <h2>{{ _('nm.trend') }}</h2>
+  {% set n = nm.series|length %}
+  <svg class="spark" viewBox="0 0 {{ n * 10 }} 100" preserveAspectRatio="none" role="img" aria-label="{{ _('nm.trend') }}">
+    {% for s in nm.series %}{% set th = (96 * s.total / peak) if peak else 0 %}{% set hh = (96 * s.high / peak) if peak else 0 %}
+    <g><title>{{ s.day }} · {{ s.total|n }} · L{{ nm.high_level }}+ {{ s.high|n }} (%{{ (s.ratio * 100)|round(1) }})</title>
+      <rect class="t" x="{{ loop.index0 * 10 + 1 }}" y="{{ 100 - th }}" width="8" height="{{ th }}"></rect>
+      <rect class="h" x="{{ loop.index0 * 10 + 1 }}" y="{{ 100 - hh }}" width="8" height="{{ hh }}"></rect></g>{% endfor %}
+  </svg>
+  <p class="small muted"><span class="key t"></span> {{ _('nm.all') }} · <span class="key h"></span> L{{ nm.high_level }}+ · {{ nm.series[0].day if nm.series }} → {{ nm.series[-1].day if nm.series }}</p>
+</div>
+
+<div class="card table-card">
+  <h2 class="pad">{{ _('nm.rules', d=days) }}</h2>
+  <div class="scrollx"><table class="tbl noise-tbl">
+    <tr><th>{{ _('nm.c.rule') }}</th><th>L</th><th>{{ _('nm.c.day') }}</th><th>{{ _('nm.c.share') }}</th><th>{{ _('nm.c.trend') }}</th><th>{{ _('nm.c.source') }}</th><th></th></tr>
+    {% for r in nm.rules %}
+    <tr class="{{ 'cand' if r.candidate }}" data-noise="/api/e/{{ env.id }}/k/noise-draft" data-rule="{{ r.id }}">
+      <td><code>{{ r.id }}</code> {{ r.desc|truncate(90) }}</td>
+      <td><span class="pill {{ 'red' if r.level >= 12 else 'amber' if r.level >= nm.high_level else 'gray' }}">{{ r.level }}</span></td>
+      <td>{{ r.per_day|n }}</td>
+      <td><svg class="bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="bg" width="100" height="6" rx="3"></rect><rect class="fg" width="{{ [r.share * 100, 0.5]|max }}" height="6" rx="3"></rect></svg>
+        <span class="small">%{{ (r.share * 100)|round(1) }}{% if r.high_share %} · {{ _('nm.of_high') }} %{{ (r.high_share * 100)|round(1) }}{% endif %}</span></td>
+      <td class="small">{% if r.trend is none %}{{ _('nm.new') }}{% else %}<span class="{{ 'bad' if r.trend > 0.5 else 'good' if r.trend < -0.3 }}">{{ '+' if r.trend > 0 }}{{ (r.trend * 100)|round(0)|int }}%</span>{% endif %}</td>
+      <td class="small">{{ r.top_agent }} ({{ (r.top_agent_share * 100)|round(0)|int }}%){% if r.agents > 1 %} · {{ _('nm.agents', n=r.agents) }}{% endif %}<br><span class="muted">{{ r.top_location|truncate(50) }}</span></td>
+      <td class="nowrap">{% if r.candidate %}<span class="pill amber">{{ _('nm.cand') }}</span><br>{% endif %}
+        {% if can.knowledge and r.level >= 3 %}<button class="btn small" data-noise-mode="request" title="{{ _('nm.req_hint') }}">{{ _('nm.req_btn') }}</button>
+        <button class="btn small" data-noise-mode="skeleton" title="{{ _('nm.skel_hint') }}">{{ _('nm.skel_btn') }}</button>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  <p class="small muted pad">{{ _('nm.foot', l=nm.high_level) }}</p>
+</div>
+{% endif %}
+{% endblock %}

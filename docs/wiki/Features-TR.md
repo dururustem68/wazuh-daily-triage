@@ -33,6 +33,34 @@ Dağıtım kullanıcısının tam RBAC politikası
 belgesindedir. Her dağıtım ve geri alma denetim kaydına yazılır; `notify.on_rule_deploy: true` ise bildirim de
 gider. **Verify**, dağıtılan kuralın canlı alarmlarda gerçekten tetiklendiğini sonradan kontrol eder.
 
+## Ne olurdu? (taslağı geçmişe karşı denemek)
+
+Her kural taslağında **Ne olurdu? (14 gün)** düğmesi vardır. Taslağı, üst kurallarının (`if_sid`) son 14 gündeki
+gerçek alarmları üzerinde dener ve dağıtmadan önce şunları gösterir:
+
+- kaç alarmı devralacağını (toplam, günlük, üst kuralın alarmlarına oranı) ve yeni seviyeyi,
+- bunlardan kaçının yüksek seviyede olduğunu, önce → sonra — gerçek bir alarmın seviyesi düşecekse burada görünür,
+- başlıca ajanları, kaynak IP'leri ve log kaynaklarını, eşleşen örnekleri ve **eşleşmeyecek** üst kural alarmlarını.
+
+`<match>` / `<regex>` (OS_Match, OS_Regex ya da `type="pcre2"`), `<field>`, `<srcip>`, `<user>`, `<url>`,
+`<location>`, `<decoded_as>` gibi koşullar en fazla 2.000 alarmlık rastgele bir örneklem üzerinde değerlendirilir
+(daha azsa birebir). CDB listeleri, zaman pencereleri ve frekans kuralları *değerlendirilmedi* olarak listelenir;
+sayılar o zaman üst sınırdır. Yapay zekâ da bir taslak önermeden önce aynı kontrolü (`simulate_rule`, MCP'den de
+erişilebilir) çalıştırır ve sayıları öneriye yazar.
+
+## Gürültü haritası
+
+Ortam menüsündeki **Gürültü haritası** (yapay zekâsız) "hacim nereden geliyor?" sorusunu cevaplar:
+
+- son 1 / 7 / 14 / 30 günün en çok alarm üreten kuralları: günlük alarm, tüm alarmlar ve yüksek seviyeli
+  alarmlar içindeki payı, önceki döneme göre değişim, baskın ajan ve log kaynağı;
+- 28 günlük günlük grafik: tüm alarmlar ve yüksek seviyeli alarmlar — yüksek seviye temizleniyor mu?
+- seviye düşürme **adayları**: yüksek seviyede ve yüksek seviyeli alarmların ≥%5'i ya da günde ≥100.
+
+Bir kural için **Yapay zekâdan taslak iste** bir istek bırakır: sonraki koşu rutin kısmı bulur, 3–5 seviyeli bir
+çocuk kural yazar, `simulate_rule` ile ölçer ve önerir. **İskelet taslak** hemen düzenlenebilir bir çocuk kural
+oluşturur (`rule_deploy` aralığındaki ilk boş numara); daraltıp *Ne olurdu?* ile deneyin.
+
 ## Terfi paketi (promotion)
 
 Dağıtılmış bir taslak uygulamanın kendi dosyasında yaşar. **Terfi paketi** onu sizin yapılandırma yönetiminize
@@ -108,6 +136,10 @@ Secret ve configmap asla okunmaz. NetworkPolicy'de çıkış izni vermeyi unutma
 - **Zafiyet SLA'sı** (`vuln_sla: {critical: 15, high: 30, medium: 90, low: 0}` gün; 0 = izlenmez). Bayrak üretir
   ve denetim raporunu besler.
 - **Loglarda kişisel veri**: bkz. [Gizlilik (KVKK / GDPR)](Privacy-TR).
+- **Bekleyen kararlar.** Hafta içi `notify.pending_time` (varsayılan 09:30) sonrasında her ortam için bir mesaj,
+  `notify.pending_days` (varsayılan 7) günden uzun süredir karar bekleyen önerileri yaşı ve kaç koşuda görüldüğüyle
+  listeler. Teams kartında önerileri ve en eski üç kaydı doğrudan açan düğmeler vardır. Öneriler sayfası 7 günü
+  geçen kayıtları işaretler. Kapatmak için `notify.on_pending: false` (`NOTIFY_ON_PENDING=false`).
 
 Diğer ortam anahtarları:
 

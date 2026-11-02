@@ -6,8 +6,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 from .collector import Collector, _parse, iso
 from .i18n import t
@@ -186,6 +187,70 @@ class ReviewMixin:
             if removed:
                 log.info("%s: removed %d run(s) older than %d days", rt.env.id, removed, days)
 
+    # ------------------------------------------------------------ waiting decisions
+    async def pending_items(self, env_id: str, days: int) -> list[dict]:
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        out = []
+        for g in await self.inbox(env_id):
+            try:
+                first = _parse(g.get("first_seen") or g.get("run_started") or "")
+            except ValueError:
+                continue
+            if first <= cutoff:
+                out.append({**g, "age_days": (datetime.now(UTC) - first).days})
+        return out
+
+    async def pending_reminder(self, env_id: str, transport=None) -> dict:
+        """One message: recommendations that have waited longer than notify.pending_days, oldest-critical first."""
+        rt = self.get(env_id)
+        cfg = self.settings.notify_for(rt.env)
+        if not (cfg.enabled and cfg.channels and cfg.on_pending):
+            return {}
+        lang = self.lang(rt.env)
+        old = await self.pending_items(env_id, cfg.pending_days)
+        if not old:
+            return {"waiting": 0}
+        base = cfg.ui_url.rstrip("/")
+        lines = [f"[{t(lang, 'label.' + (g['finding'].get('label') or ''))} · {g['finding'].get('severity', '')}] "
+                 f"{str(g['finding'].get('title', ''))[:110]} — {t(lang, 'pend.age', d=g['age_days'], n=g['seen'])}"
+                 for g in old[:8]]
+        if len(old) > 8:
+            lines.append(t(lang, "pend.more", n=len(old) - 8))
+        lines.append(t(lang, "pend.how"))
+        msg = plain_message(t(lang, "pend.title", env=rt.env.name, n=len(old), d=cfg.pending_days), lines,
+                            f"{base}/e/{env_id}/inbox" if base else "")
+        msg["link_title"] = t(lang, "pend.open")
+        if base:
+            msg["actions"] = [{"title": str(g["finding"].get("title", ""))[:40],
+                               "url": f"{base}/e/{env_id}/inbox?key={quote(g['key'], safe='')}"} for g in old[:3]]
+        res = await notify_send(cfg, msg, transport=transport)
+        log.info("%s: pending-decision reminder for %d item(s): %s", env_id, len(old), res)
+        return {"waiting": len(old), "result": res}
+
+    async def _pending_tick(self):
+        now = datetime.now(self.tz)
+        if now.weekday() >= 5:
+            return
+        for env_id, rt in self.envs.items():
+            cfg = self.settings.notify_for(rt.env)
+            if not (cfg.enabled and cfg.channels and cfg.on_pending) or now.strftime("%H:%M") < cfg.pending_time:
+                continue
+            key = f"{env_id}:{now:%Y-%m-%d}"
+            if key in self._pending_sent:
+                continue
+            self._pending_sent.add(key)
+            marker = f"_pending_{env_id}"
+            try:   # survive restarts: one reminder per day, also across pods
+                prev = await rt.store.get("knowledge", marker)
+                if prev and prev.get("day") == f"{now:%Y-%m-%d}":
+                    continue
+                await rt.store.put("knowledge", marker, {"id": marker, "env": "__meta__", "kind": "pending_marker",
+                                                         "status": "closed", "title": env_id, "day": f"{now:%Y-%m-%d}",
+                                                         "created_at": now_iso(), "updated_at": now_iso()})
+                await self.pending_reminder(env_id, transport=self.notify_transport)
+            except Exception:  # noqa: BLE001 — a reminder must never stop the scheduler
+                log.exception("%s: pending reminder failed", env_id)
+
     async def notify_test(self, env_id: str, transport=None) -> dict:
         rt = self.get(env_id)
         cfg = self.settings.notify_for(rt.env)
@@ -255,6 +320,12 @@ class ReviewMixin:
                 g["refs"].append({"run_id": r["run_id"], "fid": f.get("id")})
                 g["seen"] += 1
                 g["first_seen"] = r.get("started_at")
+        now = datetime.now(UTC)
+        for g in groups:
+            try:
+                g["age_days"] = (now - _parse(g.get("first_seen") or "")).days
+            except ValueError:
+                g["age_days"] = 0
         sev = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
         lab = {"real_incident": 0, "detection_gap": 1, "baseline_increase": 2, "investigate": 3, "false_positive": 4}
         items = [g for g in groups

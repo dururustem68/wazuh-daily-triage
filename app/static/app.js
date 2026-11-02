@@ -107,6 +107,21 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (e) { alertInline(kf, e.message); }
   });
   // knowledge import (YAML) — preview first, then import
+  document.querySelectorAll("[data-noise-mode]").forEach(b => b.addEventListener("click", async () => {
+    const row = b.closest("[data-noise]");
+    b.disabled = true;
+    try {
+      const k = await api(row.dataset.noise, "POST", { rule_id: row.dataset.rule, mode: b.dataset.noiseMode });
+      b.replaceWith(Object.assign(document.createElement("a"), {
+        href: location.pathname.replace(/\/noise$/, "/k") + (b.dataset.noiseMode === "skeleton" ? "?kind=rule_draft" : "?kind=request"),
+        textContent: "✓ " + tr("nm_done"), className: "small" }));
+    } catch (e) {
+      b.disabled = false;
+      const err = Object.assign(document.createElement("div"), { className: "small bad", textContent: e.message });
+      b.after(err);
+    }
+  }));
+
   const ki = document.querySelector("[data-kimport]");
   if (ki) {
     const fileIn = ki.querySelector("[data-kfile]");
@@ -160,6 +175,38 @@ document.addEventListener("DOMContentLoaded", () => {
         out.querySelector("[data-copy-out]").addEventListener("click", ev => copyText(v.commands, ev.target));
       } catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); }
       cmds.disabled = false;
+    });
+    const wi = card.querySelector("[data-whatif]");
+    if (wi) wi.addEventListener("click", async () => {
+      wi.disabled = true;
+      show(`<p class="muted">${escapeHtml(tr("wi_working"))}</p>`);
+      try {
+        const v = await api(url + "/whatif?days=14", "GET");
+        if (!v.ok) { show(listHtml("bad", tr("rd_errors"), v.errors)); wi.disabled = false; return; }
+        const n = x => Number(x || 0).toLocaleString();
+        const pairs = a => (a || []).filter(x => x[0]).map(x => `${escapeHtml(x[0])} (${n(x[1])})`).join(", ") || "—";
+        show(v.rules.map(r => {
+          if (r.note) return `<p><b>${escapeHtml(r.id)}</b>: ${escapeHtml(r.note)}</p>`;
+          const lvls = Object.entries(r.parent_levels || {}).map(([k, c]) => `L${k}: ${n(c)}`).join(" · ");
+          const lost = r.high_before && !r.high_after;
+          return `<div class="whatif"><b>${escapeHtml(tr("wi_title").replace("{id}", r.id).replace("{days}", v.days))}</b>
+            <table class="tbl"><tbody>
+            <tr><td>${escapeHtml(tr("wi_parent"))} (${escapeHtml((r.parents || []).join(", "))})</td><td>${n(r.parent_events)} · ${lvls}</td></tr>
+            <tr><td>${escapeHtml(tr("wi_matched"))}</td><td><b>${n(r.estimated)}</b> (${n(r.per_day)}/${escapeHtml(tr("wi_day"))}, %${Math.round((r.share || 0) * 1000) / 10})
+              ${r.exact ? "" : `<span class="muted">· ${escapeHtml(tr("wi_sample").replace("{s}", n(r.sampled)))}</span>`}</td></tr>
+            <tr><td>${escapeHtml(tr("wi_level"))}</td><td>→ L${escapeHtml(String(r.new_level ?? "?"))}</td></tr>
+            <tr class="${lost ? "bad" : ""}"><td>${escapeHtml(tr("wi_high").replace("{l}", r.high_level))}</td><td>${n(r.high_before)} → ${n(r.high_after)}</td></tr>
+            <tr><td>${escapeHtml(tr("wi_agents"))}</td><td>${pairs(r.top_agents)}</td></tr>
+            <tr><td>${escapeHtml(tr("wi_ips"))}</td><td>${pairs(r.top_srcips)}</td></tr>
+            <tr><td>${escapeHtml(tr("wi_locs"))}</td><td>${pairs(r.top_locations)}</td></tr>
+            </tbody></table>
+            ${(r.examples || []).length ? `<b>${escapeHtml(tr("wi_ex"))}</b><pre class="code">${escapeHtml(r.examples.join("\n"))}</pre>` : ""}
+            ${(r.unmatched_examples || []).length ? `<b>${escapeHtml(tr("wi_unex"))}</b><pre class="code">${escapeHtml(r.unmatched_examples.join("\n"))}</pre>` : ""}
+            ${(r.not_evaluated || []).length ? `<p class="warn">${escapeHtml(tr("wi_skipped"))}: ${escapeHtml(r.not_evaluated.join(", "))}</p>` : ""}
+            </div>`;
+        }).join("") + `<p class="muted">${escapeHtml(tr("wi_note"))}</p>`);
+      } catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); }
+      wi.disabled = false;
     });
     const ver = card.querySelector("[data-verify]");
     if (ver) ver.addEventListener("click", async () => {

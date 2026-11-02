@@ -19,7 +19,11 @@
   "pr_steps": _('pr.steps'), "pr_block": _('pr.block'), "pr_script": _('pr.script'), "pr_catalog": _('pr.catalog'),
   "pr_mark": _('pr.mark'), "pr_mark_confirm": _('pr.mark_confirm'), "pr_remove_first": _('pr.remove_first'),
   "inc_download": _('inc.download'), "inc_regen": _('inc.regen'), "inc_ticket": _('inc.ticket'),
-  "inc_ticket_jira": _('inc.ticket_jira'), "inc_working": _('inc.working')
+  "inc_ticket_jira": _('inc.ticket_jira'), "inc_working": _('inc.working'),
+  "wi_working": _('wi.working'), "wi_title": _('wi.title'), "wi_parent": _('wi.parent'), "wi_matched": _('wi.matched'),
+  "wi_day": _('wi.day'), "wi_sample": _("wi.sample"), "wi_level": _('wi.level'), "wi_high": _('wi.high'),
+  "wi_agents": _('wi.agents'), "wi_ips": _('wi.ips'), "wi_locs": _('wi.locs'), "wi_ex": _('wi.ex'), "wi_unex": _('wi.unex'),
+  "wi_skipped": _('wi.skipped'), "wi_note": _('wi.note'), "nm_done": _('nm.done')
 } | tojson }}</script>
 <script src="/static/app.js?v={{ version }}" defer></script>
 </head>
@@ -48,6 +52,7 @@
     <a href="/e/{{ env.id }}/inbox" class="{{ 'on' if path.endswith('/inbox') }}"><svg viewBox="0 0 24 24"><path d="M4 4h16v10h-5l-2 3h-2l-2-3H4zM4 16h4l2 3h4l2-3h4v4H4z"/></svg>{{ _('nav.inbox') }}</a>
     <a href="/e/{{ env.id }}" class="{{ 'on' if path == '/e/' ~ env.id or '/r/' in path }}"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 3v5h5M9 12h8M9 16h8"/></svg>{{ _('nav.reports') }}</a>
     <a href="/e/{{ env.id }}/k" class="{{ 'on' if path.endswith('/k') }}"><svg viewBox="0 0 24 24"><path d="M5 3h12a2 2 0 0 1 2 2v16H7a2 2 0 0 1-2-2zM5 17a2 2 0 0 1 2-2h12"/></svg>{{ _('nav.knowledge') }}</a>
+    <a href="/e/{{ env.id }}/noise" class="{{ 'on' if path.endswith('/noise') }}"><svg viewBox="0 0 24 24"><path d="M4 20V10M9 20V4M14 20v-7M19 20v-11"/></svg>{{ _('nav.noise') }}</a>
     <a href="/e/{{ env.id }}/audit" class="{{ 'on' if path.endswith('/audit') }}"><svg viewBox="0 0 24 24"><path d="M9 3h6v3H9zM6 5h12v16H6zM9 11l2 2 4-4M9 17h6"/></svg>{{ _('nav.audit') }}</a>
   </nav>
   {% endif %}

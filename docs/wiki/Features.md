@@ -33,6 +33,34 @@ The deploy user's exact RBAC policy is in
 Every deploy and undeploy is audited and, with `notify.on_rule_deploy: true`, notified. **Verify** later
 checks live alerts to confirm that a deployed rule really fires.
 
+## What would it do? (replay a draft)
+
+Every rule draft has a **What would it do? (14 days)** button. It replays the draft against the last 14 days of
+real alerts of its parent rules (`if_sid`) and shows, before anything is deployed:
+
+- how many alerts it would take over (total, per day, share of the parent's alerts) and the new level,
+- how many of them were at or above the high level, before → after — lowering a real alert shows up here,
+- the top agents, source IPs and log locations, matching examples and parent alerts it would **not** match.
+
+`<match>` / `<regex>` (OS_Match, OS_Regex or `type="pcre2"`), `<field>`, `<srcip>`, `<user>`, `<url>`,
+`<location>`, `<decoded_as>` and similar are evaluated on a random sample of up to 2 000 alerts (exact when there
+are fewer). CDB lists, time windows and frequency rules are listed as *not evaluated*; the numbers are then an
+upper bound. The AI uses the same check (`simulate_rule`, also over MCP) before it proposes a draft and puts the
+numbers in the proposal.
+
+## Noise map
+
+**Noise map** in the environment menu (no AI) answers "where does the volume come from?":
+
+- the busiest rules of the last 1 / 7 / 14 / 30 days: alerts per day, share of all alerts and of the high-level
+  band, change against the previous period, the dominant agent and log location;
+- a 28-day daily chart of all alerts and of high-level alerts — is the high band getting cleaner?
+- **candidates** for a level reduction: high level and either ≥ 5 % of the high band or ≥ 100 a day.
+
+For a rule, **Ask AI for a draft** queues a request: the next run looks for the routine part, writes a child
+rule at level 3–5, measures it with `simulate_rule` and proposes it. **Skeleton draft** creates an editable child
+rule right away (next free id in the `rule_deploy` range); narrow it, then use *What would it do?*.
+
 ## Promotion package
 
 A deployed draft lives in the app's own file. A **promotion package** moves it into your configuration
@@ -108,6 +136,10 @@ Secrets and configmaps are never read. Also allow the egress in your NetworkPoli
 - **Vulnerability SLA** (`vuln_sla: {critical: 15, high: 30, medium: 90, low: 0}` days; 0 = not tracked).
   Raises a flag and feeds the audit report.
 - **Personal data in logs**: see [Privacy (GDPR / KVKK)](Privacy).
+- **Waiting decisions.** On weekdays after `notify.pending_time` (default 09:30) one message per environment lists
+  the recommendations that have waited longer than `notify.pending_days` (default 7), with age and how often they
+  were seen. Teams cards get buttons that open the inbox and the three oldest items directly. The inbox marks
+  items older than 7 days. Turn it off with `notify.on_pending: false` (`NOTIFY_ON_PENDING=false`).
 
 Other per-environment keys:
 

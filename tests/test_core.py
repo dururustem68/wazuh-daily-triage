@@ -85,6 +85,8 @@ async def test_all_tools(settings, ix):
         "logtest": {"event": "sshd[1]: Invalid user x from 192.0.2.4 port 22"},
         "validate_rule_xml": {"xml": '<group name="x"><rule id="100299" level="3"><if_sid>31101</if_sid>'
                                       '<field name="id">^(400|408)$</field><description>t</description></rule></group>'},
+        "simulate_rule": {"xml": '<group name="x"><rule id="100299" level="3"><if_sid>5710</if_sid>'
+                                  '<match>user1</match><description>t</description></rule></group>', "days": 3},
         "propose_knowledge": {"kind": "baseline", "title": "test"},
         "list_reports": {}, "get_report": {}, "knowledge": {},
     }
@@ -96,6 +98,9 @@ async def test_all_tools(settings, ix):
     assert v["xml_ok"] and v["warnings"]
     ipp = json.loads(await tb.call("ip_profile", {"ip": "192.0.2.45"}))
     assert ipp["distinct_urls"] == 1 and ipp["status_codes"] == {"401": 1680}
+    sim = json.loads(await tb.call("simulate_rule", calls["simulate_rule"]))
+    r0 = sim["rules"][0]
+    assert sim["ok"] and r0["parent_events"] > 0 and 0 < r0["estimated"] <= r0["parent_events"], sim
     bad = json.loads(await tb.call("validate_rule_xml", {"xml": "<rule id='1'>"}))
     assert bad["xml_ok"] is False
 
@@ -625,3 +630,45 @@ async def test_run_retention_uses_delete_by_query():
     assert await repo.prune_runs(30) == 1
     assert await store.get("runs", "old") is None
     assert (await store.get("runs", "new"))["run_id"] == "new"
+
+
+async def test_pending_reminder_and_noise_map(settings):
+    from app import notify as N
+    from app.noise import next_rule_id, noise_map, skeleton
+    sent = []
+
+    def h(req):
+        sent.append(json.loads(req.content))
+        return httpx.Response(200, json={"ok": True})
+    s2 = settings.model_copy(deep=True)
+    s2.notify = N.NotifyCfg(ui_url="https://triage.example", teams=N.TeamsCfg(webhook_url="https://example.invalid/hook"))
+    rt = Runtime(s2, demo=True)
+    er = rt.get("demo")
+    old = {"run_id": "p-1", "env": "demo", "status": "done", "started_at": "2026-10-01T07:50:00.000Z",
+           "findings": [{"id": "f1", "label": "investigate", "severity": "high", "title": "odooserver SSH brute force",
+                         "rule_ids": ["5712"], "agents": ["odooserver"]}]}
+    new = {"run_id": "p-2", "env": "demo", "status": "done", "started_at": "2099-01-01T07:50:00.000Z",
+           "findings": [{"id": "f1", "label": "real_incident", "severity": "high", "title": "SSH kaba kuvvet odooserver",
+                         "rule_ids": ["5712", "5710"], "agents": ["odooserver"]}]}
+    for r in (old, new):
+        await er.repo.save_run(r)
+    inbox = await rt.inbox("demo")
+    assert len(inbox) == 1 and inbox[0]["seen"] == 2 and inbox[0]["age_days"] > 7     # merged across wording
+    res = await rt.pending_reminder("demo", transport=httpx.MockTransport(h))
+    assert res["waiting"] == 1
+    card = sent[0]["attachments"][0]["content"]
+    urls = [a["url"] for a in card["actions"]]
+    assert urls[0] == "https://triage.example/e/demo/inbox" and "/inbox?key=" in urls[1]
+    s2.notify.on_pending = False
+    assert await rt.pending_reminder("demo", transport=httpx.MockTransport(h)) == {}
+
+    nm = await noise_map(er.env, er.ix, days=30)
+    top = nm["rules"][0]
+    assert top["id"] == "31101" and nm["total"] > 0 and nm["series"]
+    assert any(r["candidate"] for r in nm["rules"])
+    rid = next_rule_id([{"xml": '<rule id="100961" level="3">'}], er.env.rule_deploy)
+    assert rid == 100962
+    xml = skeleton(top, rid, 5)
+    from app.rules import parse
+    rules, errors = parse(xml)
+    assert not errors and rules[0]["parents"] == ["31101"]

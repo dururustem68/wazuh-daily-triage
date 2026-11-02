@@ -75,6 +75,9 @@ METHOD = """\
   cannot be replayed through logtest: for children of those rules leave `tests` empty and say the rule is
   confirmed on the next real event. Nothing is applied until the user approves it; depending on the environment the user
   either deploys it with one click (validated, restarted and rolled back on failure) or runs the commands.
+- Before proposing a child-rule draft, run `simulate_rule` with the XML (14 days): put the estimated alerts/day,
+  how many were at or above the high level, and the top agents/IPs into `body`. If it matches far more or far
+  less than intended, or the unmatched examples show it misses the target, fix the draft first.
 - Prefer adding detection or lowering levels (3-6) over level 0 / `no_log` / `overwrite`: silencing drafts
   need an extra confirmation and blind the SIEM if wrong.
 

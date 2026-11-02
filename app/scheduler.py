@@ -42,6 +42,10 @@ class SchedulerMixin:
             except Exception:  # noqa: BLE001
                 log.exception("liveness scheduler error")
             try:
+                await self._pending_tick()
+            except Exception:  # noqa: BLE001
+                log.exception("pending reminder scheduler error")
+            try:
                 await self._retention_tick()
             except Exception:  # noqa: BLE001
                 log.exception("retention scheduler error")

@@ -211,3 +211,16 @@ def test_about_templates_and_simple_import(c):
     assert r["added"] == 3 and not r["errors"], r
     k = c.get("/e/demo/k?kind=rule_draft")
     assert k.status_code == 200
+
+
+def test_noise_map_whatif_pages(c):
+    assert c.post("/login", data={"password": "pw"}, follow_redirects=False).status_code == 303
+    p = c.get("/e/demo/noise")
+    assert p.status_code == 200 and "31101" in p.text
+    k = c.post("/api/e/demo/k/noise-draft", json={"rule_id": "31101", "mode": "skeleton"}).json()
+    assert k["kind"] == "rule_draft" and k["status"] == "proposed" and "<if_sid>31101</if_sid>" in k["xml"]
+    w = c.get(f"/api/e/demo/k/{k['id']}/whatif").json()
+    assert w["ok"] and w["rules"][0]["parent_events"] > 0
+    q = c.post("/api/e/demo/k/noise-draft", json={"rule_id": "31101", "mode": "request"}).json()
+    assert q["kind"] == "request"
+    assert c.get("/e/demo/inbox?key=nope").status_code == 200

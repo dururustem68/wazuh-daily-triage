@@ -52,6 +52,13 @@ class RuleDeployMixin:
                 "commands": rulemod.commands(kid, xml, rt.env.rule_deploy, d.get("title", ""), an["ids"],
                                              d.get("tests"))}
 
+    async def rule_whatif(self, env_id: str, kid: str, days: int = 14) -> dict:
+        """Replay the draft against the last `days` days of alerts (app/whatif.py); nothing is written."""
+        from .whatif import simulate
+        rt = self.envs[env_id]
+        d = await self._rule_entry(rt, kid)
+        return await simulate(rt.env, rt.ix, rulemod.extract_xml(d), days=max(1, min(days, 30)))
+
     async def rule_deploy(self, env_id: str, kid: str, actor: str, confirm: str = "", remove: bool = False) -> dict:
         rt = self.envs[env_id]
         api = self._deploy_api(rt)
