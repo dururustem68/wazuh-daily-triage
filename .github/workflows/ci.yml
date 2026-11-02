@@ -120,11 +120,22 @@ jobs:
       - uses: helm/kind-action@v1.15.1
         with:
           cluster_name: wdt
+      - name: Build the image from this commit and load it into kind
+        # The chart's appVersion points at a release tag that is only published after this commit (a release
+        # bump would otherwise wait for an image that does not exist yet) — test the code being pushed instead.
+        run: |
+          docker build -t wazuh-daily-triage:ci .
+          kind load docker-image wazuh-daily-triage:ci --name wdt
       - name: Install the chart on a real cluster
         run: |
           helm install wazuh-daily-triage ./deploy/helm/wazuh-daily-triage \
+            --set image.repository=wazuh-daily-triage --set image.tag=ci --set image.pullPolicy=Never \
             --set secret.APP_PASSWORD=test --set secret.LLM_API_KEY=test \
             --set secret.INDEXER_PASSWORD=test --set secret.API_PASSWORD=test
           # /readyz needs no reachable indexer (readiness is startup-only by design), so the pod becomes Ready
-          kubectl wait --for=condition=available --timeout=180s deployment/wazuh-daily-triage
+          if ! kubectl wait --for=condition=available --timeout=180s deployment/wazuh-daily-triage; then
+            kubectl describe pods -l app.kubernetes.io/name=wazuh-daily-triage | tail -40
+            kubectl logs deploy/wazuh-daily-triage --tail=80 || true
+            exit 1
+          fi
           kubectl get pods
