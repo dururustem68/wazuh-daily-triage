@@ -5,6 +5,31 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-11-06
+
+### Fixed
+- **`<srcip>`/`<dstip>` in rule drafts**: Wazuh accepts only an IP address or CIDR block there (optionally `!`),
+  but drafts such as `<srcip type="pcre2">^192\.168\.68\.(52|53)$</srcip>` passed `validate_rule_xml` and only
+  failed at `wazuh-analysisd -t`. The rule parser (approve/deploy, "What would it do?") now rejects them with a
+  hint (`192.168.68.52/31`, or one element per address), `validate_rule_xml` warns, and the AI prompt explains it.
+- **"What would it do?" with several `<srcip>`/`<dstip>`**: they are now combined with OR, as Wazuh does
+  (previously AND, so such drafts looked like they matched nothing).
+- **Inbox hid waiting rule drafts**: an `expected`/`measurement` finding that carries a rule draft now appears in
+  the inbox and in the waiting-decision reminder; without a draft they stay out as before.
+- **Inbox hid new findings after an unrelated decision**: a decision on one finding settled every later finding
+  that shared a single rule id (e.g. 2501). Decisions now settle a finding only when the rule sets mostly
+  coincide (Jaccard ≥ 0.5); grouping across runs stays as fuzzy as before.
+
+### Added
+- **`health_accept`** (`HEALTH_ACCEPT`): warning flags you already know about (e.g. `vuln_overdue`) are shown as
+  "accepted" and no longer turn every run's health into "warn", so a real warning stands out again. Critical
+  flags (SIEM silent, daemons down, red indexer, disk ≥ 90 %) are never downgraded.
+- **`ignore_agents`** (`IGNORE_AGENTS`, fnmatch patterns): retired or personal machines left out of the
+  "agents not active" flag; they stay in the collected data.
+
+### Changed
+- CI also tests on Python 3.15, the version of the Docker base image.
+
 ## [0.9.0] — 2026-11-02
 
 ### Added

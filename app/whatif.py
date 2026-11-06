@@ -149,8 +149,18 @@ def _matcher(tag: str, attrs: dict, text: str):
 
 def compile_rule(rule_el) -> tuple[list, list[str]]:
     tests, skipped = [], []
+    # Wazuh keeps every <srcip>/<dstip> of a rule in one list and fires when any of them matches: OR, not AND.
+    for tag in ("srcip", "dstip"):
+        texts = [(el.text or "").strip() for el in rule_el if el.tag == tag and not el.attrib]
+        if len(texts) > 1:
+            m = _matcher(tag, {}, ",".join(texts))
+            if m is None:
+                skipped.append(f"<{tag}>")
+            else:
+                tests.append(m)
+    multi = {t for t in ("srcip", "dstip") if sum(1 for el in rule_el if el.tag == t and not el.attrib) > 1}
     for el in rule_el:
-        if el.tag in ("if_sid",):
+        if el.tag in ("if_sid",) or el.tag in multi:
             continue
         if el.tag in UNSUPPORTED:
             if el.tag not in ("description", "options", "mitre", "info", "group"):

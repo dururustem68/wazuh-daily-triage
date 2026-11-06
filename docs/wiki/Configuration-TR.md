@@ -119,6 +119,8 @@ Bir kanal, alanları dolu olduğunda açıktır. Ayrıntılar: [docs/notificatio
 | `PRIVACY_IPS` | `keep` | `public` / `all`: IP adreslerini de takma adla değiştirir. |
 | `PRIVACY_DETECT` | `true` | Alarmlarda açık duran kişisel veriyi işaretler. |
 | `INVENTORY` | *(boş)* | Beklenen ajan adları; eksik/fazla ajanlar bayrak olur. |
+| `HEALTH_ACCEPT` | *(boş)* | Virgülle ayrılmış uyarı bayrağı kodları (ör. `vuln_overdue`); “kabul edildi” olarak gösterilir, sağlığı “uyarı”ya çekmez. Kritik bayraklar asla düşürülmez. |
+| `IGNORE_AGENTS` | *(boş)* | “Aktif değil” bayrağından çıkarılacak ajan adları / fnmatch kalıpları (virgülle). |
 | `RULE_DEPLOY_ENABLED` | `false` | İsteğe bağlı kural dağıtımı (ayrı API kullanıcısı gerekir). |
 | `WAZUH_DEPLOY_USER`, `WAZUH_DEPLOY_PASSWORD` | *(boş)* | O ayrı kullanıcı. |
 | `RULE_DEPLOY_FILE` | `wdt_rules.xml` | Yöneticide `etc/rules` altındaki tek dosya. |
@@ -178,6 +180,8 @@ environments:
     window_max_hours: 96
     high_level: 7
     max_silence_minutes: 60
+    health_accept: []                 # sağlığı "uyarı"ya çekmemesi gereken bilinen uyarı bayrakları (ör. [vuln_overdue])
+    ignore_agents: []                 # "aktif değil" bayrağından çıkarılacak ajan adları/kalıpları (ör. [eski-web01, *-laptop])
     liveness: {enabled: true, interval_minutes: 10}
     privacy: {mode: off, ips: keep, detect: true}   # KVKK / GDPR — bkz. Gizlilik
     context_file: context/prod.md

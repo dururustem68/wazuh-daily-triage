@@ -265,8 +265,9 @@ class ReviewMixin:
         return await notify_send(cfg, msg, transport=transport)
 
     # ------------------------------------------------------------ recommendation inbox
-    INBOX_RUNS = 14            # look back over this many finished runs (7 days at 2 runs/day)
-    INBOX_SKIP = {"expected", "measurement"}
+    INBOX_RUNS = 14            # look back over this many finished runs (14 days at one run a day)
+    INBOX_SKIP = {"expected", "measurement"}   # shown only when they carry a rule draft (a decision is waiting)
+    HANDLED_RULE_OVERLAP = 0.5  # a decision settles a later finding only when their rule sets mostly coincide
 
     @staticmethod
     def finding_key(f: dict) -> str:
@@ -280,8 +281,11 @@ class ReviewMixin:
     ATTENTION = {"real_incident", "investigate", "detection_gap"}
 
     @classmethod
-    def same_finding(cls, a: dict, b: dict) -> bool:
-        """Fuzzy match across runs: the model rewords titles and changes labels or rule lists between runs."""
+    def same_finding(cls, a: dict, b: dict, strict: bool = False) -> bool:
+        """Fuzzy match across runs: the model rewords titles and changes labels or rule lists between runs.
+
+        ``strict`` is used when a decision on one finding would hide another: one shared generic rule (2501, 5710 …)
+        is then not enough — the rule sets have to overlap by at least ``HANDLED_RULE_OVERLAP`` (Jaccard)."""
         la, lb = a.get("label"), b.get("label")
         if la != lb and not (la in cls.ATTENTION and lb in cls.ATTENTION):
             return False
@@ -289,6 +293,8 @@ class ReviewMixin:
         aa, ab = set(a.get("agents") or []), set(b.get("agents") or [])
         agents_ok = not aa or not ab or bool(aa & ab)
         if ra and rb:
+            if strict:
+                return len(ra & rb) / len(ra | rb) >= cls.HANDLED_RULE_OVERLAP and agents_ok
             return bool(ra & rb) and agents_ok
         if ra or rb:
             return False
@@ -306,7 +312,7 @@ class ReviewMixin:
         handled: list[dict] = []
         for r in runs:  # newest first
             for f in r.get("findings") or []:
-                if f.get("label") in self.INBOX_SKIP:
+                if f.get("label") in self.INBOX_SKIP and not f.get("rule_draft_xml"):
                     continue
                 if f.get("user_status", "new") != "new":
                     handled.append(f)  # a decision on any occurrence settles the group
@@ -329,7 +335,8 @@ class ReviewMixin:
         sev = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
         lab = {"real_incident": 0, "detection_gap": 1, "baseline_increase": 2, "investigate": 3, "false_positive": 4}
         items = [g for g in groups
-                 if not any(self.finding_key(h) == g["key"] or self.same_finding(h, g["finding"]) for h in handled)]
+                 if not any(self.finding_key(h) == g["key"] or self.same_finding(h, g["finding"], strict=True)
+                            for h in handled)]
         items.sort(key=lambda g: (lab.get(g["finding"].get("label"), 5), sev.get(g["finding"].get("severity"), 5),
                                   _neg_ts(g["run_started"])))
         return items

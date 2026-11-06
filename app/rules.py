@@ -9,6 +9,7 @@ change is validated by the manager before restart and rolled back automatically 
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import re
 import time
 import xml.etree.ElementTree as ET  # ParseError only; parsing goes through defusedxml
@@ -53,6 +54,27 @@ def _normalise(xml: str) -> str:
 
 
 # ----------------------------------------------------------------------------- analysis
+def ip_element_issues(tag: str, el) -> list[str]:
+    """Problems with a <srcip>/<dstip> condition. Wazuh takes only an IP address or CIDR block there (optionally
+    negated with "!", several elements = any of them); a regex or a type="" attribute fails `wazuh-analysisd -t`."""
+    issues = []
+    if el.attrib:
+        issues.append(f"<{tag}> takes no attributes ({', '.join(el.attrib)}) — only an IP or CIDR, e.g. "
+                      f"<{tag}>192.168.68.52/31</{tag}>")
+    text = (el.text or "").strip()
+    if not text:
+        issues.append(f"<{tag}> is empty")
+    for part in (x.strip() for x in text.split(",")):
+        if not part:
+            continue
+        try:
+            ipaddress.ip_network(part.lstrip("!"), strict=False)
+        except ValueError:
+            issues.append(f"<{tag}>{part}</{tag}> is not an IP address or CIDR block (no regex here: use a CIDR "
+                          f"such as 10.0.0.0/24, or one <{tag}> element per address)")
+    return issues
+
+
 def parse(xml: str) -> tuple[list[dict], list[str]]:
     errors: list[str] = []
     rules: list[dict] = []
@@ -70,6 +92,9 @@ def parse(xml: str) -> tuple[list[dict], list[str]]:
         if top.tag != "group":
             errors.append(f"top-level <{top.tag}> is not allowed; only <group>")
     for r in root.iter("rule"):
+        for tag in ("srcip", "dstip"):
+            for el in r.iter(tag):
+                errors.extend(f"rule {r.get('id')}: {m}" for m in ip_element_issues(tag, el))
         opts = [o.text.strip() for o in r.iter("options") if o.text]
         parents = [x.strip() for t in ("if_sid", "if_matched_sid") for el in r.iter(t)
                    for x in re.split(r"[,\s]+", el.text or "") if x.strip()]

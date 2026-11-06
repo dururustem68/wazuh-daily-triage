@@ -323,6 +323,13 @@ class Environment(BaseModel):
     high_level: int = 7
     max_silence_minutes: int = 60
     disk_warn_percent: int = 75
+    # Known, accepted warning flags (e.g. vuln_overdue while a patch plan runs): still listed, shown as "accepted"
+    # and no longer turn the run's health into "warn". Critical flags (silence, daemons, red indexer) are never
+    # downgraded.
+    health_accept: list[str] = Field(default_factory=list)
+    # Agent names (fnmatch patterns allowed) left out of the "agents not active" flag: retired machines not yet
+    # removed, personal laptops that are often offline … They stay in the collected data.
+    ignore_agents: list[str] = Field(default_factory=list)
     required_daemons: list[str] = Field(default_factory=lambda: [
         "wazuh-analysisd", "wazuh-remoted", "wazuh-db", "wazuh-modulesd", "wazuh-apid"])
     watch_rules: list[str] = Field(default_factory=list)
@@ -531,6 +538,10 @@ def settings_from_env() -> dict:
                            "interval_minutes": int(E("LIVENESS_INTERVAL_MINUTES") or 10)}
     if E("MAIL_MAX_PER_HOUR"):
         env["mail"] = {"alert_level": int(E("MAIL_ALERT_LEVEL") or 7), "max_per_hour": int(E("MAIL_MAX_PER_HOUR"))}
+    if E("HEALTH_ACCEPT"):
+        env["health_accept"] = [x.strip() for x in E("HEALTH_ACCEPT", "").split(",") if x.strip()]
+    if E("IGNORE_AGENTS"):
+        env["ignore_agents"] = [x.strip() for x in E("IGNORE_AGENTS", "").split(",") if x.strip()]
     if E("INVENTORY"):
         env["inventory"] = [x.strip() for x in E("INVENTORY", "").split(",") if x.strip()]
     if _bool(E("RULE_DEPLOY_ENABLED"), False):

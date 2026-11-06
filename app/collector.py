@@ -9,6 +9,7 @@ aborting the run.
 from __future__ import annotations
 
 import asyncio
+import fnmatch
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -540,7 +541,8 @@ class Collector:
                 add("critical" if p >= 90 else "warn", "indexer_disk", node=disk["node"], p=p)
         if h.get("daemons_not_running"):
             add("critical", "daemons", d=", ".join(h["daemons_not_running"]))
-        bad = h.get("agents_not_active") or []
+        bad = [a for a in h.get("agents_not_active") or []
+               if not any(fnmatch.fnmatchcase(str(a.get("name") or ""), pat) for pat in self.env.ignore_agents)]
         if bad:
             add("warn", "agents", n=len(bad), a=", ".join(a["name"] for a in bad[:8]))
         cl = h.get("cluster")
@@ -575,7 +577,7 @@ class Collector:
                 src=", ".join(f"{x['location'] or x['agent']} (rule {x['rule_id']})" for x in pd["sources"][:3]))
         if self.errors:
             add("warn", "collector_errors", n=len(self.errors))
-        return f
+        return accept_flags(f, self.env.health_accept)
 
 
 def _int(x):
@@ -591,6 +593,16 @@ def _parse(ts: str) -> datetime:
         ts = ts[:-2] + ":" + ts[-2:]
     dt = datetime.fromisoformat(ts)
     return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
+
+def accept_flags(flags: list[dict], accepted: list[str]) -> list[dict]:
+    """Warning flags listed in `health_accept` become informational (marked `accepted`); critical ones stay."""
+    acc = set(accepted or [])
+    for fl in flags:
+        if fl["code"] in acc and fl["severity"] == "warn":
+            fl["severity"] = "info"
+            fl["accepted"] = True
+    return flags
 
 
 def health_status(flags: list[dict]) -> str:

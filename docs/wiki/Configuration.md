@@ -119,6 +119,8 @@ A channel is on when its fields are set. See [docs/notifications.md](https://git
 | `PRIVACY_IPS` | `keep` | `public` / `all`: pseudonymise IP addresses too. |
 | `PRIVACY_DETECT` | `true` | Flag personal data stored in clear text in the alerts. |
 | `INVENTORY` | *(empty)* | Expected agent names; missing/unexpected agents become flags. |
+| `HEALTH_ACCEPT` | *(empty)* | Comma-separated warning flag codes (e.g. `vuln_overdue`) that are shown as accepted and do not set health to “warn”. Critical flags are never downgraded. |
+| `IGNORE_AGENTS` | *(empty)* | Comma-separated agent names / fnmatch patterns left out of the “agents not active” flag. |
 | `RULE_DEPLOY_ENABLED` | `false` | Opt-in rule deployment (needs a separate API user). |
 | `WAZUH_DEPLOY_USER`, `WAZUH_DEPLOY_PASSWORD` | *(empty)* | That separate user. |
 | `RULE_DEPLOY_FILE` | `wdt_rules.xml` | One file in `etc/rules` on the manager. |
@@ -178,6 +180,8 @@ environments:
     window_max_hours: 96
     high_level: 7
     max_silence_minutes: 60
+    health_accept: []                 # known warning flags that should not turn health to "warn" (e.g. [vuln_overdue])
+    ignore_agents: []                 # agent names/globs left out of the "not active" flag (e.g. [old-web01, *-laptop])
     liveness: {enabled: true, interval_minutes: 10}
     privacy: {mode: off, ips: keep, detect: true}   # GDPR / KVKK — see Privacy
     context_file: context/prod.md

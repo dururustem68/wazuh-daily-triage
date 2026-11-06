@@ -26,6 +26,7 @@ from defusedxml.common import DefusedXmlException
 from ..collector import TS, _b, _parse, iso
 from ..config import Environment
 from ..query_guard import QueryError, check_interval, field, histogram_buckets, query_string, size, time_range
+from ..rules import ip_element_issues
 from ..store import KNOWLEDGE_KINDS, Repo
 from ..wazuh.api import WazuhAPI
 from ..wazuh.indexer import Indexer
@@ -318,6 +319,9 @@ class ToolBox:
                     t = fld.get("type", "osregex")
                     if t == "osregex" and "(" in (fld.text or "") and "|" in (fld.text or ""):
                         issues.append(f"rule {r.get('id')}: <field> OS_Regex does not support grouped alternation — use type=\"pcre2\"")
+                for tag in ("srcip", "dstip"):
+                    for el in r.iter(tag):
+                        issues.extend(f"rule {r.get('id')}: {m}" for m in ip_element_issues(tag, el))
                 for tag in ("id", "match", "regex"):
                     for el in r.iter(tag):
                         if el.get("type") in (None, "osregex") and "(" in (el.text or "") and "|" in (el.text or ""):

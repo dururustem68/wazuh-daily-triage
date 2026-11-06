@@ -39,7 +39,7 @@
 
 {% if run.flags %}
 <section class="flags">
-  {% for f in run.flags %}<div class="flag {{ 'red' if f.severity == 'critical' else 'amber' if f.severity == 'warn' else 'gray' }}">{{ f.message }}</div>{% endfor %}
+  {% for f in run.flags %}<div class="flag {{ 'red' if f.severity == 'critical' else 'amber' if f.severity == 'warn' else 'gray' }}">{{ f.message }}{% if f.accepted %} <span class="small muted">· {{ _('flag.accepted_tag') }}</span>{% endif %}</div>{% endfor %}
 </section>
 {% endif %}
 

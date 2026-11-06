@@ -65,6 +65,8 @@ METHOD = """\
   not depend on ordering.
 - OS_Regex does not support grouping/alternation in parentheses: `^(400|408)$` never matches yet passes
   `wazuh-analysisd -t`. Write `^400$|^408$` or use `type="pcre2"`. Check drafts with `validate_rule_xml`.
+- `<srcip>`/`<dstip>` take only an IP address or CIDR block (`!` negates) — no regex, no `type=`. For two
+  addresses use a CIDR that covers exactly them (`192.168.68.52/31`) or one element per address (any of them matches).
 - A child rule removes the event from the counters of frequency rules bound to the parent; say which frequency
   rule would go blind.
 - Propose a draft with `propose_knowledge(kind="rule_draft")`: put the complete `<group>…</group>` XML in the

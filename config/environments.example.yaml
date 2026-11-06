@@ -66,6 +66,9 @@ environments:
     max_silence_minutes: 60     # last alert older than this → "SIEM may be down"
     liveness: {enabled: true, interval_minutes: 10}   # quick check without AI; notifies problem + recovery
     disk_warn_percent: 75
+    # health_accept: [vuln_overdue]   # warning flags you know about: shown as "accepted", health stays "ok"
+    #                                 # (critical flags — silence, daemons, red indexer — are never downgraded)
+    # ignore_agents: [old-web01, "*-laptop"]   # left out of the "agents not active" flag (fnmatch patterns)
     # required_daemons: [wazuh-analysisd, wazuh-remoted, wazuh-db, wazuh-modulesd, wazuh-apid]
     watch_rules: []             # rule IDs whose daily count is always reported
     watch_groups: [authentication_failed, web_scan, sshd]
