@@ -1,8 +1,8 @@
 # MCP server
 
 `POST /mcp` speaks the [Model Context Protocol](https://modelcontextprotocol.io) (Streamable HTTP, JSON
-responses). It exposes the **same read-only investigation tools the built-in AI uses**, so Claude Desktop or any
-other MCP client can query your Wazuh data, reports and knowledge base with the same limits.
+responses). It exposes the **same read-only investigation tools the built-in AI uses**, so any MCP-capable agent —
+Claude Desktop, Claude Code, Cursor, VS Code and others — can query your Wazuh data, reports and knowledge base with the same limits.
 
 The endpoint is **off by default**. Without `MCP_TOKEN` it answers `404`.
 

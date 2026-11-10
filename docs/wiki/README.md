@@ -6,7 +6,7 @@ any tool.
 
 | Page | English | Türkçe | Audience |
 |---|---|---|---|
-| Landing page | [`Home.md`](Home.md) | [`Home-TR.md`](Home-TR.md) | everyone |
+| Landing page | [`Home.md`](Home.md) | [`Home-TR.md`](Home-TR.md) | everyone — also [`Home-ES.md`](Home-ES.md), [`Home-FR.md`](Home-FR.md) |
 | Installation | [`Installation.md`](Installation.md) | [`Installation-TR.md`](Installation-TR.md) | operator installing it |
 | Configuration | [`Configuration.md`](Configuration.md) | [`Configuration-TR.md`](Configuration-TR.md) | operator, day 2 |
 | Features | [`Features.md`](Features.md) | [`Features-TR.md`](Features-TR.md) | operator, SOC lead |
@@ -74,7 +74,7 @@ across whenever they change.
 ```sh
 # from the project root
 WIKI=../wazuh-daily-triage.wiki
-for p in Home Home-TR Installation Installation-TR Configuration Configuration-TR Features Features-TR Privacy Privacy-TR \
+for p in Home Home-TR Home-ES Home-FR Installation Installation-TR Configuration Configuration-TR Features Features-TR Privacy Privacy-TR \
          SSO-Proxy-Auth SSO-Proxy-Auth-TR Viewer-Mode Viewer-Mode-TR MCP MCP-TR Watch Watch-TR Backup Backup-TR _Sidebar; do
   cp "docs/wiki/$p.md" "$WIKI/"
 done
@@ -83,7 +83,7 @@ cp docs/wiki/images/*.png "$WIKI/images/"
 
 cd "$WIKI"
 git add -A
-git commit -m "wiki: sync from docs/wiki (0.10.0)"
+git commit -m "wiki: sync from docs/wiki (0.10.1)"
 git push
 ```
 
@@ -91,13 +91,13 @@ In PowerShell:
 
 ```powershell
 $wiki = '..\wazuh-daily-triage.wiki'
-'Home','Home-TR','Installation','Installation-TR','Configuration','Configuration-TR','Features','Features-TR','Privacy','Privacy-TR',
+'Home','Home-TR','Home-ES','Home-FR','Installation','Installation-TR','Configuration','Configuration-TR','Features','Features-TR','Privacy','Privacy-TR',
 'SSO-Proxy-Auth','SSO-Proxy-Auth-TR','Viewer-Mode','Viewer-Mode-TR','MCP','MCP-TR','Watch','Watch-TR','Backup','Backup-TR','_Sidebar' |
   ForEach-Object { Copy-Item "docs\wiki\$_.md" $wiki -Force }
 New-Item -ItemType Directory -Force "$wiki\images" | Out-Null
 Copy-Item docs\wiki\images\*.png "$wiki\images" -Force
 git -C $wiki add -A
-git -C $wiki commit -m "wiki: sync from docs/wiki (0.10.0)"
+git -C $wiki commit -m "wiki: sync from docs/wiki (0.10.1)"
 git -C $wiki push
 ```
 
@@ -113,7 +113,7 @@ otherwise the next sync silently reverts it.
 
 - One topic per page; do not add a page without adding it to `_Sidebar.md` (both languages).
 - Every page ends with `[English](Page) · [Türkçe](Page-TR)`.
-- Keep commands copy-pasteable and version-pinned: `0.10.0`, chart `0.2.0`.
+- Keep commands copy-pasteable and version-pinned: `0.10.1`, chart `0.2.1`.
 - Update the version string in `Home.md`, `Home-TR.md`, `_Sidebar.md` when the release changes.
 - Never put a real password, token, hostname or customer alert in a page or a screenshot.
 

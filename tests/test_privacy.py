@@ -44,7 +44,8 @@ def test_ips_public_mode_and_allow():
 
 def test_privacy_config_alias():
     assert env(redact=True).privacy.mode == "mask"
-    assert masker_for(env()) is None and masker_for(env(privacy={"mode": "mask"})) is not None
+    assert masker_for(env(privacy={"mode": "off"})) is None and masker_for(env(privacy={"mode": "mask"})) is not None
+    assert env().privacy.mode == "mask" and masker_for(env()) is not None        # on by default (0.10.1)
 
 
 def test_masking_llm_boundary():

@@ -1,4 +1,6 @@
-**Wazuh Daily Triage 0.10.0**
+**Wazuh Daily Triage 0.10.1**
+
+**Español** · [Inicio](Home-ES) — **Français** · [Accueil](Home-FR)
 
 **English**
 - [Home](Home)

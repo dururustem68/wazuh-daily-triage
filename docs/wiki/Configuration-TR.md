@@ -123,7 +123,7 @@ Bir kanal, alanları dolu olduğunda açıktır. Ayrıntılar: [docs/notificatio
 | `HIGH_LEVEL` | `7` | “Yüksek” sayılan seviye. |
 | `WINDOW_MIN_HOURS` | `24` | Önceki rapor yoksa geri dönüş penceresi. |
 | `REDACT` | `false` | `PRIVACY_MODE=mask` ile aynı (uyumluluk için). |
-| `PRIVACY_MODE` | `off` | `mask`: kişisel veriyi modele gitmeden takma adla değiştirir — bkz. [Gizlilik](Privacy-TR). |
+| `PRIVACY_MODE` | `mask` | `mask` (0.10.1'den beri varsayılan): kişisel veriyi modele gitmeden takma adla değiştirir; `off` maskesiz gönderir — bkz. [Gizlilik](Privacy-TR). |
 | `PRIVACY_IPS` | `keep` | `public` / `all`: IP adreslerini de takma adla değiştirir. |
 | `PRIVACY_DETECT` | `true` | Alarmlarda açık duran kişisel veriyi işaretler. |
 | `INVENTORY` | *(boş)* | Beklenen ajan adları; eksik/fazla ajanlar bayrak olur. |
@@ -191,7 +191,7 @@ environments:
     health_accept: []                 # sağlığı "uyarı"ya çekmemesi gereken bilinen uyarı bayrakları (ör. [vuln_overdue])
     ignore_agents: []                 # "aktif değil" bayrağından çıkarılacak ajan adları/kalıpları (ör. [eski-web01, *-laptop])
     liveness: {enabled: true, interval_minutes: 10}
-    privacy: {mode: off, ips: keep, detect: true}   # KVKK / GDPR — bkz. Gizlilik
+    privacy: {mode: mask, ips: keep, detect: true}  # KVKK / GDPR, 0.10.1'den beri varsayılan — bkz. Gizlilik
     context_file: context/prod.md
     seed_file: seed/prod.yaml
     inventory: [web01, db01]          # veya inventory_file

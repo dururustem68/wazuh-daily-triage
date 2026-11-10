@@ -5,6 +5,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-11-10
+
+### Changed
+- **Personal-data masking is on by default** (`privacy.mode: mask`, also for `PRIVACY_MODE` in single-environment
+  mode). Until now an installation without a `privacy:` block sent personal data to the AI provider unmasked.
+  Reports keep the real values; set `privacy.mode: off` explicitly to switch masking off. When `PRIVACY_SALT` and
+  `APP_SECRET` are both empty, startup warns that pseudonyms change on every restart.
+
+
 ### Fixed
 - **Demo with Docker Compose did not start** when `WDT_DEMO=true` was added to a copy of `.env.example`
   above its `WDT_DEMO=false` line (the last definition wins) — the container exited with
@@ -20,6 +29,8 @@ All notable changes to this project are documented here. The format follows
   a masking profile with a custom detector. `WDT_DEMO_SEED=false` starts it empty.
 
 ### Documentation
+- Wiki home page: the project as an on-call companion (the watch first, the AI round second), with what
+  leaves the installation (pseudonyms only) and the MCP server up front; the home page also in Spanish and French.
 - Wiki updated for 0.10: new pages *Watch* and *Backup* (English and Turkish), and the watch, settings page,
   masking profile, per-environment pseudonyms, MCP rate limit and proxy checks on the existing pages.
 

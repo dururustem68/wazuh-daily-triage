@@ -1,10 +1,23 @@
 # Privacy (GDPR / KVKK)
 
+> **In short:** personal data is replaced by pseudonyms before anything is sent to the AI provider, and
+> secrets are removed for good. **On by default since 0.10.1** — an installation without a `privacy:` block
+> masks. Switching it off takes an explicit `privacy.mode: off`.
+
+| Leaves your installation (to the AI provider / MCP clients) | Stays inside your installation |
+|---|---|
+| pseudonyms: `<email:3f9a…>`, `<national_id_tr:…>`, `<iban:…>`, `<phone:…>`, your own `x_…` kinds | the real values, in reports, the inbox and the watch page |
+| `<password>`, `<jwt>`, `<private_key>` … — removed, never reversible | the mapping pseudonym → value (memory only, per environment) |
+| IP addresses — **kept by default** (`ips: keep`) because the analysis needs them; `ips: public` masks external ones, `ips: all` every one | the data in Wazuh, which is never changed |
+
+Notifications (Teams, Telegram, e-mail …) carry real values such as IPs, agent names and finding titles: choose
+channels you trust for that.
+
 *Since 0.8.0.* Two features, set per environment under `privacy:`.
 
 | Feature | Question it answers | Default |
 |---|---|---|
-| **Masking** (`mode: mask`) | "Does personal data reach the LLM?" — it does not; the model sees pseudonyms. | off |
+| **Masking** (`mode: mask`) | "Does personal data reach the LLM?" — it does not; the model sees pseudonyms. | **on** (since 0.10.1) |
 | **Detection** (`detect: true`) | "Is there personal data in our logs that should not be there?" — flagged and turned into a recommendation. | on |
 
 ```yaml

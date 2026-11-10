@@ -1,10 +1,23 @@
 # Gizlilik (KVKK / GDPR)
 
+> **Kısaca:** AI sağlayıcısına herhangi bir şey gönderilmeden önce kişisel veri takma adlarla değiştirilir,
+> sırlar ise kalıcı olarak silinir. **0.10.1'den beri varsayılan olarak açık** — `privacy:` bloğu olmayan bir
+> kurulum maskeler. Kapatmak için açıkça `privacy.mode: off` yazmak gerekir.
+
+| Kurulumunuzdan çıkan (AI sağlayıcısına / MCP istemcilerine) | Kurulumunuzun içinde kalan |
+|---|---|
+| takma adlar: `<email:3f9a…>`, `<national_id_tr:…>`, `<iban:…>`, `<phone:…>`, kendi `x_…` türleriniz | gerçek değerler: raporlarda, önerilerde, nöbet sayfasında |
+| `<password>`, `<jwt>`, `<private_key>` … — silinir, hiç geri açılmaz | takma ad → değer eşlemesi (yalnızca bellekte, ortam başına) |
+| IP adresleri — analiz için **varsayılan olarak açık gider** (`ips: keep`); `ips: public` dış IP'leri, `ips: all` hepsini maskeler | Wazuh'taki veri; hiç değiştirilmez |
+
+Bildirimler (Teams, Telegram, e-posta …) IP, ajan adı ve bulgu başlığı gibi gerçek değerleri taşır: bunun için
+güvendiğiniz kanalları seçin.
+
 *0.8.0 ile gelir.* `privacy:` altında ortam bazında ayarlanan iki özellik vardır:
 
 | Özellik | Cevapladığı soru | Varsayılan |
 |---|---|---|
-| **Maskeleme** (`mode: mask`) | "Kişisel veri LLM'e gidiyor mu?" — gitmez; model yalnızca takma adları görür. | kapalı |
+| **Maskeleme** (`mode: mask`) | "Kişisel veri LLM'e gidiyor mu?" — gitmez; model yalnızca takma adları görür. | **açık** (0.10.1'den beri) |
 | **Tespit** (`detect: true`) | "Loglarımızda olmaması gereken kişisel veri var mı?" — işaretlenir ve öneriye dönüştürülür. | açık |
 
 ```yaml

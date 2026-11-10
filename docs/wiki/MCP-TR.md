@@ -1,8 +1,8 @@
 # MCP sunucusu
 
 `POST /mcp`, [Model Context Protocol](https://modelcontextprotocol.io) konuşur (Streamable HTTP, JSON yanıtlar).
-**Yerleşik yapay zekânın kullandığı salt okunur araştırma araçlarının aynısını** sunar; böylece Claude Desktop
-veya başka bir MCP istemcisi, aynı limitlerle Wazuh verilerinizi, raporlarınızı ve bilgi tabanınızı sorgulayabilir.
+**Yerleşik yapay zekânın kullandığı salt okunur araştırma araçlarının aynısını** sunar; böylece MCP destekleyen her ajan —
+Claude Desktop, Claude Code, Cursor, VS Code ve diğerleri — aynı limitlerle Wazuh verilerinizi, raporlarınızı ve bilgi tabanınızı sorgulayabilir.
 
 Uç nokta **varsayılan olarak kapalıdır**. `MCP_TOKEN` yoksa `404` döner.
 

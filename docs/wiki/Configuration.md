@@ -123,7 +123,7 @@ A channel is on when its fields are set. See [docs/notifications.md](https://git
 | `HIGH_LEVEL` | `7` | Level considered “high”. |
 | `WINDOW_MIN_HOURS` | `24` | Fallback window when no previous report exists. |
 | `REDACT` | `false` | Same as `PRIVACY_MODE=mask` (kept for compatibility). |
-| `PRIVACY_MODE` | `off` | `mask`: pseudonymise personal data before it reaches the model — see [Privacy](Privacy). |
+| `PRIVACY_MODE` | `mask` | `mask` (default since 0.10.1): pseudonymise personal data before it reaches the model; `off` sends it unmasked — see [Privacy](Privacy). |
 | `PRIVACY_IPS` | `keep` | `public` / `all`: pseudonymise IP addresses too. |
 | `PRIVACY_DETECT` | `true` | Flag personal data stored in clear text in the alerts. |
 | `INVENTORY` | *(empty)* | Expected agent names; missing/unexpected agents become flags. |
@@ -191,7 +191,7 @@ environments:
     health_accept: []                 # known warning flags that should not turn health to "warn" (e.g. [vuln_overdue])
     ignore_agents: []                 # agent names/globs left out of the "not active" flag (e.g. [old-web01, *-laptop])
     liveness: {enabled: true, interval_minutes: 10}
-    privacy: {mode: off, ips: keep, detect: true}   # GDPR / KVKK — see Privacy
+    privacy: {mode: mask, ips: keep, detect: true}  # GDPR / KVKK, default since 0.10.1 — see Privacy
     context_file: context/prod.md
     seed_file: seed/prod.yaml
     inventory: [web01, db01]          # or inventory_file

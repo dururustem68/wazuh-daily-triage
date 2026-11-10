@@ -104,7 +104,7 @@ run. Notifications have their own **Test notification** button.
 > part of the value.
 
 > **Pin the image for production.** `docker-compose.yml` uses `:latest` so the demo always works. Replace it with
-> `ghcr.io/dururustem68/wazuh-daily-triage:0.10.0` (or your own digest) so an upgrade is a deliberate change.
+> `ghcr.io/dururustem68/wazuh-daily-triage:0.10.1` (or your own digest) so an upgrade is a deliberate change.
 
 ### A3. Several Wazuh environments
 
@@ -170,7 +170,7 @@ app:
 
 ```sh
 helm install wazuh-daily-triage wazuh-daily-triage/wazuh-daily-triage \
-  --version 0.2.0 -f my-values.yaml
+  --version 0.2.1 -f my-values.yaml
 ```
 
 Or install straight from a checkout: `helm install wazuh-daily-triage ./deploy/helm/wazuh-daily-triage -f my-values.yaml`.
@@ -186,7 +186,7 @@ placeholders.
 cp -r deploy/kubernetes/example ~/triage-overlay
 cd ~/triage-overlay
 # outside the repository the relative "../base" no longer resolves — point it at the pinned remote base:
-sed -i 's#^  - ../base.*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.10.0#' kustomization.yaml
+sed -i 's#^  - ../base.*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.10.1#' kustomization.yaml
 cp secret.env.example secret.env
 vi secret.env environments.yaml context.md
 kubectl apply -k .
@@ -297,7 +297,7 @@ docker compose exec triage python -m app.check
 
 # Helm
 helm upgrade wazuh-daily-triage wazuh-daily-triage/wazuh-daily-triage \
-  --version 0.2.0 -f my-values.yaml
+  --version 0.2.1 -f my-values.yaml
 helm rollback wazuh-daily-triage 1     # if needed
 ```
 

@@ -101,10 +101,10 @@ class QueryLimitsCfg(BaseModel):
 
 
 class PrivacyCfg(BaseModel):
-    """Personal data (GDPR / KVKK). ``mode: mask`` pseudonymises personal data in everything sent to the model
+    """Personal data (GDPR / KVKK). On by default since 0.10.1. ``mode: mask`` pseudonymises personal data in everything sent to the model
     (e-mail, phone, national IDs, IBAN, card, secrets; IPs per ``ips``) and maps it back in tool calls and reports.
     ``detect`` scans a sample of each window's alerts for personal data stored in clear text."""
-    mode: Literal["off", "mask"] = "off"
+    mode: Literal["off", "mask"] = "mask"            # 0.10.1: on by default (KVKK/GDPR); off only on purpose
     ips: Literal["keep", "public", "all"] = "keep"   # IPs are personal data under GDPR, but the analysis needs them
     kinds: list[str] = Field(default_factory=list)   # empty = all detectors (app/privacy.py KINDS)
     allow: list[str] = Field(default_factory=list)   # regexes never masked / reported (e.g. "noreply@example\\.com")
@@ -532,7 +532,7 @@ def settings_from_env() -> dict:
         "high_level": int(E("HIGH_LEVEL", "7")),
         "window_min_hours": int(E("WINDOW_MIN_HOURS", "24")),
         "redact": _bool(E("REDACT"), False),
-        "privacy": {"mode": E("PRIVACY_MODE") or ("mask" if _bool(E("REDACT"), False) else "off"),
+        "privacy": {"mode": E("PRIVACY_MODE") or "mask",
                     "ips": E("PRIVACY_IPS", "keep"), "detect": _bool(E("PRIVACY_DETECT"), True)},
     }
     if E("WAZUH_API_URL"):
