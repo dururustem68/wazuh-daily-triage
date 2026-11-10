@@ -7,8 +7,39 @@ entries:
         - name: Documentation
           url: https://github.com/dururustem68/wazuh-daily-triage
     apiVersion: v2
+    appVersion: 0.10.0
+    created: "2026-11-10T13:52:59.913255936Z"
+    description: AI-assisted daily review for the Wazuh SIEM
+    digest: 684cf39d13f59e61d6d0ab37ee2e8c0b23cd903724cc0a6c136d87725b0c8e4b
+    home: https://github.com/dururustem68/wazuh-daily-triage
+    icon: https://raw.githubusercontent.com/dururustem68/wazuh-daily-triage/main/app/static/icon.svg
+    keywords:
+    - wazuh
+    - siem
+    - security
+    - soc
+    - llm
+    - triage
+    - opensearch
+    kubeVersion: '>=1.25-0'
+    maintainers:
+    - name: Rüstem Duru
+      url: https://github.com/dururustem68
+    name: wazuh-daily-triage
+    sources:
+    - https://github.com/dururustem68/wazuh-daily-triage
+    type: application
+    urls:
+    - https://dururustem68.github.io/wazuh-daily-triage/wazuh-daily-triage-0.2.0.tgz
+    version: 0.2.0
+  - annotations:
+      artifacthub.io/license: AGPL-3.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/dururustem68/wazuh-daily-triage
+    apiVersion: v2
     appVersion: 0.9.2
-    created: "2026-11-10T09:19:17.440577017Z"
+    created: "2026-11-10T13:52:59.912904161Z"
     description: AI-assisted daily review for the Wazuh SIEM
     digest: 3bfe6cfb3ae5c63beaeaa4e2af1b013bbfea7d692254b3a3fa5f54553ee468c8
     home: https://github.com/dururustem68/wazuh-daily-triage
@@ -39,7 +70,7 @@ entries:
           url: https://github.com/dururustem68/wazuh-daily-triage
     apiVersion: v2
     appVersion: 0.9.0
-    created: "2026-11-10T09:19:17.439941532Z"
+    created: "2026-11-10T13:52:59.912539397Z"
     description: AI-assisted daily review for the Wazuh SIEM
     digest: 0d1a0c7f5a3a5a05b3581c5833b9b8066f95b558bc5350b714ff25e814310e20
     home: https://github.com/dururustem68/wazuh-daily-triage
@@ -70,7 +101,7 @@ entries:
           url: https://github.com/dururustem68/wazuh-daily-triage
     apiVersion: v2
     appVersion: 0.8.0
-    created: "2026-11-10T09:19:17.439277363Z"
+    created: "2026-11-10T13:52:59.912166651Z"
     description: AI-assisted daily review for the Wazuh SIEM
     digest: ff139d5479b77a2762e804c1e8ad0acc318d21e74de27ca056702f7e8101389e
     home: https://github.com/dururustem68/wazuh-daily-triage
@@ -101,7 +132,7 @@ entries:
           url: https://github.com/dururustem68/wazuh-daily-triage
     apiVersion: v2
     appVersion: 0.6.4
-    created: "2026-11-10T09:19:17.438641186Z"
+    created: "2026-11-10T13:52:59.911788296Z"
     description: AI-assisted daily review for the Wazuh SIEM
     digest: 7e6dece717bde942ecd199e6ace7f52507ccbca6e0e5ce02a5a5ab884d4d3b04
     home: https://github.com/dururustem68/wazuh-daily-triage
@@ -132,7 +163,7 @@ entries:
           url: https://github.com/dururustem68/wazuh-daily-triage
     apiVersion: v2
     appVersion: 0.6.3
-    created: "2026-11-10T09:19:17.437973891Z"
+    created: "2026-11-10T13:52:59.911400908Z"
     description: AI-assisted daily review for the Wazuh SIEM
     digest: 2efdfdfeb0fbbe470929d2b509253734d74858ef908b7fbcfa882f56b810ce0b
     home: https://github.com/dururustem68/wazuh-daily-triage
@@ -156,4 +187,4 @@ entries:
     urls:
     - https://dururustem68.github.io/wazuh-daily-triage/wazuh-daily-triage-0.1.1.tgz
     version: 0.1.1
-generated: "2026-11-10T09:19:17.437143793Z"
+generated: "2026-11-10T13:52:59.910810798Z"
