@@ -4,6 +4,7 @@ field allow-list, SMTP checks, fail-closed audit trail, credentials in logs."""
 import json
 import logging
 import os
+from urllib.parse import urlsplit
 
 import httpx
 import pytest
@@ -328,7 +329,8 @@ def test_scrub_removes_tokens_and_webhook_urls():
     teams = ("https://prod-12.westeurope.logic.azure.com:443/workflows/abc/triggers/manual/paths/invoke"
              "?api-version=2016-06-01&sig=SECRETSIG")
     out = scrub(f"POST {teams} failed")
-    assert "SECRETSIG" not in out and "abc" not in out and "logic.azure.com" in out
+    assert "SECRETSIG" not in out and "abc" not in out
+    assert urlsplit(out.split()[1]).hostname == "prod-12.westeurope.logic.azure.com"   # the host is kept
     assert "B000/XXXX" not in scrub("https://hooks.slack.com/services/T000/B000/XXXX")
     assert "abcDEF" not in scrub("https://discord.com/api/webhooks/123/abcDEF")
     assert "s3cr3t" not in scrub("GET https://x.example/api?token=s3cr3t&page=2") and "page=2" in scrub(

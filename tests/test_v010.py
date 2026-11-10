@@ -213,8 +213,7 @@ async def test_watch_scan_notifies_once_holds_in_quiet_hours_and_flushes():
     ev = next(e for e in await er.repo.list_events() if e["key"] == "level:100213:jenkins")
     assert ev["count"] == 2 and ev["repeats"] == 1
     # quiet hours: a high event is held, a critical one still goes out, the held one follows afterwards
-    night = datetime(2026, 11, 10, 21, 30, tzinfo=UTC)                           # 00:30 in the demo's time zone
-    assert rt.tz.key == "Europe/Istanbul"
+    night = datetime(2026, 11, 11, 0, 30, tzinfo=rt.tz).astimezone(UTC)          # 00:30 in the app's time zone
     await rt.save_settings("demo", {"watch": {"enabled": True, "quiet": {"enabled": True, "start": "23:00",
                                                                         "end": "07:00"}}}, "admin")
     hi = _ev(night - timedelta(minutes=2), "110014", AGENTS[3])
