@@ -110,6 +110,7 @@
 <div class="card" id="mask">
   <h2>{{ _('mask.title') }} <span class="pill {{ 'green' if privacy_mode == 'mask' else 'amber' }}">{{ _('mask.mode_' ~ privacy_mode) }}</span>
     <span class="pill outline">{{ _('mask.version', v=st.mask.version) }}</span></h2>
+  <p class="small">{{ _('mask.where') }}</p>
   <p class="small muted">{{ _('mask.help') }}</p>
   <form class="sform" data-mask="/api/e/{{ env.id }}/settings">
     <h3>{{ _('mask.standard') }}</h3>

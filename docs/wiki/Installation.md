@@ -35,7 +35,10 @@ docker compose up -d --build
 `.env.demo` contains only what the demo needs (`WDT_DEMO=true`, `LLM_PROVIDER=mock`, a demo password). Do not
 add `WDT_DEMO=true` to a copy of `.env.example` instead: if a variable appears twice in `.env`, the **last**
 line wins. Open <http://127.0.0.1:8080>, sign in with `demo-password-change-me`, press **Run check now** once.
-To try the watch, open **Settings**, switch the watch on and press **Scan now** on the **Watch** page. The demo uses `config/demo.yaml` and
+The demo starts with sample data on every page: a finished report, the **Watch** switched on with six events
+of the last 24 hours (a successful SSH login after failed attempts, an Active Response block, a lost agent …)
+already judged by the AI round, two tuning suggestions waiting in **Settings**, and a masking profile with one
+custom detector. `WDT_DEMO_SEED=false` starts it empty. The demo uses `config/demo.yaml` and
 synthetic data; no Wazuh connection is attempted. `WDT_DEMO=true` must never be combined with
 `ENVIRONMENT=production` — startup refuses it. (The pulled 0.7.0 image additionally needed
 `WDT_CONFIG=config/demo.yaml`; fixed in 0.8.0.)

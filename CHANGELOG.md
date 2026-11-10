@@ -14,6 +14,11 @@ All notable changes to this project are documented here. The format follows
   write the audit file. `docker-compose.yml` now uses the named volume `audit` (move an existing
   `./logs/audit.jsonl` into it if you want to keep it).
 
+### Added
+- **Demo sample data**: the demo starts with a finished report, the watch switched on with judged events
+  (successful login after failed attempts, Active Response, lost agent, watched groups), tuning suggestions and
+  a masking profile with a custom detector. `WDT_DEMO_SEED=false` starts it empty.
+
 ### Documentation
 - Wiki updated for 0.10: new pages *Watch* and *Backup* (English and Turkish), and the watch, settings page,
   masking profile, per-environment pseudonyms, MCP rate limit and proxy checks on the existing pages.

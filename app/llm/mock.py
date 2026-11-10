@@ -51,6 +51,26 @@ class MockLLM:
         return {}
 
     @staticmethod
+    def _verdict(e: dict) -> dict:
+        t, eid = e.get("trigger"), e["id"]
+        if t == "groups":
+            return {"event_id": eid, "verdict": "noise", "reason": "(demo) the same scanner pattern every day",
+                    "suggestion": {"mute": True, "why": "(demo) known scanner noise"}}
+        if t == "brute_force":
+            return {"event_id": eid, "verdict": "real_incident",
+                    "reason": "(demo) a password login succeeded right after a burst of invalid users from the same "
+                              "address — reset the account and check what the session did"}
+        if t == "active_response":
+            return {"event_id": eid, "verdict": "expected",
+                    "reason": "(demo) firewall-drop blocked a known scanner, as configured"}
+        if t == "level":
+            return {"event_id": eid, "verdict": "investigate",
+                    "reason": "(demo) brute force on Jenkins; no successful login seen yet",
+                    "suggestion": {"param": "critical_level", "value": 13,
+                                   "why": "(demo) level-12 Jenkins alerts fire daily; 13 keeps only the rarer ones"}}
+        return {"event_id": eid, "verdict": "investigate", "reason": "(demo) severity " + str(e.get("severity"))}
+
+    @staticmethod
     def _watch_events(messages):
         for m in messages:
             if m["role"] == "user" and "```watch-events" in (m.get("content") or ""):
@@ -103,11 +123,6 @@ class MockLLM:
                   "questions": [{"question": L["q"], "why": L["why"]}],
                   "open_items": [L["open"]], "closed_items": []}
         events = self._watch_events(messages)
-        if events:      # demo verdicts: critical → investigate, a watched group → noise with a mute suggestion
-            report["event_verdicts"] = [
-                {"event_id": e["id"], "verdict": "investigate", "reason": "(demo) severity " + e["severity"]}
-                if e["severity"] == "critical" or e["trigger"] != "groups" else
-                {"event_id": e["id"], "verdict": "noise", "reason": "(demo) repeats every day",
-                 "suggestion": {"mute": True, "why": "(demo) known scanner noise"}}
-                for e in events]
+        if events:      # demo verdicts, one of each kind, so the pages show what a real round looks like
+            report["event_verdicts"] = [self._verdict(e) for e in events]
         return LLMResponse(tool_calls=[ToolCall("t2", "submit_report", report)], input_tokens=1500, output_tokens=400)

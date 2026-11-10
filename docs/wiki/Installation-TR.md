@@ -35,8 +35,10 @@ docker compose up -d --build
 `.env.demo` yalnızca demonun ihtiyacını içerir (`WDT_DEMO=true`, `LLM_PROVIDER=mock`, bir demo parolası).
 Bunun yerine `.env.example` kopyasına `WDT_DEMO=true` eklemeyin: `.env` içinde bir değişken iki kez geçerse
 **son** satır geçerlidir. <http://127.0.0.1:8080> adresini açın, `demo-password-change-me` ile giriş yapın ve
-bir kez **Run check now** düğmesine basın. Nöbeti denemek için **Ayarlar**'dan nöbeti açın ve **Nöbet**
-sayfasında **Şimdi tara**'ya basın. Demo
+bir kez **Run check now** düğmesine basın. Demo her sayfada örnek veriyle açılır: tamamlanmış bir rapor, açık **Nöbet** ve son 24 saatin AI turunda
+değerlendirilmiş altı olayı (başarısız denemelerden sonra başarılı SSH girişi, Active Response engellemesi, kopan
+ajan …), **Ayarlar**'da bekleyen iki öneri ve tek özel algılayıcılı bir maskeleme profili. `WDT_DEMO_SEED=false`
+ile boş açılır. Demo
 `config/demo.yaml` ve sentetik veri kullanır; Wazuh'a bağlanmaz. `WDT_DEMO=true` ile
 `ENVIRONMENT=production` birlikte kullanılamaz — uygulama açılmaz. (Hazır 0.7.0 imajı ayrıca
 `WDT_CONFIG=config/demo.yaml` istiyordu; 0.8.0'da düzeltildi.)

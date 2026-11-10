@@ -48,7 +48,8 @@ docker compose up -d --build
 <http://127.0.0.1:8080> adresini açın ve `demo-password-change-me` ile (`.env.demo` içindeki `APP_PASSWORD`) giriş
 yapın. Arayüz dilini sağ üstten TR seçerek değiştirebilirsiniz. Demo sentetik veri
 kullanır (Jenkins brute force, SSH denemeleri, bağlantısı kopmuş ajan, zafiyet patlaması) ve `mock` sağlayıcısı
-model çağırmadan yer tutucu bir rapor yazar.
+model çağırmadan yer tutucu bir rapor yazar. Demo tamamlanmış bir raporla, AI hükmü verilmiş nöbet olaylarıyla
+ve bekleyen önerilerle açılır; her sayfada görülecek bir şey vardır.
 
 ## Bir koşu nasıl işler?
 

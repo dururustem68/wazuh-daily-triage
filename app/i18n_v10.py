@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 EN: dict[str, str] = {
+    "mask.where": "Where it applies: everything sent to the AI provider — the scheduled AI round, manual runs, incident drafts and every tool result the model reads — and the answers to MCP clients (Claude Desktop and others). The model sees pseudonyms such as <email:3f9a…>; they are mapped back when its answer is stored, so reports, the inbox, the watch page and notifications show the real values. Those stay inside your installation, and the data in Wazuh is never changed.",
     "nav.watch": "Watch",
     # ---- watch: notifications and events
     "watch.title": "[Wazuh Daily Triage] {env} — rule-based alert",
@@ -112,6 +113,7 @@ EN: dict[str, str] = {
 }
 
 TR: dict[str, str] = {
+    "mask.where": "Nerede uygulanır: AI sağlayıcısına giden her şey — planlı AI turu, elle başlatılan koşular, olay kaydı taslakları ve modelin okuduğu her araç sonucu — ve MCP istemcilerine (Claude Desktop vb.) giden cevaplar. Model <email:3f9a…> gibi takma adlar görür; cevabı saklanırken gerçek değerlere geri çevrilir, bu yüzden raporlar, öneriler, nöbet sayfası ve bildirimler gerçek değerleri gösterir. Bunlar kendi kurulumunuzun içinde kalır; Wazuh'taki veri hiç değiştirilmez.",
     "nav.watch": "Nöbet",
     "watch.title": "[Wazuh Daily Triage] {env} — kural tabanlı uyarı",
     "watch.title_critical": "[Wazuh Daily Triage] {env} — KRİTİK kural tabanlı uyarı",
@@ -214,6 +216,7 @@ TR: dict[str, str] = {
 }
 
 ES: dict[str, str] = {
+    "mask.where": "Dónde se aplica: todo lo que se envía al proveedor de IA — la ronda de IA programada, las ejecuciones manuales, los borradores de incidente y cada resultado de herramienta que lee el modelo — y las respuestas a los clientes MCP (Claude Desktop y otros). El modelo ve seudónimos como <email:3f9a…>; se traducen de vuelta al guardar su respuesta, por eso los informes, las recomendaciones, la vigilancia y las notificaciones muestran los valores reales. Estos no salen de su instalación y los datos de Wazuh nunca se modifican.",
     "nav.watch": "Vigilancia",
     "watch.title": "[Wazuh Daily Triage] {env} — alerta basada en reglas",
     "watch.title_critical": "[Wazuh Daily Triage] {env} — alerta CRÍTICA basada en reglas",
@@ -316,6 +319,7 @@ ES: dict[str, str] = {
 }
 
 DE: dict[str, str] = {
+    "mask.where": "Wo sie greift: alles, was an den KI-Anbieter geht — die geplante KI-Runde, manuelle Läufe, Vorfallsentwürfe und jedes Werkzeugergebnis, das das Modell liest — sowie die Antworten an MCP-Clients (Claude Desktop u. a.). Das Modell sieht Pseudonyme wie <email:3f9a…>; beim Speichern seiner Antwort werden sie zurückübersetzt, daher zeigen Berichte, Empfehlungen, die Wache und Benachrichtigungen die echten Werte. Diese bleiben in Ihrer Installation, und die Daten in Wazuh werden nie verändert.",
     "nav.watch": "Wache",
     "watch.title": "[Wazuh Daily Triage] {env} — regelbasierte Meldung",
     "watch.title_critical": "[Wazuh Daily Triage] {env} — KRITISCHE regelbasierte Meldung",

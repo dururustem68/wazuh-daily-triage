@@ -804,3 +804,20 @@ def test_demo_start_is_forgiving_and_the_error_says_what_to_do(monkeypatch, tmp_
     assert env["WDT_DEMO"] == "true" and env["LLM_PROVIDER"] == "mock"
     example = open(os.path.join(ROOT, ".env.example"), encoding="utf-8").read()
     assert "\nWDT_DEMO=" not in example                                          # nothing to override the demo
+
+
+async def test_demo_sample_data_fills_every_new_page():
+    from app import demo_seed
+    rt = _rt()
+    res = await demo_seed.seed_demo(rt)
+    er = rt.get("demo")
+    rows = await er.repo.list_events()
+    events = {e["trigger"]: e for e in rows}
+    assert res["demo"]["run"] == "done" and res["demo"]["judged"] == len(rows) >= 5
+    assert {"brute_force", "active_response", "groups", "level", "agents"} <= set(events)
+    assert events["brute_force"]["verdict"] == "real_incident" and events["active_response"]["verdict"] == "expected"
+    assert {e["suggestion"]["type"] for e in events.values() if e.get("suggestion")} == {"mute", "param"}
+    st = await rt.env_settings(er, fresh=True)
+    assert st.watch.enabled and st.mask.custom[0].name == "x_order_no" and st.mask.version == 1
+    assert await demo_seed.seed_demo(rt) == {}                                    # never twice
+    assert not demo_seed.enabled() or os.environ.get("WDT_DEMO_SEED") != "false"

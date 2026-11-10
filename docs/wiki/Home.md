@@ -47,7 +47,8 @@ docker compose up -d --build
 
 Open <http://127.0.0.1:8080> and sign in with `demo-password-change-me` (the `APP_PASSWORD` in `.env.demo`). The demo uses synthetic data
 (a Jenkins brute force, SSH attempts, a disconnected agent, a vulnerability burst) and the `mock` provider,
-which writes a placeholder report without calling a model.
+which writes a placeholder report without calling a model. It starts with a finished report, watch events with
+AI verdicts and waiting suggestions, so every page has something to show.
 
 ## How a run flows
 

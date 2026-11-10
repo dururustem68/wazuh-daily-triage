@@ -55,6 +55,13 @@ async def lifespan(app: FastAPI):
     app.state.rt = rt
     await rt.recover_stale()
     await rt.load_all_settings()
+    if demo:
+        from . import demo_seed
+        if demo_seed.enabled():
+            try:
+                await demo_seed.seed_demo(rt)
+            except Exception:  # noqa: BLE001 - the demo must start even if the sample data fails
+                log.exception("demo: could not create the sample data")
     if os.environ.get("WDT_SCHEDULER", "true").lower() not in ("0", "false", "no"):
         rt.start_scheduler()
     log.info("wazuh-daily-triage %s started — %d environment(s)%s", __version__, len(settings.environments),
