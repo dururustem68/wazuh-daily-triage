@@ -89,6 +89,35 @@ chmod 600 ~/.wdt-mcp-token
 - Windows + WSL: `"command": "wsl.exe"` ve `/mnt/c/...` yolları.
 - Token dosya yerine `WDT_MCP_TOKEN` değişkeninden de gelebilir.
 
+### Kurulum olmadan deneme (stdio, demo verisi)
+
+Araçlar tek bir süreçte, stdio üzerinden ve sentetik demo verisiyle de çalışır: Wazuh, web sunucusu ve token
+gerekmez. Herhangi bir MCP istemcisinden ilk bakış ve sunucuyu başlatıp araçlarını listeleyen MCP dizinleri
+için kullanışlıdır.
+
+```sh
+docker build -t wazuh-daily-triage .
+docker run -i --rm -e WDT_DEMO=true wazuh-daily-triage python -m app.mcp_stdio
+```
+
+İstemci ayarı (Claude Desktop, Cursor, VS Code … — stdio sunucusu başlatabilen her istemci):
+
+```json
+{
+  "mcpServers": {
+    "wazuh-demo": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "WDT_DEMO=true", "wazuh-daily-triage", "python", "-m", "app.mcp_stdio"]
+    }
+  }
+}
+```
+
+Docker olmadan: gereksinimleri kurulu bir kopyada `WDT_DEMO=true python -m app.mcp_stdio`.
+`WDT_DEMO` olmadan `python -m app.mcp_stdio` normal yapılandırmanızı (`WDT_CONFIG` ve web uygulamasıyla aynı ortam
+değişkenleri) başlatan kişinin kimlik bilgileriyle kullanır. Paylaşılan bir kurulumda aşağıdaki HTTP uç noktası
+kullanılmalı: token, hız sınırı ve istemci bazında denetim kaydı orada.
+
 ### Herhangi bir Streamable HTTP istemcisi
 
 URL'yi `Authorization: Bearer <token>` ve `Content-Type: application/json` ile kullanın.

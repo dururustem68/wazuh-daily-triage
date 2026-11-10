@@ -89,6 +89,35 @@ chmod 600 ~/.wdt-mcp-token
 - Windows + WSL: `"command": "wsl.exe"` and `/mnt/c/...` paths.
 - The token can also come from `WDT_MCP_TOKEN` instead of a file.
 
+### Try it without an installation (stdio, demo data)
+
+The tools can also run over stdio in a single process, with the synthetic demo data: no Wazuh, no web server,
+no token. Useful for a first look from any MCP client and for MCP directories that start a server to list its
+tools.
+
+```sh
+docker build -t wazuh-daily-triage .
+docker run -i --rm -e WDT_DEMO=true wazuh-daily-triage python -m app.mcp_stdio
+```
+
+Client configuration (Claude Desktop, Cursor, VS Code … — any client that starts stdio servers):
+
+```json
+{
+  "mcpServers": {
+    "wazuh-demo": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "WDT_DEMO=true", "wazuh-daily-triage", "python", "-m", "app.mcp_stdio"]
+    }
+  }
+}
+```
+
+Without Docker: `WDT_DEMO=true python -m app.mcp_stdio` from a checkout with the requirements installed.
+`python -m app.mcp_stdio` without `WDT_DEMO` uses your normal configuration (`WDT_CONFIG` and the same environment
+variables as the web app), with the credentials of whoever starts it. A shared installation should use the HTTP
+endpoint below instead: it has the token, the rate limit and the per-client audit.
+
 ### Any Streamable HTTP client
 
 Use the URL with `Authorization: Bearer <token>` and `Content-Type: application/json`.

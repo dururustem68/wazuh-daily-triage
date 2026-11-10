@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **MCP over stdio**: `python -m app.mcp_stdio` serves the same tools as `POST /mcp` in one process, one JSON-RPC
+  message per line. With `WDT_DEMO=true` it needs nothing else (synthetic data, sample AI round), so any stdio MCP
+  client can try the tools with `docker run -i --rm -e WDT_DEMO=true <image> python -m app.mcp_stdio`, and MCP
+  directories can start the server to list its tools. Logs go to stderr.
+- `glama.json` (maintainer entry for the Glama MCP directory).
+
 ## [0.10.1] — 2026-11-10
 
 ### Changed
