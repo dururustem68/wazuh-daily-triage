@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse, Response
 
 from . import __version__, auditlog, authz
 from .agent.tools import SPECS, ToolBox
+from .errors import public_error
 
 log = logging.getLogger("wdt.mcp")
 router = APIRouter()
@@ -138,12 +139,16 @@ async def _handle(rt, msg: dict) -> dict | None:
         return _ok(mid, {"tools": _tool_list(rt)})
     if method == "tools/call":
         name = p.get("name", "")
+        if name == "propose_knowledge" and not auditlog.available():     # the only write: no trace, no write
+            return _ok(mid, {"content": [{"type": "text", "text": json.dumps(
+                {"error": "audit trail is not writable; proposals are refused"})}], "isError": True})
         try:
             text = await _call(rt, name, dict(p.get("arguments") or {}))
             err = text.startswith('{"error"')
         except Exception as e:  # noqa: BLE001
-            log.exception("mcp tool %s failed", name)
-            text, err = json.dumps({"error": f"{type(e).__name__}: {e}"}), True
+            pub, ref = public_error(e)
+            log.exception("mcp tool %s failed (ref=%s)", name, ref)
+            text, err = json.dumps(pub), True
         if name == "propose_knowledge":
             auditlog.record("mcp.propose_knowledge", actor="mcp-client", role="mcp", env="",
                             target=str((p.get("arguments") or {}).get("env") or ""),

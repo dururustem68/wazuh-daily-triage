@@ -17,6 +17,7 @@ import httpx
 from pydantic import BaseModel, Field, field_validator
 
 from .i18n import t
+from .observability import scrub
 
 log = logging.getLogger("wdt.notify")
 
@@ -206,11 +207,14 @@ def _send_email(cfg: EmailCfg, msg: dict):
     if not cfg.verify_tls:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
-    if cfg.security == "ssl":
+    sec = (cfg.security or "").strip().lower()
+    if sec not in ("starttls", "ssl", "none"):      # a typo must not silently mean "no encryption"
+        raise RuntimeError(f"email.security {cfg.security!r} is not one of starttls, ssl, none")
+    if sec == "ssl":
         s = smtplib.SMTP_SSL(cfg.host, cfg.port, context=ctx, timeout=20)
     else:
         s = smtplib.SMTP(cfg.host, cfg.port, timeout=20)
-        if cfg.security == "starttls":
+        if sec == "starttls":
             s.starttls(context=ctx)
     try:
         if cfg.username:
@@ -310,6 +314,14 @@ async def send(cfg: NotifyCfg, msg: dict, transport: httpx.AsyncBaseTransport | 
                     await _send_ntfy(cfg.ntfy, msg, client)
                 res[name] = "ok"
             except Exception as e:  # noqa: BLE001
-                log.warning("notification via %s failed: %s", name, e)
-                res[name] = f"{type(e).__name__}: {e}"[:300]
+                # the error text is logged, stored with the run and shown in the UI: no token, no webhook URL
+                detail = scrub(f"{type(e).__name__}: {e}", *_secrets(cfg))[:300]
+                log.warning("notification via %s failed: %s", name, detail)
+                res[name] = detail
     return res
+
+
+def _secrets(cfg: NotifyCfg) -> list[str]:
+    return [cfg.telegram.bot_token, cfg.teams.webhook_url, cfg.slack.webhook_url, cfg.discord.webhook_url,
+            cfg.webhook.url, cfg.webhook.token, cfg.ntfy.token, cfg.email.password,
+            *cfg.webhook.headers.values()]

@@ -34,7 +34,7 @@ flowchart LR
 
 | Tür | Örnek | Modele giden | Doğrulama |
 |---|---|---|---|
-| e-posta | `betul@example.com` | `<email:3f9a1c2b>` | — |
+| e-posta | `betul@example.com` | `<email:3f9a1c2b7d4e9a10>` | — |
 | telefon | `+90 532 123 45 67`, `0532 123 45 67` | `<phone:…>` | 10–15 hane |
 | TCKN | 11 hane | `<national_id_tr:…>` | iki kontrol hanesi |
 | Belçika ulusal no | `85.07.30-033.28` | `<national_id_be:…>` | mod 97 |
@@ -44,7 +44,7 @@ flowchart LR
 | IP (`ips: public/all`) | `203.0.113.7` | `<ip:…>` | `public` iç ağ adreslerini korur |
 | parola, token, Bearer, JWT, AWS anahtarı, özel anahtar | `password=…` | `<password>` | silinir — **geri döndürülemez** |
 
-- **Kararlı.** Aynı değer her zaman aynı takma adı alır (`APP_SECRET` ile HMAC). Model, aynı hesabın üç ülkeden
+- **Kararlı.** Aynı değer her zaman aynı takma adı alır (`PRIVACY_SALT`, yoksa `APP_SECRET` ile HMAC; 64 bit). Model, aynı hesabın üç ülkeden
   40 başarısız giriş yaptığını yine görür, ama kim olduğunu bilmez.
 - **Yalnızca uygulama içinde geri çevrilebilir.** Model bir aracı takma adla çağırdığında, Wazuh sorgulanmadan
   önce gerçek değer yerine konur. Modelin raporu da saklanmadan önce geri çevrilir; incelemeci gerçek değerleri

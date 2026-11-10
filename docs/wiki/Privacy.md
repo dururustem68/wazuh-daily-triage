@@ -34,7 +34,7 @@ flowchart LR
 
 | Kind | Example | Sent as | Validated by |
 |---|---|---|---|
-| e-mail | `betul@example.com` | `<email:3f9a1c2b>` | — |
+| e-mail | `betul@example.com` | `<email:3f9a1c2b7d4e9a10>` | — |
 | phone | `+90 532 123 45 67` | `<phone:…>` | 10–15 digits |
 | Turkish ID (TCKN) | 11 digits | `<national_id_tr:…>` | both check digits |
 | Belgian national number | `85.07.30-033.28` | `<national_id_be:…>` | mod 97 |
@@ -44,7 +44,7 @@ flowchart LR
 | IP (`ips: public/all`) | `203.0.113.7` | `<ip:…>` | `public` keeps private ranges |
 | password, token, Bearer, JWT, AWS key, private key | `password=…` | `<password>` | removed — **irreversible** |
 
-- **Stable.** The same value always gets the same pseudonym (HMAC with `APP_SECRET`). The model can still see that
+- **Stable.** The same value always gets the same pseudonym (HMAC with `PRIVACY_SALT`, else `APP_SECRET`; 64 bit). The model can still see that
   one account failed 40 logins from three countries, without knowing who it is.
 - **Reversible only inside the app.** When the model calls a tool with a pseudonym, the real value is substituted
   before Wazuh is queried. The model's report is mapped back before it is stored, so reviewers see real values

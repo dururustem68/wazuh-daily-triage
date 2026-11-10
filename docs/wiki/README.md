@@ -81,7 +81,7 @@ cp docs/wiki/images/*.png "$WIKI/images/"
 
 cd "$WIKI"
 git add -A
-git commit -m "wiki: sync from docs/wiki (0.9.1)"
+git commit -m "wiki: sync from docs/wiki (0.9.2)"
 git push
 ```
 
@@ -95,7 +95,7 @@ $wiki = '..\wazuh-daily-triage.wiki'
 New-Item -ItemType Directory -Force "$wiki\images" | Out-Null
 Copy-Item docs\wiki\images\*.png "$wiki\images" -Force
 git -C $wiki add -A
-git -C $wiki commit -m "wiki: sync from docs/wiki (0.9.1)"
+git -C $wiki commit -m "wiki: sync from docs/wiki (0.9.2)"
 git -C $wiki push
 ```
 
@@ -111,7 +111,7 @@ otherwise the next sync silently reverts it.
 
 - One topic per page; do not add a page without adding it to `_Sidebar.md` (both languages).
 - Every page ends with `[English](Page) · [Türkçe](Page-TR)`.
-- Keep commands copy-pasteable and version-pinned: `0.9.1`, chart `0.1.5`.
+- Keep commands copy-pasteable and version-pinned: `0.9.2`, chart `0.1.6`.
 - Update the version string in `Home.md`, `Home-TR.md`, `_Sidebar.md` when the release changes.
 - Never put a real password, token, hostname or customer alert in a page or a screenshot.
 

@@ -24,7 +24,7 @@ collected summary of the window and every tool result. Before the request leaves
 
 | Kind | Example in | Sent to the model | Check |
 |---|---|---|---|
-| `email` | `betul@example.com` | `<email:3f9a1c2b>` | — |
+| `email` | `betul@example.com` | `<email:3f9a1c2b7d4e9a10>` | — |
 | `phone` | `+90 532 123 45 67`, `0532 123 45 67` | `<phone:…>` | 10–15 digits |
 | `national_id_tr` | TCKN | `<national_id_tr:…>` | both check digits |
 | `national_id_be` | `85.07.30-033.28` | `<national_id_be:…>` | mod 97 |
@@ -34,10 +34,10 @@ collected summary of the window and every tool result. Before the request leaves
 | `ip` (only with `ips: public/all`) | `203.0.113.7` | `<ip:…>` | `public` keeps private ranges |
 | `password`, `bearer`, `jwt`, `aws_key`, `private_key` | `password=…`, `Bearer …` | `<password>` … | removed, **irreversible** |
 
-- **Pseudonyms are stable**: the same value always gets the same token (HMAC with `APP_SECRET`), so the model can
+- **Pseudonyms are stable**: the same value always gets the same token (HMAC with `PRIVACY_SALT`, else `APP_SECRET`; 64 bit), so the model can
   still see that the same person logged in from five countries — without seeing who.
 - **They are reversible inside the application only.** When the model calls a tool with a pseudonym
-  (`search_alerts user=<email:3f9a1c2b>`), the application substitutes the real value before querying Wazuh, and
+  (`search_alerts user=<email:3f9a1c2b7d4e9a10>`), the application substitutes the real value before querying Wazuh, and
   the model's answer is mapped back before it is stored. Reports, the inbox and incident drafts show real values
   to the reviewer; the model never received them.
 - **MCP**: an external assistant is an LLM too. MCP results are masked the same way, and pseudonyms passed back as

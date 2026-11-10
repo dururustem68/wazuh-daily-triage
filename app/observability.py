@@ -12,6 +12,7 @@ from __future__ import annotations
 import contextvars
 import itertools
 import logging
+import re
 import time
 from collections import defaultdict, deque
 
@@ -21,6 +22,46 @@ _seq = itertools.count(1)
 
 def new_request_id() -> str:
     return f"{time.strftime('%Y%m%dT%H%M%S')}-{next(_seq):06d}"
+
+
+_SECRET_PATTERNS = [
+    (re.compile(r"(api\.telegram\.org/bot)[^/\s\"']+"), r"\1***"),                       # Telegram bot token
+    (re.compile(r"(https?://[^/\s\"'?]+)/[^\s\"']*(?:webhook|hooks|workflows|triggers)[^\s\"']*", re.I),
+     r"\1/***"),                                                                        # webhook URLs are secrets
+    (re.compile(r"(https?://hooks\.[^/\s\"']+)/[^\s\"']+", re.I), r"\1/***"),
+    (re.compile(r"([?&](?:sig|signature|token|key|api[_-]?key|secret|code|access_token)=)[^&\s\"']+", re.I),
+     r"\1***"),
+    (re.compile(r"(?i)(authorization['\"]?\s*[:=]\s*['\"]?(?:bearer|basic)\s+)[A-Za-z0-9._~+/=-]+"), r"\1***"),
+]
+
+
+def scrub(text: str, *secrets_: str) -> str:
+    """Remove credentials that live inside URLs/headers from a text that is about to be logged or shown.
+
+    A Telegram bot token is part of the request path and a Teams/Slack/Discord webhook URL *is* the
+    credential, so the usual "never log the password field" rule does not cover them. ``secrets_`` are
+    exact values (configured tokens/URLs) to blank out as well.
+    """
+    for s in secrets_:
+        if s and len(s) >= 6:
+            text = text.replace(s, "***")
+    for rx, rep in _SECRET_PATTERNS:
+        text = rx.sub(rep, text)
+    return text
+
+
+class ScrubFilter(logging.Filter):
+    """Last line of defence on the handler: no log line leaves the process with a token in a URL."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.getMessage()
+        except Exception:  # noqa: BLE001 - a broken format string must not break logging
+            return True
+        clean = scrub(msg)
+        if clean != msg:
+            record.msg, record.args = clean, None
+        return True
 
 
 class RequestIdFilter(logging.Filter):
@@ -42,10 +83,16 @@ def install_logging(level: str = "INFO", fmt: str | None = None) -> None:
             fmt or "%(asctime)s %(levelname)s %(name)s [%(request_id)s]: %(message)s",
             defaults={"request_id": "-"}))
         h.addFilter(RequestIdFilter())
+        h.addFilter(ScrubFilter())
         root.addHandler(h)
     else:
         for h in root.handlers:
             h.addFilter(RequestIdFilter())
+            h.addFilter(ScrubFilter())
+    # httpx logs every request line at INFO — including the URL, i.e. the Telegram bot token and whole
+    # webhook addresses. Request logging belongs to this application's own loggers.
+    for noisy in ("httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(max(logging.WARNING, logging.getLogger(noisy).level))
 
 
 class Metrics:

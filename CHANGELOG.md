@@ -5,6 +5,48 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.2] — 2026-11-10
+
+Security hardening after a code review; no new features. **Read "Upgrading" before you roll it out.**
+
+### Security
+- **Pseudonym key**: personal-data pseudonyms were an HMAC with the built-in key `wdt-privacy` whenever
+  `APP_SECRET` was unset (typical behind an SSO proxy), so a token could be checked against a guessed value.
+  There is no built-in key any more: `PRIVACY_SALT`, else `APP_SECRET`, else a random key per process (with a
+  startup warning). Tokens are 64 bit instead of 32 (`<email:3f9a1c2b7d4e9a10>`), which also removes
+  collisions inside the token registry.
+- **Cross-origin writes**: every state-changing request must come from the application's own origin
+  (`Sec-Fetch-Site`, else `Origin`/`Referer` against `Host`/`X-Forwarded-Host`/`WDT_TRUSTED_ORIGINS`).
+  Previously a page on a sibling sub-domain could trigger body-less POSTs (undeploy, promoted, liveness,
+  check, notify-test) in SSO mode. Clients without browser headers (curl, scripts) and `/mcp` are unaffected.
+- **Permissions fail closed**: a state-changing route without a permission mapping now needs `admin` instead
+  of `read`; a test enumerates every route so a new one cannot be forgotten.
+- **Error texts**: the model and MCP clients get an error category and a reference (`{"error", "kind",
+  "ref"}`) instead of the exception text (endpoint URLs, index names, raw indexer/API responses). The full
+  text and traceback are in the log under the same reference.
+- **Lucene `query` argument**: fields named inside the free-text query pass the same allow-list as the
+  structured filters (including `_exists_:`), field patterns and leading wildcards are refused, regular
+  expressions and wildcards are bounded. `query.extra_fields` accepts sub-trees (`data.win.*`).
+- **Indexer queries** carry a server-side `timeout` just below the client timeout; a partial (`timed_out`)
+  answer is an error instead of a silent undercount.
+- **SMTP**: in production `email.security: none` with a username is refused (password in clear text),
+  without one it warns (`WDT_ALLOW_INSECURE_SMTP=1`); `verify_tls: false` is refused unless
+  `WDT_ALLOW_INSECURE_TLS=1`. An unknown `security` value no longer silently means "no encryption".
+- **Audit trail fails closed**: with `AUDIT_STRICT` (default on in production) state-changing requests and
+  MCP `propose_knowledge` answer 503 while the audit file cannot be written. Outside strict mode every lost
+  record is logged and counted (`wdt_audit_write_failures_total`) instead of one warning per process.
+- **Credentials in logs**: `httpx` logged every request line at INFO, including the Telegram bot token and
+  whole webhook URLs. Its loggers are now at WARNING, a filter on the log handler scrubs tokens in URLs and
+  `Authorization` values, and notification errors (log, run record, "test notification" result) are scrubbed.
+
+### Upgrading
+- Set `PRIVACY_SALT` (or `APP_SECRET`) if masking is on and neither is set, otherwise pseudonyms change at
+  every restart. Rotate the Telegram bot token / webhook URLs if your pod logs were shipped anywhere.
+- Production with `email.verify_tls: false`, or `email.security: none` plus a username, **refuses to start**.
+- Behind a proxy that rewrites `Host` without sending `X-Forwarded-Host`, old browsers without
+  `Sec-Fetch-Site` need `WDT_TRUSTED_ORIGINS=https://your.public.host`.
+- If the model used fields outside the allow-list in `query`, add them to `query.extra_fields`.
+
 ## [0.9.1] — 2026-11-06
 
 ### Fixed

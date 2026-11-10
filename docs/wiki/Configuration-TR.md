@@ -57,6 +57,9 @@ aksi halde                    → WAZUH_* değişkenleriyle tek ortam modu
 | `MCP_ENVS` | *(boş = tümü)* | MCP istemcilerinin sorgulayabileceği ortamlar. |
 | `AUDIT_LOG` | `true` | Eklemeli JSONL denetim kaydı; `false` yalnızca testler için. |
 | `AUDIT_LOG_FILE` | `logs/audit.jsonl` | Denetim dosyası yolu. |
+| `AUDIT_STRICT` | *(üretimde açık)* | Denetim dosyası yazılamıyorken durum değiştiren istekler iz bırakmadan çalışmak yerine 503 döner. |
+| `PRIVACY_SALT` | *(`APP_SECRET`, yoksa rastgele)* | Kişisel veri takma adlarının anahtarı (`openssl rand -hex 32`). İkisi de yoksa her açılışta rastgele anahtar üretilir: güvenlidir, ama takma adlar yeniden başlatmada değişir. |
+| `WDT_TRUSTED_ORIGINS` | *(boş)* | Durum değiştiren istek gönderebilecek ek kaynaklar (virgülle). Yalnızca dış adres, uygulamanın gördüğü `Host`/`X-Forwarded-Host` değerinden farklıysa gerekir. |
 | `METRICS_TOKEN` | *(boş)* | `/metrics` için Bearer token; boşsa admin oturumu gerekir. |
 | `MCP_TOKEN` | *(boş)* | `POST /mcp`'yi açar; yoksa uç nokta `404` döner. [MCP](MCP-TR). |
 
@@ -129,7 +132,7 @@ Bir kanal, alanları dolu olduğunda açıktır. Ayrıntılar: [docs/notificatio
 | `RULE_DEPLOY_ALLOW_INCONCLUSIVE` | `false` | Logtest'in yeniden üretemediği örnekleri de dağıt. |
 | `MAIL_MAX_PER_HOUR`, `MAIL_ALERT_LEVEL` | *(yok)*, `7` | E-posta kanalı analizi (`ossec.conf` limitleriniz). |
 
-`WDT_ALLOW_INSECURE_TLS=1` ve `WDT_ALLOW_INSECURE_COOKIE=1` üretim açılış kontrolleri için bilinçli laboratuvar
+`WDT_ALLOW_INSECURE_TLS=1`, `WDT_ALLOW_INSECURE_COOKIE=1` ve `WDT_ALLOW_INSECURE_SMTP=1` üretim açılış kontrolleri için bilinçli laboratuvar
 istisnalarıdır; [docs/security-exceptions.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/security-exceptions.md).
 
 ## YAML dosyası

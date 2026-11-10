@@ -60,8 +60,13 @@ class Indexer:
 
     async def search(self, index: str, body: dict) -> dict:
         body.setdefault("track_total_hits", True)
+        # Server-side budget just below the client timeout: the cluster stops working on the query instead
+        # of finishing it for nobody. A partial answer would silently undercount, so it is an error.
+        body.setdefault("timeout", f"{max(1, int(self._timeout) - 2)}s")
         r = await self.request("POST", f"/{index}/_search", body,
                                params={"ignore_unavailable": "true", "allow_no_indices": "true"})
+        if r.get("timed_out"):
+            raise IndexerError(f"indexer query timed out after {body['timeout']} (partial result discarded)")
         # with no matching index OpenSearch omits "aggregations" entirely; return an empty skeleton
         if body.get("aggs") and "aggregations" not in r:
             r["aggregations"] = {n: _empty_agg(spec) for n, spec in body["aggs"].items()}

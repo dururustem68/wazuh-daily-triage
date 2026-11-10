@@ -25,8 +25,10 @@ from defusedxml.common import DefusedXmlException
 
 from ..collector import TS, _b, _parse, iso
 from ..config import Environment
+from ..errors import public_error
 from ..query_guard import QueryError, check_interval, field, histogram_buckets, query_string, size, time_range
 from ..rules import ip_element_issues
+from ..sources import SourcePolicyError
 from ..store import KNOWLEDGE_KINDS, Repo
 from ..wazuh.api import WazuhAPI
 from ..wazuh.indexer import Indexer
@@ -61,9 +63,10 @@ def _filters(a: dict, limits=None) -> list[dict]:
     frm, to = time_range(a.get("from") or "now-24h", a.get("to") or "now", max_hours)
     extra = getattr(limits, "extra_fields", None)
     f: list[dict] = [{"range": {TS: {"gte": iso(frm), "lte": iso(to)}}}]
-    q = query_string(a.get("query"))
+    q = query_string(a.get("query"), extra)
     if q:
-        f.append({"query_string": {"query": q, "analyze_wildcard": True, "default_operator": "AND"}})
+        f.append({"query_string": {"query": q, "analyze_wildcard": True, "default_operator": "AND",
+                                   "allow_leading_wildcard": False, "max_determinized_states": 2000}})
     if a.get("rule_ids"):
         f.append({"terms": {"rule.id": [str(x) for x in a["rule_ids"]][:50]}})
     if a.get("agent"):
@@ -146,12 +149,16 @@ class ToolBox:
             return json.dumps({"error": f"unknown tool: {name}"})
         try:
             res = await h(args or {})
+        except SourcePolicyError as e:
+            res = {"error": str(e)}
         except QueryError as e:
             res = {"error": str(e), "hint": "narrow the window, use an allow-listed field or a coarser interval"}
         except Exception as e:  # noqa: BLE001
-            # The model gets a short error; the operator needs the traceback to see *why* a tool broke.
-            log.warning("tool %s failed (env=%s, mode=%s): %s", name, self.env.id, self.mode, e, exc_info=True)
-            res = {"error": f"{type(e).__name__}: {e}"}
+            # The model gets a category and a reference, never the exception text (URLs, index names, raw
+            # responses); the operator finds the traceback in the log under the same reference.
+            res, ref = public_error(e)
+            log.warning("tool %s failed (env=%s, mode=%s, ref=%s): %s", name, self.env.id, self.mode, ref, e,
+                        exc_info=True)
         txt = json.dumps(res, ensure_ascii=False, default=str)
         if len(txt) > MAX_RESULT_CHARS:
             txt = txt[:MAX_RESULT_CHARS] + f'… [truncated, {len(txt)} chars in total — narrow the filter]'

@@ -57,6 +57,9 @@ otherwise                → single-environment mode from WAZUH_* variables
 | `MCP_ENVS` | *(empty = all)* | Environment ids MCP clients may query. |
 | `AUDIT_LOG` | `true` | Append-only JSONL audit trail; `false` is for tests only. |
 | `AUDIT_LOG_FILE` | `logs/audit.jsonl` | Audit file path. |
+| `AUDIT_STRICT` | *(on in production)* | While the audit file cannot be written, state-changing requests answer 503 instead of running without a trace. |
+| `PRIVACY_SALT` | *(`APP_SECRET`, else random)* | Key for personal-data pseudonyms (`openssl rand -hex 32`). With neither set, a random key is drawn at every start: safe, but pseudonyms change on restart. |
+| `WDT_TRUSTED_ORIGINS` | *(empty)* | Extra origins allowed to send state-changing requests (comma separated). Only needed when the public URL differs from the `Host`/`X-Forwarded-Host` the app sees. |
 | `METRICS_TOKEN` | *(empty)* | Bearer token for `/metrics`; when empty an admin session is required. |
 | `MCP_TOKEN` | *(empty)* | Enables `POST /mcp`; without it the endpoint answers `404`. See [MCP](MCP). |
 
@@ -129,7 +132,7 @@ A channel is on when its fields are set. See [docs/notifications.md](https://git
 | `RULE_DEPLOY_ALLOW_INCONCLUSIVE` | `false` | Also deploy samples logtest cannot reproduce. |
 | `MAIL_MAX_PER_HOUR`, `MAIL_ALERT_LEVEL` | *(unset)*, `7` | Mail channel analysis (your `ossec.conf` limits). |
 
-`WDT_ALLOW_INSECURE_TLS=1` and `WDT_ALLOW_INSECURE_COOKIE=1` are deliberate lab overrides for the production
+`WDT_ALLOW_INSECURE_TLS=1`, `WDT_ALLOW_INSECURE_COOKIE=1` and `WDT_ALLOW_INSECURE_SMTP=1` are deliberate lab overrides for the production
 startup checks; see [docs/security-exceptions.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/security-exceptions.md).
 
 ## The YAML file

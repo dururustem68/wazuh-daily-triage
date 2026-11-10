@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import hmac
+import os
 import re
 import time
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -30,6 +32,7 @@ from .common import (
 from .ui import tpl
 
 router = APIRouter()
+AUDIT_EXEMPT = ("/login", "/logout", "/lang", "/mcp")    # signing in must stay possible; /mcp checks per tool
 
 
 def env_from_path(path: str) -> str | None:
@@ -43,9 +46,63 @@ def deny(request: Request, status: int, message: str) -> Response:
     return HTMLResponse(f"<p>{message}</p>", status_code=status)
 
 
-def required_perm(method: str, path: str) -> str:
-    """Permission for this request; ``read`` for safe methods."""
-    if method in ("GET", "HEAD", "OPTIONS"):
+SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+TRUSTED_ORIGINS = {o.strip().lower().rstrip("/") for o in os.environ.get("WDT_TRUSTED_ORIGINS", "").split(",")
+                   if o.strip()}
+
+
+def _netloc(value: str) -> str:
+    """``host[:port]`` of an origin/URL or a Host header, lower-cased, without a default port."""
+    v = value.strip().lower()
+    u = urlsplit(v if "://" in v else "//" + v)
+    host = u.hostname or ""
+    try:
+        port = u.port
+    except ValueError:
+        return ""
+    if port in (None, 80, 443):
+        return host
+    return f"{host}:{port}"
+
+
+def cross_origin(request: Request) -> str:
+    """Why this state-changing request is refused as cross-origin; ``""`` when it is fine.
+
+    The session cookie is ``SameSite=Strict``, but that does not help when the browser sends no cookie at
+    all (``AUTH_DISABLED`` behind an SSO proxy: the proxy's own cookie may be ``Lax``/domain-wide) and it
+    treats sibling sub-domains as the *same site*. So every non-safe request must come from this origin:
+
+    * ``Sec-Fetch-Site: same-origin`` (set by the browser, not by the page) is accepted,
+    * otherwise ``Origin`` (or ``Referer``) must name the host the request was sent to (``Host`` /
+      ``X-Forwarded-Host``) or an entry of ``WDT_TRUSTED_ORIGINS``,
+    * a request with none of these headers is not a browser (curl, scripts) and is left to the normal
+      authentication.
+    """
+    if request.method in SAFE_METHODS or request.url.path == "/mcp":     # /mcp: bearer token, no cookie
+        return ""
+    h = request.headers
+    site = (h.get("sec-fetch-site") or "").strip().lower()
+    if site in ("same-origin", "none"):
+        return ""
+    origin = (h.get("origin") or "").strip()
+    if not origin:
+        origin = (h.get("referer") or "").strip()
+        if not origin:
+            return "cross-site" if site else ""
+    if origin.lower() == "null":
+        return "null-origin"
+    got = _netloc(origin)
+    own = {_netloc(x) for x in [h.get("host") or "", *(h.get("x-forwarded-host") or "").split(",")] if x.strip()}
+    own |= {_netloc(o) for o in TRUSTED_ORIGINS}
+    own.discard("")
+    return "" if got and got in own else "cross-origin"
+
+
+def explicit_perm(method: str, path: str) -> str | None:
+    """Permission of a known route; ``None`` when a state-changing route has no mapping."""
+    if method in SAFE_METHODS:
+        return authz.READ
+    if path == "/logout":
         return authz.READ
     if path.endswith("/deploy") or path.endswith("/undeploy") or path.endswith("/promoted"):
         return authz.DEPLOY
@@ -56,7 +113,16 @@ def required_perm(method: str, path: str) -> str:
         return authz.KNOWLEDGE
     if "/inbox/" in path or "/f/" in path or "/q/" in path or "/incident" in path:
         return authz.DECIDE
-    return authz.READ
+    return None
+
+
+def required_perm(method: str, path: str) -> str:
+    """Permission for this request; ``read`` for safe methods.
+
+    Fails closed: a state-changing route nobody mapped needs the ``admin`` permission, so a route added
+    later is never open to the read-only role by accident (``tests/test_v092.py`` checks every route).
+    """
+    return explicit_perm(method, path) or authz.ADMINISTER
 
 
 def finish(request: Request, resp: Response, role_: str | None, denial: str) -> Response:
@@ -81,6 +147,10 @@ def finish(request: Request, resp: Response, role_: str | None, denial: str) -> 
 async def handle_request(request: Request, call_next, p: str, role_: str | None) -> Response:
     public = p.startswith("/static") or p in ("/login", "/healthz", "/readyz", "/lang", "/mcp")   # /mcp: own bearer token
     resp: Response
+    why = cross_origin(request)
+    if why:
+        resp = deny(request, 403, "cross-origin request refused")
+        return finish(request, resp, role_, f"denied:{why}")
     if not public and not AUTH_DISABLED:
         if not APP_PASSWORD:
             resp = HTMLResponse(f"<p>{t(ui_lang(request), 'auth.no_password')}</p>", status_code=503)
@@ -97,6 +167,10 @@ async def handle_request(request: Request, call_next, p: str, role_: str | None)
         if env_id and not authz.may_access_env(role_, env_id):
             resp = deny(request, 403, t(ui_lang(request), "err.no_env"))
             return finish(request, resp, role_, "denied:env")
+    if request.method not in SAFE_METHODS and p not in AUDIT_EXEMPT and not auditlog.available():
+        resp = deny(request, 503, "audit trail is not writable; state-changing requests are refused "
+                                  "(fix AUDIT_LOG_FILE or set AUDIT_STRICT=false)")
+        return finish(request, resp, role_, "denied:audit")
     resp = await call_next(request)
     return finish(request, resp, role_, "")
 

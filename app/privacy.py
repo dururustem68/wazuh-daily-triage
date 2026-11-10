@@ -27,6 +27,7 @@ import ipaddress
 import json
 import os
 import re
+import secrets
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -142,11 +143,32 @@ DETECTORS: list[Detector] = [
 ]
 KINDS = [d.kind for d in DETECTORS] + ["ip"]
 _IPV4 = re.compile(r"(?<![\d.])(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?![\d.])")
-_TOKEN = re.compile(r"<(?P<k>[a-z_]+):(?P<h>[0-9a-f]{6,12})>")
+_TOKEN = re.compile(r"<(?P<k>[a-z_]+):(?P<h>[0-9a-f]{6,32})>")
+TOKEN_HEX = 16          # 64 bit: no realistic collision inside the registry, no brute-force table
+_random_salt: bytes | None = None
+
+
+def salt_source(env=os.environ) -> str:
+    """Where the pseudonym key comes from: ``PRIVACY_SALT``, ``APP_SECRET`` or ``random`` (per process)."""
+    if env.get("PRIVACY_SALT"):
+        return "PRIVACY_SALT"
+    if env.get("APP_SECRET"):
+        return "APP_SECRET"
+    return "random"
 
 
 def _salt() -> bytes:
-    return (os.environ.get("APP_SECRET") or os.environ.get("PRIVACY_SALT") or "wdt-privacy").encode()
+    """HMAC key for pseudonyms. There is deliberately no built-in default: with a publicly known key
+    anyone holding a token could confirm a guessed value (an IP, a phone number, a national id).
+    Without ``PRIVACY_SALT``/``APP_SECRET`` a random key is drawn per process — safe, but pseudonyms
+    then change on every restart."""
+    global _random_salt
+    v = os.environ.get("PRIVACY_SALT") or os.environ.get("APP_SECRET")
+    if v:
+        return v.encode()
+    if _random_salt is None:
+        _random_salt = secrets.token_bytes(32)
+    return _random_salt
 
 
 class _Registry:
@@ -186,7 +208,7 @@ class Masker:
         self.counts: dict[str, int] = {}
 
     def _tok(self, kind: str, val: str) -> str:
-        h = hmac.new(_salt(), f"{kind}:{val}".encode(), hashlib.sha256).hexdigest()[:8]
+        h = hmac.new(_salt(), f"{kind}:{val}".encode(), hashlib.sha256).hexdigest()[:TOKEN_HEX]
         tok = f"<{kind}:{h}>"
         REGISTRY.put(tok, val)
         return tok

@@ -13,8 +13,12 @@ action, target, result and time, in a file that sits outside the application log
 * size-based rotation (``.1`` … ``.3``) keeps the current file bounded; each generation is a complete
   hash chain of its own, so ship and verify every file (see ``docs/permissions.md``).
 
-Set ``AUDIT_LOG_FILE`` to move the file (e.g. a read-only mount or a log shipper path). An unwritable
-path never breaks a request: the failure is logged and the application continues.
+Set ``AUDIT_LOG_FILE`` to move the file (e.g. a log shipper path).
+
+Fail closed: with ``AUDIT_STRICT`` on (the default in production, see :func:`strict`) a state-changing
+request is refused with 503 while the file cannot be written — an operation that leaves no trace must
+not happen. Outside strict mode the failure is logged (every time, plus the
+``wdt_audit_write_failures_total`` counter) and the application continues.
 """
 from __future__ import annotations
 
@@ -26,13 +30,14 @@ import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .observability import metrics
+
 log = logging.getLogger("wdt.audit")
 MAX_BYTES = 20 * 1024 * 1024
 KEEP = 3
 _lock = threading.Lock()
 _path: Path | None = None
 _last_hash: str | None = None
-_warned = False
 
 
 def configure(path: str | os.PathLike | None = None) -> Path:
@@ -50,6 +55,36 @@ def path() -> Path | None:
 
 def enabled() -> bool:
     return os.environ.get("AUDIT_LOG", "true").strip().lower() not in ("0", "false", "no", "off")
+
+
+def strict(env=os.environ) -> bool:
+    """Refuse state-changing requests when the trail cannot be written?
+
+    ``AUDIT_STRICT=true|false`` decides; unset means *on in production* (``ENVIRONMENT=production``).
+    """
+    v = (env.get("AUDIT_STRICT") or "").strip().lower()
+    if v:
+        return v in ("1", "true", "yes", "on")
+    return (env.get("ENVIRONMENT") or env.get("WDT_ENV") or "").strip().lower() in ("prod", "production", "live")
+
+
+def writable() -> bool:
+    """Can a line be appended right now? (opens the file for append; nothing is written)"""
+    p = _path or configure()
+    try:
+        with _lock:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            with p.open("a", encoding="utf-8"):
+                pass
+        return True
+    except OSError as e:
+        log.error("audit log is not writable (%s): %s", p, e)
+        return False
+
+
+def available() -> bool:
+    """False only when the trail is enabled, strict and cannot be written — the caller must refuse."""
+    return not enabled() or not strict() or writable()
 
 
 def _tail_hash(p: Path) -> str | None:
@@ -88,8 +123,8 @@ def _rotate(p: Path) -> bool:
 def record(action: str, *, actor: str = "", role: str = "", env: str = "", target: str = "",
            result: str = "", request_id: str = "", method: str = "", path_: str = "",
            detail: dict | None = None) -> dict | None:
-    """Append one audit line. Never raises."""
-    global _last_hash, _warned
+    """Append one audit line. Never raises; a failed write is logged and counted."""
+    global _last_hash
     if not enabled():
         return None
     p = _path
@@ -115,9 +150,9 @@ def record(action: str, *, actor: str = "", role: str = "", env: str = "", targe
             _last_hash = h
         return rec
     except OSError as e:
-        if not _warned:
-            _warned = True
-            log.warning("audit log is not writable (%s): %s", p, e)
+        log.error("audit record LOST (%s): action=%s target=%s result=%s request_id=%s: %s",
+                  p, action, target, result, request_id, e)
+        metrics.inc("wdt_audit_write_failures_total")
         return None
 
 

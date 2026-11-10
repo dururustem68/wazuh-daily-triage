@@ -111,14 +111,25 @@ def check_interval(value: str, minimum: str, span_hours: float, max_buckets: int
     return value
 
 
+def _allowed(f: str, extra: list[str] | None) -> bool:
+    if f in BASE_FIELDS:
+        return True
+    for x in extra or ():
+        # the operator may allow a whole sub-tree in the configuration: ``data.win.*``
+        if f == x or (x.endswith(".*") and len(x) > 2 and f.startswith(x[:-1])):
+            return True
+    return False
+
+
 def field(name: str, extra: list[str] | None = None) -> str:
     """Allow-list check for a filter/aggregation field."""
     f = str(name or "").strip()
     if not f or not re.fullmatch(r"[A-Za-z0-9_.@-]{1,120}", f):
         raise QueryError(f"invalid field name {name!r}")
-    if f not in BASE_FIELDS and f not in set(extra or ()):
+    if not _allowed(f, extra):
         raise QueryError(f"field {f!r} is not allow-listed for queries; use e.g. rule.id, agent.name, "
-                         f"data.srcip, data.url, rule.level")
+                         f"data.srcip, data.url, rule.level (the operator can add fields with "
+                         f"query.extra_fields)")
     return f
 
 
@@ -133,8 +144,22 @@ def size(value, cap: int, what: str = "size") -> int:
     return min(n, cap)
 
 
-def query_string(value: str | None) -> str | None:
-    """Basic sanity check for a free-text Lucene query (length and balanced brackets)."""
+_QUOTED = re.compile(r'"(?:\\.|[^"\\])*"')
+_REGEX = re.compile(r"(?<![\w\\])/(?:\\.|[^/\\])+/")
+_RANGE = re.compile(r"[\[{][^\]}]*[\]}]")
+_FIELD_REF = re.compile(r"(?:^|(?<=[\s(+!-]))([A-Za-z_@][\w.@*\\-]*)\s*:")
+MAX_REGEX, MAX_REGEX_LEN, MAX_WILDCARDS = 2, 80, 8
+
+
+def query_string(value: str | None, extra: list[str] | None = None) -> str | None:
+    """Validate a free-text Lucene query before it reaches the indexer.
+
+    ``query_string`` is a small language of its own: ``some.field:value`` reaches *any* indexed field,
+    ``_exists_:x`` probes the mapping and ``/regex/`` or leading wildcards are expensive. The same
+    allow-list as for the structured filters therefore applies to every field named in the text, and
+    regular expressions and wildcards are bounded. Terms without a field keep searching the index's
+    default fields.
+    """
     if not value:
         return None
     q = str(value).strip()
@@ -145,8 +170,27 @@ def query_string(value: str | None) -> str | None:
     for a, b in (("(", ")"), ('"', '"')):
         if q.count(a) != q.count(b):
             raise QueryError(f"unbalanced {a}{b} in query")
-    if len(re.findall(r"\b(?:regexp|wildcard)\b", q, re.I)) > 3:
-        raise QueryError("too many regexp/wildcard clauses; use exact terms")
+    bare = _QUOTED.sub('""', q)                       # quoted values may contain anything
+    regexes = _REGEX.findall(bare)
+    if len(regexes) > MAX_REGEX or any(len(r) > MAX_REGEX_LEN for r in regexes):
+        raise QueryError(f"at most {MAX_REGEX} /regex/ clauses of {MAX_REGEX_LEN} characters; use exact terms")
+    bare = _RANGE.sub("[]", _REGEX.sub("//", bare))
+    plain = re.sub(r"\\.", "", bare)                  # escaped characters are literal text
+    if plain.count("*") + plain.count("?") > MAX_WILDCARDS:
+        raise QueryError(f"too many wildcards (max {MAX_WILDCARDS}); use exact terms")
+    if re.search(r"(?:^|[\s(:+!-])[*?]\w", plain):
+        raise QueryError("leading wildcards (*term) are not allowed; anchor the term at its start")
+    for name in _FIELD_REF.findall(bare):
+        if name == "_exists_":
+            m = re.search(r"_exists_\s*:\s*([^\s()]+)", bare)
+            field(m.group(1) if m else "", extra)
+            continue
+        if "*" in name or "\\" in name:
+            raise QueryError(f"field pattern {name!r} is not allowed; name one allow-listed field")
+        try:
+            field(name, extra)
+        except QueryError as e:
+            raise QueryError(f"{e} (quote a value that contains a colon, e.g. data.srcip:\"2001:db8::1\")") from e
     return q
 
 

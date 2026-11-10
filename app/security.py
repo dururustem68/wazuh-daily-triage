@@ -32,11 +32,62 @@ def _true(env, name: str) -> bool:
     return (env.get(name) or "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def _masking_envs(settings) -> list[str]:
+    return [e.id for e in getattr(settings, "environments", [])
+            if getattr(getattr(e, "privacy", None), "mode", "off") != "off"]
+
+
+def _privacy_key(settings, env, warnings: list[str]) -> None:
+    """Personal-data pseudonyms are an HMAC of the value; the key must be secret and should be stable."""
+    masking = _masking_envs(settings)
+    if not masking:
+        return
+    key = env.get("PRIVACY_SALT") or env.get("APP_SECRET") or ""
+    if not key:
+        warnings.append("privacy masking is on (" + ", ".join(masking) + ") but neither PRIVACY_SALT nor "
+                        "APP_SECRET is set: a random key is used, so pseudonyms change on every restart "
+                        "(generate one with `openssl rand -hex 32`)")
+    elif len(key) < 16:
+        warnings.append("the pseudonym key (PRIVACY_SALT/APP_SECRET) is shorter than 16 characters: masked "
+                        "values could be recovered by guessing it (use `openssl rand -hex 32`)")
+
+
+def _smtp(settings, env, errors: list[str], warnings: list[str]) -> None:
+    """Notification mail carries finding titles and report links; the SMTP login is a credential."""
+    seen: set[tuple] = set()
+    cfgs = [("notify", getattr(settings, "notify", None))]
+    cfgs += [(f"{e.id}.notify", getattr(e, "notify", None)) for e in getattr(settings, "environments", [])]
+    for where, n in cfgs:
+        m = getattr(n, "email", None)
+        if not n or not m or not getattr(n, "enabled", True) or not m.enabled:
+            continue
+        key = (m.host, m.port, m.security, m.verify_tls, bool(m.username))
+        if key in seen:
+            continue
+        seen.add(key)
+        sec = (m.security or "").strip().lower()
+        if sec not in ("starttls", "ssl", "none"):
+            errors.append(f"{where}.email.security is {m.security!r}; use starttls, ssl or none")
+        elif sec == "none":
+            if m.username:
+                errors.append(f"{where}.email: security is none but a username is set — the SMTP password "
+                              "would be sent in clear text; use starttls or ssl")
+            elif not _true(env, "WDT_ALLOW_INSECURE_SMTP"):
+                warnings.append(f"{where}.email: security is none — notifications travel unencrypted to "
+                                f"{m.host}; fine for a relay on the same host/network only "
+                                "(WDT_ALLOW_INSECURE_SMTP=1 silences this)")
+        if sec != "none" and m.verify_tls is False and not _true(env, "WDT_ALLOW_INSECURE_TLS"):
+            errors.append(f"{where}.email: verify_tls is false — the mail server's certificate is not "
+                          "checked, so the SMTP login can be intercepted (fix the certificate, or set "
+                          "WDT_ALLOW_INSECURE_TLS=1 for a lab)")
+
+
 def validate(settings, env=os.environ, demo: bool = False) -> tuple[list[str], list[str]]:
     """Return ``(errors, warnings)``; errors are fatal when production mode is on."""
     prod = is_production(env)
     errors: list[str] = []
     warnings: list[str] = []
+    _privacy_key(settings, env, warnings)
 
     if not prod:
         if (env.get("APP_PASSWORD") or "").strip().lower() in WEAK_PASSWORDS:
@@ -79,6 +130,8 @@ def validate(settings, env=os.environ, demo: bool = False) -> tuple[list[str], l
         if insecure:
             errors.append("TLS verification is disabled for " + ", ".join(insecure) +
                           "; configure ca_file (or set WDT_ALLOW_INSECURE_TLS=1 for a lab)")
+
+    _smtp(settings, env, errors, warnings)
 
     for e in getattr(settings, "environments", []):
         rd = e.rule_deploy

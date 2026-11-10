@@ -24,6 +24,10 @@ class SourceError(RuntimeError):
     pass
 
 
+class SourcePolicyError(SourceError):
+    """The request is outside what the configuration allows; the text is written for the model."""
+
+
 def _ts(v: str | None, default: float) -> float:
     """ISO-8601, 'now', 'now-2h' or epoch seconds → epoch seconds."""
     if not v or v == "now":
@@ -163,13 +167,13 @@ class Kubernetes:
 
     def _ns_ok(self, ns: str | None):
         if ns and self.cfg.namespaces and ns not in self.cfg.namespaces:
-            raise SourceError(f"namespace {ns} is not in the allow-list {self.cfg.namespaces}")
+            raise SourcePolicyError(f"namespace {ns} is not in the allow-list {self.cfg.namespaces}")
 
     async def get(self, kind: str, namespace: str | None = None, name: str | None = None,
                   label_selector: str | None = None, field_selector: str | None = None, limit: int = 200) -> dict:
         kind = kind.lower()
         if kind not in KINDS:
-            raise SourceError(f"kind {kind!r} is not allowed; allowed: {', '.join(KINDS)}")
+            raise SourcePolicyError(f"kind {kind!r} is not allowed; allowed: {', '.join(KINDS)}")
         prefix, namespaced = KINDS[kind]
         self._ns_ok(namespace)
         if namespaced and namespace:
@@ -178,7 +182,7 @@ class Kubernetes:
             path = f"{prefix}/{kind}"
         if name:
             if namespaced and not namespace:
-                raise SourceError("namespace is required with name")
+                raise SourcePolicyError("namespace is required with name")
             path += f"/{name}"
         params = {"limit": min(int(limit or 200), 500)}
         if label_selector:
@@ -197,7 +201,7 @@ class Kubernetes:
     async def logs(self, namespace: str, pod: str, container: str | None = None, tail: int = 200,
                    previous: bool = False, since_seconds: int | None = None) -> dict:
         if not self.cfg.pod_logs:
-            raise SourceError("pod logs are disabled (sources.kubernetes.pod_logs: false)")
+            raise SourcePolicyError("pod logs are disabled (sources.kubernetes.pod_logs: false)")
         self._ns_ok(namespace)
         params: dict[str, Any] = {"tailLines": max(1, min(int(tail or 200), 1000)), "timestamps": "true"}
         if container:
