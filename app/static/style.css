@@ -335,3 +335,17 @@ textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, mono
 .incident { margin-top: 8px; }
 .incident .inc-box { margin-top: 8px; }
 .incident .inc-box textarea { width: 100%; }
+
+/* ---- settings / watch (0.10) ---- */
+.sform { display: grid; gap: 10px; }
+.sform h3 { margin: 14px 0 0; }
+.frow, .trig { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.trig { padding: 8px 0; border-top: 1px solid var(--line); }
+.trig > .chk:first-child { min-width: 260px; font-weight: 600; }
+.trig > input:not([type]) { flex: 1; min-width: 220px; }
+.sform label { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+.sform input.num { width: 76px; } .sform input.num.wide { width: 110px; }
+.sform input.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; width: 100%; }
+.sform table input { width: 100%; }
+.sugg { padding: 10px 0; border-top: 1px solid var(--line); display: grid; gap: 4px; }
+.card .saved.err { background: none; }

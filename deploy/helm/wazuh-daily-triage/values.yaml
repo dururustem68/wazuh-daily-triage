@@ -54,6 +54,12 @@ secret:
   SMTP_PASSWORD: ""
   SMTP_FROM: ""
   SMTP_TO: ""
+  # 0.10
+  PRIVACY_SALT: ""            # key for personal-data pseudonyms (default: APP_SECRET)
+  PROXY_SECRET: ""            # SSO mode: the proxy must send it as X-WDT-Proxy-Secret
+  BACKUP_PASSPHRASE: ""       # automatic backups only (docs/backup.md); manual exports ask for one
+  BACKUP_S3_ACCESS_KEY: ""
+  BACKUP_S3_SECRET_KEY: ""
 
 # The application configuration, mounted at /app/config. Keep the ${VAR}
 # placeholders — they are expanded from `env:` / `secret:` at startup.
@@ -157,7 +163,7 @@ ingress:
 # Optional NetworkPolicy (recommended behind SSO). Mirrors the kustomize
 # `networkpolicy` component; edit the egress to match your Wazuh / SMTP layout.
 networkPolicy:
-  enabled: false
+  enabled: true         # 0.10: on by default — set ingressNamespace to the namespace of YOUR ingress controller
   ingressNamespace: ingress-nginx
   wazuhNamespace: wazuh
   wazuhCIDR: ""          # set to the indexer/API address when Wazuh is outside the cluster

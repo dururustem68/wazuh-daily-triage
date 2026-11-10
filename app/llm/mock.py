@@ -50,6 +50,13 @@ class MockLLM:
                 return json.loads(re.search(r"```json\n(.*?)\n```", m["content"], re.S).group(1))
         return {}
 
+    @staticmethod
+    def _watch_events(messages):
+        for m in messages:
+            if m["role"] == "user" and "```watch-events" in (m.get("content") or ""):
+                return json.loads(re.search(r"```watch-events\n(.*?)\n```", m["content"], re.S).group(1))
+        return []
+
     def _triage(self, L, messages, tool_msgs, names):
         c = self._collected(messages)
         hi = c.get("high_level") or []
@@ -95,4 +102,12 @@ class MockLLM:
                   "health_assessment": L["health"], "findings": findings,
                   "questions": [{"question": L["q"], "why": L["why"]}],
                   "open_items": [L["open"]], "closed_items": []}
+        events = self._watch_events(messages)
+        if events:      # demo verdicts: critical → investigate, a watched group → noise with a mute suggestion
+            report["event_verdicts"] = [
+                {"event_id": e["id"], "verdict": "investigate", "reason": "(demo) severity " + e["severity"]}
+                if e["severity"] == "critical" or e["trigger"] != "groups" else
+                {"event_id": e["id"], "verdict": "noise", "reason": "(demo) repeats every day",
+                 "suggestion": {"mute": True, "why": "(demo) known scanner noise"}}
+                for e in events]
         return LLMResponse(tool_calls=[ToolCall("t2", "submit_report", report)], input_tokens=1500, output_tokens=400)

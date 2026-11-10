@@ -114,6 +114,26 @@ class Indexer:
                                        "refresh": "true"})
         return int((r or {}).get("deleted", 0))
 
+    async def index_meta(self, pattern: str) -> dict[str, dict]:
+        """``{index: {"created": epoch_ms}}`` for the indices matching ``pattern``."""
+        r = await self.request("GET", f"/{pattern}/_settings/index.creation_date", ok_404=True,
+                               params={"ignore_unavailable": "true", "allow_no_indices": "true"}) or {}
+        out = {}
+        for name, v in r.items():
+            try:
+                out[name] = {"created": int(v["settings"]["index"]["creation_date"])}
+            except (KeyError, TypeError, ValueError):
+                out[name] = {"created": None}
+        return out
+
+    async def ism_explain(self, pattern: str) -> dict:
+        """Index State Management state per index (OpenSearch ``_plugins/_ism/explain``)."""
+        return await self.request("GET", f"/_plugins/_ism/explain/{pattern}", ok_404=True) or {}
+
+    async def ism_policy(self, policy_id: str) -> dict | None:
+        r = await self.request("GET", f"/_plugins/_ism/policies/{policy_id}", ok_404=True)
+        return (r or {}).get("policy")
+
     async def delete_doc(self, index: str, doc_id: str):
         return await self.request("DELETE", f"/{index}/_doc/{doc_id}", params={"refresh": "true"}, ok_404=True)
 

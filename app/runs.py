@@ -18,6 +18,7 @@ from .llm.base import LLMError
 from .observability import metrics
 from .reporting import _compact, flags_only_report, normalize_report
 from .store import new_id, now_iso
+from .watch import compact_for_ai, normalize_verdicts
 
 if TYPE_CHECKING:
     from .services import EnvRuntime
@@ -110,6 +111,10 @@ class RunMixin:
             except Exception as e:  # noqa: BLE001
                 log.warning("%s: rule verification failed: %s", env.id, e)
             flags = collected["flags"]
+            flags += await self.storage_flags(rt, lang)      # lost index, risky prefix, retention policy, backup age
+            st = await self.env_settings(rt)
+            from .privacy import profile_info
+            run["privacy"] = profile_info(env, st.mask)
             run.update(window=collected["window"], flags=flags, health=health_status(flags),
                        metrics={"total": (collected.get("volume") or {}).get("total", 0),
                                 "high": (collected.get("volume") or {}).get("high_level_total", 0)},
@@ -126,7 +131,9 @@ class RunMixin:
 
             sysmsg = system_prompt(env, env.context_text(self.settings.base_dir),
                                    [k for k in knowledge if k["kind"] != "answer"], self.settings.app.timezone, lang)
-            usr = triage_user_message(_compact(collected), prev, answers, requests)
+            events = await self.watch_pending(rt)             # everything the watch saw since the last round
+            usr = triage_user_message(_compact(collected), prev, answers, requests,
+                                      [compact_for_ai(e) for e in events])
             tb = ToolBox(env, rt.ix, rt.api, repo, mode="triage", run_id=run_id, sources=rt.sources)
             try:
                 res = await run_agent(self.llm_for(env), sysmsg, [{"role": "user", "content": usr}], tb,
@@ -155,6 +162,10 @@ class RunMixin:
                        "input_tokens": res.input_tokens, "output_tokens": res.output_tokens,
                        "provider": llm_cfg.provider, "model": llm_cfg.model},
             )
+            verdicts = normalize_verdicts((tb.submitted or {}).get("event_verdicts"), {e["id"] for e in events})
+            if events:
+                run["watch"] = {"events": len(events), "judged": await self.watch_apply_verdicts(rt, verdicts, run_id),
+                                "verdicts": verdicts}
             await repo.save_run(run)
             for r in requests:  # requests were handed to this run
                 await repo.update_knowledge(r["id"], status="closed", consumed_run=run_id)

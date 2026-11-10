@@ -8,5 +8,7 @@ pyyaml>=6.0.3,<7
 python-multipart>=0.0.32
 defusedxml>=0.7.1,<1
 reportlab>=5.1.0,<6
+# backup archives: AES-256-GCM (the key is derived with scrypt from the standard library)
+cryptography>=46,<60
 # ZoneInfo needs a timezone database; python:3.12-slim ships none, so do not rely on pandas.
 tzdata>=2026.6,<2027

@@ -194,8 +194,8 @@ Enable it in your overlay:
 
 ```yaml
 components:   # remote, pinned — or copy the folders next to your overlay to edit the host names
-  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/networkpolicy?ref=v0.9.2
-  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/ingress-traefik-authentik?ref=v0.9.2
+  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/networkpolicy?ref=v0.10.0
+  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/ingress-traefik-authentik?ref=v0.10.0
 ```
 
 The component already sets `AUTH_DISABLED=true`, `COOKIE_SECURE=true` and `NOTIFY_UI_URL` (edit the host). Add
@@ -251,3 +251,16 @@ effectively unauthenticated. Fix the network policy before exposing it.
 ---
 
 [English](SSO-Proxy-Auth) · [Türkçe](SSO-Proxy-Auth-TR)
+
+## Verifying that requests come from the proxy (0.10)
+
+With `AUTH_DISABLED=true` the application believes whoever reaches it. Three settings make that mean "the proxy":
+
+| Variable | Effect |
+|---|---|
+| `SSO_REQUIRE_USER` (default `true`) | A request without one of the `USER_HEADER` headers is refused with 401. |
+| `TRUSTED_PROXIES` | Addresses/CIDRs of the proxy. Other peers get 403, and `X-Forwarded-For` from these peers is used for the audit trail. |
+| `PROXY_SECRET` | The proxy must add the header `X-WDT-Proxy-Secret` with this value. |
+
+`/healthz`, `/readyz`, `/mcp` (own token) and `/metrics` with `METRICS_TOKEN` are not affected. Keep the
+NetworkPolicy: these checks complement it, they do not replace it.

@@ -65,7 +65,9 @@ async def dashboard(request: Request):
 async def env_page(request: Request, env_id: str):
     er = _env(request, env_id)
     runs = await _safe(er.repo.list_runs(60, light=True), [], request=request)
+    await _safe(_rt(request).env_settings(er), None, request=request)       # the AI-round times set in the UI
     return tpl.TemplateResponse(request, "env.html", _ctx(request, er=er, env=er.env, runs=runs,
+                                                          schedule=_rt(request).schedule_for(er),
                                                           next=_rt(request).next_run(er.env, ui_lang(request))))
 
 
@@ -151,7 +153,7 @@ async def about_page(request: Request):
         llm = rt.llm_cfg(e)
         rows.append({
             "env": e,
-            "schedule": ", ".join(e.schedule.all_times) if e.schedule.enabled else "",
+            "schedule": ", ".join(rt.schedule_for(er).all_times) if e.schedule.enabled else "",
             "model": f"{llm.provider} · {llm.model}",
             "deploy": rt.deploy_ready(e),
             "privacy": e.privacy.mode,

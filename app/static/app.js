@@ -429,3 +429,200 @@ function copyText(text, btn) {
   }
   fallback();
 }
+
+// ---------------------------------------------------------------- settings / watch / backup (0.10)
+function setPath(obj, path, val) {
+  const parts = path.split(".");
+  let cur = obj;
+  parts.slice(0, -1).forEach(p => { cur = cur[p] = cur[p] || {}; });
+  cur[parts[parts.length - 1]] = val;
+}
+
+function formObject(form) {
+  const out = {}, multi = {};
+  form.querySelectorAll("[name]").forEach(el => {
+    const type = el.dataset.type || "";
+    if (type === "multi" || type === "multi-or-null" || type === "times") {
+      const m = multi[el.name] = multi[el.name] || { type, vals: [] };
+      if (type === "times") { if (el.value) m.vals.push(el.value); } else if (el.checked) m.vals.push(el.value);
+      return;
+    }
+    if (el.type === "radio") { if (el.checked) setPath(out, el.name, el.value); return; }
+    if (el.type === "checkbox") { setPath(out, el.name, el.checked); return; }
+    if (el.type === "file" || el.type === "password") return;
+    let v = el.value;
+    if (type === "lines") v = v.split("\n").map(s => s.trim()).filter(Boolean);
+    else if (type === "list-or-null") v = v.trim() ? v.split(/[,\s]+/).filter(Boolean) : null;
+    else if (el.type === "number") v = type === "float" ? parseFloat(v) : parseInt(v, 10);
+    setPath(out, el.name, v);
+  });
+  Object.entries(multi).forEach(([name, m]) => {
+    setPath(out, name, (m.type !== "multi" && !m.vals.length) ? null : m.vals);
+  });
+  return out;
+}
+
+function note(form, msg, bad) {
+  const el = form.querySelector(".saved");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.toggle("err", !!bad);
+  announce(msg);
+}
+
+function maskProfile(form) {
+  const custom = [];
+  form.querySelectorAll("[data-custom-rows] tr").forEach(row => {
+    const c = {};
+    row.querySelectorAll("[data-c]").forEach(i => { c[i.dataset.c] = i.value.trim(); });
+    if (c.name || c.pattern) custom.push(c);
+  });
+  const disabled = [];
+  form.querySelectorAll("[data-detector]").forEach(i => { if (!i.checked && !i.disabled) disabled.push(i.dataset.detector); });
+  const allow = form.querySelector("[data-allow]").value.split("\n").map(s => s.trim()).filter(Boolean);
+  return { custom, allow, disabled };
+}
+
+async function fileB64(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let s = "";
+  for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll("form[data-settings]").forEach(form => form.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    try {
+      await api(form.dataset.settings, "POST", { [form.dataset.section]: formObject(form) });
+      note(form, "✓ " + tr("saved"));
+      if (form.dataset.section !== "backup") setTimeout(() => location.reload(), 600);
+    } catch (e) { note(form, tr("error") + " " + e.message, true); }
+  }));
+
+  document.querySelectorAll("form[data-mask]").forEach(form => {
+    const save = async confirmOff => {
+      try {
+        await api(form.dataset.mask, "POST", { mask: maskProfile(form), confirm: confirmOff });
+        note(form, "✓ " + tr("saved"));
+        setTimeout(() => location.reload(), 600);
+      } catch (e) {
+        if (!confirmOff && /^confirm:/.test(e.message)) {
+          if (window.confirm(tr("set_confirm_off") + "\n\n" + e.message.replace(/^confirm:\s*/, ""))) return save(true);
+          return note(form, "");
+        }
+        note(form, tr("error") + " " + e.message, true);
+      }
+    };
+    form.addEventListener("submit", ev => { ev.preventDefault(); save(false); });
+    const rows = form.querySelector("[data-custom-rows]");
+    form.querySelector("[data-row-add]").addEventListener("click", () => {
+      const trEl = document.createElement("tr");
+      trEl.innerHTML = '<td><input data-c="name" placeholder="x_customer_no" maxlength="26"></td>'
+        + '<td><input data-c="pattern" class="mono" placeholder="CUST-\\d{6}" maxlength="200"></td>'
+        + '<td><input data-c="description" maxlength="200"></td>'
+        + '<td><button type="button" class="btn small ghost" data-row-del>✕</button></td>';
+      rows.appendChild(trEl);
+    });
+    rows.addEventListener("click", ev => { if (ev.target.matches("[data-row-del]")) ev.target.closest("tr").remove(); });
+    const pv = form.querySelector("[data-preview]");
+    pv.addEventListener("click", async () => {
+      const out = form.querySelector("[data-preview-out]");
+      try {
+        const r = await api(pv.dataset.preview, "POST", { text: form.querySelector("[data-preview-in]").value, mask: maskProfile(form) });
+        const counts = Object.entries(r.counts).map(([k, n]) => `${k}: ${n}`).join(" · ");
+        out.textContent = r.masked + (counts ? "\n\n— " + counts : "");
+      } catch (e) { out.textContent = tr("error") + " " + e.message; }
+      out.hidden = false;
+    });
+    const imp = form.querySelector("[data-mask-import]");
+    imp.addEventListener("change", async () => {
+      if (!imp.files.length) return;
+      const text = await imp.files[0].text();
+      const send = async confirmOff => {
+        try {
+          await api(imp.dataset.maskImport, "POST", { text, confirm: confirmOff });
+          location.reload();
+        } catch (e) {
+          if (!confirmOff && /^confirm:/.test(e.message) && window.confirm(tr("set_confirm_off"))) return send(true);
+          note(form, tr("error") + " " + e.message, true);
+        }
+      };
+      send(false);
+    });
+  });
+
+  document.querySelectorAll("[data-suggestion]").forEach(box => box.querySelectorAll("[data-act]").forEach(b =>
+    b.addEventListener("click", async () => {
+      try {
+        await api(box.dataset.suggestion, "POST", { event_id: box.dataset.event, action: b.dataset.act });
+        location.reload();
+      } catch (e) { note(box, tr("error") + " " + e.message, true); }
+    })));
+
+  document.querySelectorAll("[data-post]").forEach(b => b.addEventListener("click", async () => {
+    if (b.dataset.confirm && !window.confirm(b.dataset.confirm)) return;
+    const host = b.closest(".card, .tools") || document.body;
+    b.disabled = true;
+    try {
+      const r = await api(b.dataset.post, "POST");
+      if (r && r.events !== undefined) note(host, tr("set_scan").replace("{n}", r.events));
+      setTimeout(() => location.reload(), b.dataset.reload ? 900 : 300);
+    } catch (e) { note(host, tr("error") + " " + e.message, true); b.disabled = false; }
+  }));
+
+  document.querySelectorAll("select[data-autosubmit-get]").forEach(s => s.addEventListener("change", () => {
+    const u = new URL(location.href);
+    if (s.value) u.searchParams.set(s.dataset.autosubmitGet, s.value); else u.searchParams.delete(s.dataset.autosubmitGet);
+    location.href = u.toString();
+  }));
+
+  document.querySelectorAll("form[data-backup-export]").forEach(form => form.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const p1 = form.querySelector("[name=passphrase]").value, p2 = form.querySelector("[name=passphrase2]").value;
+    if (p1 !== p2) return note(form, tr("bk_mismatch"), true);
+    note(form, tr("bk_working"));
+    try {
+      const r = await api(form.dataset.backupExport, "POST", {
+        passphrase: p1, to_s3: form.querySelector("[name=to_s3]").checked,
+        include_runs: form.querySelector("[name=include_runs]").checked });
+      const bin = atob(r.data_b64), buf = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([buf], { type: "application/octet-stream" }));
+      a.download = r.filename; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      form.reset();
+      note(form, "✓ " + tr("bk_done").replace("{n}", r.bytes.toLocaleString()) + (r.s3 ? " · " + r.s3 : "")
+        + (r.s3_error ? " · S3: " + r.s3_error : ""), !!r.s3_error);
+    } catch (e) { note(form, tr("error") + " " + e.message, true); }
+  }));
+
+  document.querySelectorAll("form[data-backup-import]").forEach(form => {
+    const out = form.querySelector("[data-import-out]");
+    const real = form.querySelector('[data-dry="0"]');
+    form.querySelector("[name=file]").addEventListener("change", () => { real.disabled = true; out.textContent = ""; });
+    form.querySelectorAll("[name=mode]").forEach(r => r.addEventListener("change", () => { real.disabled = true; }));
+    form.addEventListener("submit", async ev => {
+      ev.preventDefault();
+      const dry = (ev.submitter && ev.submitter.dataset.dry) !== "0";
+      const file = form.querySelector("[name=file]").files[0];
+      if (!file) return;
+      note(form, tr("bk_working"));
+      try {
+        const r = await api(form.dataset.backupImport, "POST", {
+          data_b64: await fileB64(file), passphrase: form.querySelector("[name=passphrase]").value,
+          mode: form.querySelector("[name=mode]:checked").value, dry_run: dry });
+        const lines = Object.entries(r.kinds).map(([k, v]) => tr("bk_plan").replace("{kind}", k)
+          .replace("{add}", v.add).replace("{change}", v.change).replace("{same}", v.unchanged));
+        if (r.rule_drafts_reset) lines.push(tr("bk_reset").replace("{n}", r.rule_drafts_reset));
+        if (r.other_env) lines.push(tr("bk_other_env").replace("{env}", r.archive.env));
+        out.innerHTML = `<div class="muted">${escapeHtml(r.archive.env_name || "")} · ${escapeHtml(r.archive.created_at || "")} · ${escapeHtml(r.archive.app_version || "")}</div>`
+          + lines.map(l => `<div>${escapeHtml(l)}</div>`).join("");
+        real.disabled = !dry;
+        note(form, dry ? "" : "✓ " + tr("bk_imported"));
+        if (!dry) setTimeout(() => location.reload(), 1500);
+      } catch (e) { real.disabled = true; note(form, tr("error") + " " + e.message, true); }
+    });
+  });
+});

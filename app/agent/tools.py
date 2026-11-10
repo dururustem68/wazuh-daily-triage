@@ -566,5 +566,18 @@ SPECS: dict[str, dict] = {
                           "items": _obj({"question": {"type": "string"}, "why": {"type": "string"}}, ["question"])},
             "open_items": {"type": "array", "items": {"type": "string"}, "description": "Still open / to measure next run"},
             "closed_items": {"type": "array", "items": {"type": "string"}, "description": "Open items from the knowledge base that this run shows as closed (use their titles)"},
+            "event_verdicts": {"type": "array", "description":
+                "One entry per watch event listed in the request (only when that section is present).",
+                "items": _obj({
+                    "event_id": {"type": "string"},
+                    "verdict": {"type": "string", "enum": ["real_incident", "investigate", "expected", "noise"]},
+                    "reason": {"type": "string", "description": "One or two sentences with the evidence"},
+                    "suggestion": _obj({
+                        "mute": {"type": "boolean", "description": "true = stop announcing this exact event key"},
+                        "param": {"type": "string", "enum": ["critical_level", "group_min_level", "brute_failures",
+                                                             "spike_factor", "spike_min", "agent_minutes"]},
+                        "value": {"type": "number"},
+                        "why": {"type": "string"}}),
+                }, ["event_id", "verdict"])},
         }, ["summary_md", "findings"])},
 }

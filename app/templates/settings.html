@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}{{ _('set.title') }} · {{ env.name }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div class="titles"><div class="eyebrow">{{ env.name }}</div><h1>{{ _('set.title') }}</h1>
+    <div class="sub">{{ _('set.intro') }}{% if st.updated_at %} · {{ _('set.updated', t=st.updated_at|ts, by=st.updated_by) }}{% endif %}</div></div>
+</div>
+
+{% if storage and storage.lost %}
+<div class="card err" id="lost">
+  <h2>{{ _('stor.lost_title') }}</h2>
+  {% for x in storage.lost %}<p>{{ _('flag.storage_lost', index=x.index, at=x.detected_at[:16]) }}</p>{% endfor %}
+  <p>{{ _('stor.lost_help') }}</p>
+  <div class="row"><a class="btn small" href="#backup">{{ _('bk.import') }}</a>
+    <button class="btn small danger" data-post="/api/e/{{ env.id }}/settings/storage/ack" data-confirm="{{ _('stor.ack_confirm') }}">{{ _('stor.ack') }}</button>
+    <span class="small saved"></span></div>
+</div>
+{% endif %}
+
+{% if suggestions %}
+<div class="card" id="suggestions">
+  <h2>{{ _('set.sugg_title') }} <span class="pill blue">{{ suggestions|length }}</span></h2>
+  <p class="small muted">{{ _('set.sugg_help') }}</p>
+  {% for e in suggestions %}
+  <div class="sugg" data-suggestion="/api/e/{{ env.id }}/settings/suggestion" data-event="{{ e.id }}">
+    <div><b>{% if e.suggestion.type == 'mute' %}{{ _('set.sugg_mute', name=e.key) }}{% else %}{{ _('set.sugg_param', param=_('set.w.' ~ e.suggestion.param), value=e.suggestion.value|round(1), cur=st.watch[e.suggestion.param]) }}{% endif %}</b></div>
+    <div class="small muted">{{ e.title }} — {{ _('watch.verdict.' ~ e.verdict) }}{% if e.suggestion.why %}: {{ e.suggestion.why }}{% elif e.reason %}: {{ e.reason }}{% endif %}</div>
+    <div class="row"><button class="btn small primary" data-act="apply">{{ _('set.sugg_apply') }}</button>
+      <button class="btn small" data-act="dismiss">{{ _('set.sugg_dismiss') }}</button><span class="small saved"></span></div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<form class="card sform" id="watch" data-settings="/api/e/{{ env.id }}/settings" data-section="watch">
+  <h2>{{ _('set.watch_title') }} {% if st.watch.enabled %}<span class="pill green">{{ _('set.on') }}</span>{% else %}<span class="pill gray">{{ _('set.off') }}</span>{% endif %}</h2>
+  <p class="small muted">{{ _('set.watch_help') }}</p>
+  <div class="frow"><label class="chk"><input type="checkbox" name="enabled" {{ 'checked' if st.watch.enabled }}> <b>{{ _('set.watch_enable') }}</b></label>
+    <label>{{ _('set.w.interval') }} <input type="number" name="interval_minutes" min="2" max="60" value="{{ st.watch.interval_minutes }}" class="num"></label>
+    <label>{{ _('set.w.repeat') }} <input type="number" name="repeat_hours" min="0.25" max="168" step="0.25" value="{{ st.watch.repeat_hours }}" data-type="float" class="num"></label></div>
+
+  <h3>{{ _('set.triggers') }}</h3>
+  <div class="trig">
+    <label class="chk"><input type="checkbox" name="triggers.level" {{ 'checked' if st.watch.triggers.level }}> {{ _('watch.trigger.level') }}</label>
+    <label>{{ _('set.w.critical_level') }} <input type="number" name="critical_level" min="1" max="16" value="{{ st.watch.critical_level }}" class="num"></label>
+  </div>
+  <div class="trig">
+    <label class="chk"><input type="checkbox" name="triggers.rules" {{ 'checked' if st.watch.triggers.rules }}> {{ _('watch.trigger.rules') }}</label>
+    <input name="rules" data-type="list-or-null" value="{{ (st.watch.rules or [])|join(', ') if st.watch.rules is not none else '' }}" placeholder="{{ _('set.from_yaml') }}: {{ yaml_rules|join(', ') or '—' }}">
+  </div>
+  <div class="trig">
+    <label class="chk"><input type="checkbox" name="triggers.groups" {{ 'checked' if st.watch.triggers.groups }}> {{ _('watch.trigger.groups') }}</label>
+    <input name="groups" data-type="list-or-null" value="{{ (st.watch.groups or [])|join(', ') if st.watch.groups is not none else '' }}" placeholder="{{ _('set.from_yaml') }}: {{ yaml_groups|join(', ') or '—' }}">
+    <label>{{ _('set.w.group_min_level') }} <input type="number" name="group_min_level" min="1" max="16" value="{{ st.watch.group_min_level }}" class="num"></label>
+  </div>
+  <div class="trig">
+    <label class="chk"><input type="checkbox" name="triggers.brute_force" {{ 'checked' if st.watch.triggers.brute_force }}> {{ _('watch.trigger.brute_force') }}</label>
+    <label>{{ _('set.w.brute_failures') }} <input type="number" name="brute_failures" min="3" max="1000" value="{{ st.watch.brute_failures }}" class="num"></label>
+    <label>{{ _('set.w.brute_window') }} <input type="number" name="brute_window_minutes" min="5" max="240" value="{{ st.watch.brute_window_minutes }}" class="num"></label>
+  </div>
+  <div class="trig">
+    <label class="chk"><input type="checkbox" name="triggers.spike" {{ 'checked' if st.watch.triggers.spike }}> {{ _('watch.trigger.spike') }}</label>
+    <label>{{ _('set.w.spike_factor') }} <input type="number" name="spike_factor" min="1.5" max="100" step="0.5" value="{{ st.watch.spike_factor }}" data-type="float" class="num"></label>
+    <label>{{ _('set.w.spike_min') }} <input type="number" name="spike_min" min="10" value="{{ st.watch.spike_min }}" class="num wide"></label>
+  </div>
+  <div class="trig">
+    <label class="chk"><input type="checkbox" name="triggers.agents" {{ 'checked' if st.watch.triggers.agents }} {{ 'disabled' if not env.api }}> {{ _('watch.trigger.agents') }}</label>
+    <label>{{ _('set.w.agent_minutes') }} <input type="number" name="agent_minutes" min="5" max="1440" value="{{ st.watch.agent_minutes }}" class="num"></label>
+  </div>
+  <div class="trig">
+    <label class="chk"><input type="checkbox" name="triggers.active_response" {{ 'checked' if st.watch.triggers.active_response }}> {{ _('watch.trigger.active_response') }}</label>
+  </div>
+
+  <h3>{{ _('set.channels') }}</h3>
+  <p class="small muted">{{ _('set.channels_help') }}</p>
+  <div class="frow">
+    {% for c in all_channels %}{% if c in channels %}
+    <label class="chk"><input type="checkbox" name="channels" value="{{ c }}" data-type="multi" {{ 'checked' if c in st.watch.channels or not st.watch.channels }}> {{ c }}</label>
+    {% endif %}{% endfor %}
+    {% if not channels %}<span class="pill amber">{{ _('env.notify_none') }}</span>{% endif %}
+  </div>
+
+  <h3>{{ _('set.quiet') }}</h3>
+  <div class="frow"><label class="chk"><input type="checkbox" name="quiet.enabled" {{ 'checked' if st.watch.quiet.enabled }}> {{ _('set.quiet_enable') }}</label>
+    <label>{{ _('set.quiet_from') }} <input type="time" name="quiet.start" value="{{ st.watch.quiet.start }}"></label>
+    <label>{{ _('set.quiet_to') }} <input type="time" name="quiet.end" value="{{ st.watch.quiet.end }}"></label>
+    <label class="chk"><input type="checkbox" name="quiet.allow_critical" {{ 'checked' if st.watch.quiet.allow_critical }}> {{ _('set.quiet_critical') }}</label></div>
+  <p class="small muted">{{ _('set.quiet_help') }}</p>
+
+  <h3>{{ _('set.mute') }}</h3>
+  <textarea name="mute" rows="3" data-type="lines" placeholder="rule:5710&#10;level:5712:web01&#10;brute_force:10.0.0.*">{{ st.watch.mute|join('\n') }}</textarea>
+  <p class="small muted">{{ _('set.mute_help') }}</p>
+  <div class="row"><button class="btn primary">{{ _('rep.save') }}</button><a class="btn" href="/e/{{ env.id }}/watch">{{ _('nav.watch') }}</a><span class="small saved"></span></div>
+</form>
+
+<form class="card sform" id="ai" data-settings="/api/e/{{ env.id }}/settings" data-section="ai">
+  <h2>{{ _('set.ai_title') }}</h2>
+  <p class="small muted">{{ _('set.ai_help') }}</p>
+  <div class="frow">
+    <label>{{ _('set.ai_time1') }} <input type="time" name="times" data-type="times" value="{{ st.ai.times[0] if st.ai.times else '' }}"></label>
+    <label>{{ _('set.ai_time2') }} <input type="time" name="times" data-type="times" value="{{ st.ai.times[1] if st.ai.times and st.ai.times|length > 1 else '' }}"></label>
+    <span class="small muted">{{ _('set.from_yaml') }}: {{ yaml_schedule.all_times|join(', ') }}{% if not yaml_schedule.enabled %} ({{ _('env.off') }}){% endif %}</span>
+  </div>
+  <div class="frow">{% for d in ['mon','tue','wed','thu','fri','sat','sun'] %}
+    <label class="chk"><input type="checkbox" name="days" value="{{ d }}" data-type="multi-or-null" {{ 'checked' if d in schedule.days }}> {{ _('days').split(',')[loop.index0] }}</label>{% endfor %}</div>
+  <p class="small muted">{{ _('set.ai_now', times=schedule.all_times|join(', ')) }}</p>
+  <div class="row"><button class="btn primary">{{ _('rep.save') }}</button><span class="small saved"></span></div>
+</form>
+
+<div class="card" id="mask">
+  <h2>{{ _('mask.title') }} <span class="pill {{ 'green' if privacy_mode == 'mask' else 'amber' }}">{{ _('mask.mode_' ~ privacy_mode) }}</span>
+    <span class="pill outline">{{ _('mask.version', v=st.mask.version) }}</span></h2>
+  <p class="small muted">{{ _('mask.help') }}</p>
+  <form class="sform" data-mask="/api/e/{{ env.id }}/settings">
+    <h3>{{ _('mask.standard') }}</h3>
+    <div class="frow">{% for d in detectors %}
+      <label class="chk" title="{{ _('mask.secret_locked') if d.secret else '' }}"><input type="checkbox" data-detector="{{ d.kind }}" {{ 'checked disabled' if d.secret else ('' if d.kind in st.mask.disabled else 'checked') }}> {{ d.kind }}{% if d.secret %} 🔒{% endif %}</label>{% endfor %}</div>
+    <p class="small muted">{{ _('mask.standard_help') }}</p>
+    <h3>{{ _('mask.custom') }}</h3>
+    <table class="tbl small"><thead><tr><th>{{ _('mask.c_name') }}</th><th>{{ _('mask.c_pattern') }}</th><th>{{ _('mask.c_desc') }}</th><th></th></tr></thead>
+      <tbody data-custom-rows>{% for c in st.mask.custom %}
+        <tr><td><input data-c="name" value="{{ c.name }}" maxlength="26"></td><td><input data-c="pattern" value="{{ c.pattern }}" maxlength="200" class="mono"></td>
+          <td><input data-c="description" value="{{ c.description }}" maxlength="200"></td><td><button type="button" class="btn small ghost" data-row-del>✕</button></td></tr>{% endfor %}
+      </tbody></table>
+    <div class="row"><button type="button" class="btn small" data-row-add>{{ _('mask.c_add') }}</button><span class="small muted">{{ _('mask.custom_help') }}</span></div>
+    <h3>{{ _('mask.allow') }}</h3>
+    <textarea data-allow rows="3" class="mono" placeholder="noreply@example\.com&#10;svc-[a-z]+@example\.com">{{ st.mask.allow|join('\n') }}</textarea>
+    <p class="small muted">{{ _('mask.allow_help') }}</p>
+    <h3>{{ _('mask.preview') }}</h3>
+    <textarea data-preview-in rows="4" placeholder="{{ _('mask.preview_ph') }}"></textarea>
+    <div class="row"><button type="button" class="btn small" data-preview="/api/e/{{ env.id }}/settings/mask/preview">{{ _('mask.preview_run') }}</button><span class="small muted">{{ _('mask.preview_help') }}</span></div>
+    <pre class="code" data-preview-out hidden></pre>
+    <div class="row"><button class="btn primary">{{ _('rep.save') }}</button>
+      <a class="btn small" href="/api/e/{{ env.id }}/settings/mask.yaml">{{ _('kb.io_export') }}</a>
+      <label class="btn small">{{ _('mask.import') }} <input type="file" accept=".yaml,.yml" hidden data-mask-import="/api/e/{{ env.id }}/settings/mask/import"></label>
+      <span class="small saved"></span></div>
+  </form>
+</div>
+
+<div class="card" id="backup">
+  <h2>{{ _('bk.title') }} {% if backup_age is not none %}<span class="pill {{ 'amber' if st.backup.remind_days and backup_age >= st.backup.remind_days else 'outline' }}">{{ _('bk.age', d=backup_age) if storage.backup.last_at else _('bk.never') }}</span>{% endif %}</h2>
+  <p class="small muted">{{ _('bk.help') }}</p>
+  {% if storage and storage.backup.last_at %}<p class="small">{{ _('bk.last', t=storage.backup.last_at|ts, by=storage.backup.last_by, n=(storage.backup.last_counts or {}).knowledge|default(0)) }}
+    {% if storage.backup.s3_url %} · {{ storage.backup.s3_url }}{% endif %}{% if storage.backup.s3_error %} · <span class="err">S3: {{ storage.backup.s3_error }}</span>{% endif %}</p>{% endif %}
+
+  <h3>{{ _('bk.export') }}</h3>
+  <form class="sform" data-backup-export="/api/e/{{ env.id }}/backup/export">
+    <div class="frow"><label>{{ _('bk.pass') }} <input type="password" name="passphrase" minlength="{{ min_pass }}" autocomplete="new-password" required></label>
+      <label>{{ _('bk.pass2') }} <input type="password" name="passphrase2" minlength="{{ min_pass }}" autocomplete="new-password" required></label></div>
+    <div class="frow"><label class="chk"><input type="checkbox" name="include_runs" checked> {{ _('bk.include_runs') }}</label>
+      <label class="chk"><input type="checkbox" name="to_s3" {{ 'checked' if s3_on else 'disabled' }}> {{ _('bk.to_s3') }}{% if s3_on %} ({{ s3_bucket }}){% else %} — {{ _('bk.s3_off') }}{% endif %}</label></div>
+    <p class="small muted">{{ _('bk.pass_help', n=min_pass) }}</p>
+    <div class="row"><button class="btn primary">{{ _('bk.export_run') }}</button><span class="small saved"></span></div>
+  </form>
+
+  <h3>{{ _('bk.import') }}</h3>
+  <form class="sform" data-backup-import="/api/e/{{ env.id }}/backup/import">
+    <div class="frow"><input type="file" name="file" accept=".wdtbak" required>
+      <label>{{ _('bk.pass') }} <input type="password" name="passphrase" autocomplete="off" required></label></div>
+    <div class="frow"><label class="chk"><input type="radio" name="mode" value="missing" checked> {{ _('bk.mode_missing') }}</label>
+      <label class="chk"><input type="radio" name="mode" value="overwrite"> {{ _('bk.mode_overwrite') }}</label></div>
+    <p class="small muted">{{ _('bk.import_help') }}</p>
+    <div class="row"><button class="btn" data-dry="1">{{ _('bk.preview') }}</button>
+      <button class="btn danger" data-dry="0" disabled>{{ _('bk.import_run') }}</button><span class="small saved"></span></div>
+    <div class="small" data-import-out></div>
+  </form>
+
+  <h3>{{ _('bk.auto') }}</h3>
+  <form class="sform" data-settings="/api/e/{{ env.id }}/settings" data-section="backup">
+    <div class="frow"><label>{{ _('bk.remind') }} <input type="number" name="remind_days" min="0" max="365" value="{{ st.backup.remind_days }}" class="num"></label>
+      <label class="chk"><input type="checkbox" name="auto" {{ 'checked' if st.backup.auto }} {{ '' if auto_possible else 'disabled' }}> {{ _('bk.auto_enable') }}</label>
+      <label>{{ _('bk.auto_every') }} <input type="number" name="auto_interval_days" min="1" max="90" value="{{ st.backup.auto_interval_days }}" class="num"></label>
+      <label class="chk"><input type="checkbox" name="include_runs" {{ 'checked' if st.backup.include_runs }}> {{ _('bk.include_runs') }}</label></div>
+    {% if not auto_possible %}<p class="small muted">{{ _('bk.auto_need') }}</p>{% endif %}
+    <div class="row"><button class="btn primary">{{ _('rep.save') }}</button><span class="small saved"></span></div>
+  </form>
+</div>
+
+<div class="card" id="storage">
+  <h2>{{ _('stor.title') }}</h2>
+  <p class="small muted">{{ _('stor.help') }}</p>
+  {% if storage %}
+  <p>{{ _('stor.prefix') }}: <code>{{ storage.prefix }}-*</code>
+    {% if storage.prefix_issue %}<span class="pill amber">{{ _('stor.prefix_' ~ storage.prefix_issue) }}</span>{% else %}<span class="pill green">{{ _('chk.ok') }}</span>{% endif %}</p>
+  {% if storage.demo %}<p class="small muted">{{ _('stor.demo') }}</p>
+  {% else %}
+  {% if not storage.checked %}<p><span class="pill amber">{{ _('stor.unchecked') }}</span> <span class="small muted">{{ storage.error }}</span></p>{% endif %}
+  <table class="tbl small"><thead><tr><th>{{ _('stor.c_index') }}</th><th>{{ _('stor.c_policy') }}</th><th>{{ _('stor.c_delete') }}</th></tr></thead><tbody>
+    {% for r in storage.indices %}<tr><td><code>{{ r.index }}</code></td>
+      <td>{% if r.policy %}{{ r.policy }}{% elif r.state == 'unchecked' %}<span class="muted">{{ _('stor.unchecked') }}</span>{% else %}<span class="muted">{{ _('stor.no_policy') }}</span>{% endif %}</td>
+      <td>{% if r.deletes %}<span class="pill red">{{ _('stor.deletes', d=r.delete_after_days, on=(r.deletes_on or '?')[:10]) }}</span>
+          {% elif r.state == 'policy_unreadable' %}<span class="pill amber">{{ _('stor.unchecked') }}</span>
+          {% elif r.state == 'unchecked' %}—{% else %}<span class="pill green">{{ _('stor.keeps') }}</span>{% endif %}</td></tr>{% endfor %}
+  </tbody></table>
+  {% if storage.deletes %}<p class="small">{{ _('stor.deletes_help', prefix=storage.prefix) }}</p>{% endif %}
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

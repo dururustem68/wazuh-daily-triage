@@ -152,6 +152,25 @@ Other per-environment keys:
 | `language` | — |
 | `run_retention_days` | `0` (keep forever; knowledge is never pruned) |
 
+## The watch: urgent alerts without the AI
+
+Off by default; switch it on in **Settings → Watch**. Every few minutes local rules check the alerts — an
+alert at a critical level, a watched rule or group, Active Response, a successful login after failed
+attempts from the same source, a sudden increase, agents that stopped reporting — and notify at once as
+"rule-based alert — not reviewed by AI". No model is called. The next scheduled **AI round** (one or two a
+day, times set in Settings) receives all events in one request and returns a verdict per event and tuning
+suggestions; a suggestion changes nothing until an administrator accepts it. Channels are chosen among the
+configured ones, quiet hours hold back everything but critical events. Details: [docs/watch.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/watch.md).
+
+## Settings, masking profile, backup
+
+`/e/<env>/settings` (admin only) holds what can change without a redeploy: the watch, AI-round times, the
+masking profile (your own `x_…` detectors, exceptions, preview, YAML import/export; secret detectors cannot
+be switched off) and backup. **Backup** exports an encrypted archive of the knowledge base, reports, watch
+events and settings — as a download and optionally to S3 — and imports it with a preview. **Storage safety**
+shows whether an index retention policy would delete the application's own indices and raises a critical
+flag when one went missing. Details: [docs/backup.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/backup.md).
+
 ## Monthly audit report
 
 `/e/<env>/audit` produces a deterministic report with no LLM involved: volume, runs, findings and decisions, rule

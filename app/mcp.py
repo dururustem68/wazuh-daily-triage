@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse, Response
 from . import __version__, auditlog, authz
 from .agent.tools import SPECS, ToolBox
 from .errors import public_error
+from .web.common import Throttle, client_ip
 
 log = logging.getLogger("wdt.mcp")
 router = APIRouter()
@@ -102,13 +103,13 @@ async def _call(rt, name: str, args: dict) -> str:
     if name in EXCLUDE or name not in tb._handlers:
         return json.dumps({"error": f"tool {name} is not available for {env_id}"})
     from .privacy import Masker
-    return _red(er, await tb.call(name, Masker.unmask_obj(args)))
+    return _red(er, await tb.call(name, Masker.unmask_obj(args, er.env.id)))
 
 
 def _red(er, text: str) -> str:
     """MCP clients are external LLMs too: apply the environment's privacy masking (pseudonyms resolve back)."""
     from .privacy import masker_for
-    m = masker_for(er.env)
+    m = masker_for(er.env, getattr(getattr(er, "settings", None), "mask", None))
     return m.mask(text) if m else text
 
 
@@ -161,13 +162,32 @@ async def _handle(rt, msg: dict) -> dict | None:
     return _err(mid, -32601, f"method not found: {method}")
 
 
+def _rate() -> int:
+    try:
+        return max(0, int(os.environ.get("MCP_RATE_PER_MINUTE", "120")))
+    except ValueError:
+        return 120
+
+
+MCP_REQUESTS = Throttle(limit=_rate(), window=60)        # per client address; 0 = unlimited
+MCP_AUTH_FAILS = Throttle(limit=10, window=300)
+
+
 @router.post("/mcp")
 async def mcp_post(request: Request):
     if not token():
         return JSONResponse({"error": "MCP is disabled (set MCP_TOKEN)"}, status_code=404)
+    ip = client_ip(request)
+    if MCP_AUTH_FAILS.blocked(ip):
+        return JSONResponse({"error": "too many failed attempts"}, status_code=429, headers={"Retry-After": "300"})
     if not _authorized(request):
+        MCP_AUTH_FAILS.add(ip)
         return JSONResponse({"error": "unauthorized"}, status_code=401,
                             headers={"WWW-Authenticate": 'Bearer realm="wazuh-daily-triage"'})
+    if MCP_REQUESTS.blocked(ip):
+        return JSONResponse({"error": "rate limit exceeded; retry in a minute"}, status_code=429,
+                            headers={"Retry-After": "60"})
+    MCP_REQUESTS.add(ip)
     try:
         body = await request.json()
     except ValueError:

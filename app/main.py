@@ -20,6 +20,7 @@ from . import __version__, auditlog, authz, security
 from .config import config_path, load_settings
 from .observability import install_logging, metrics
 from .runtime import Runtime, demo_enabled
+from .web import admin_api as admin_routes
 from .web import api as api_routes
 from .web import auth as auth_routes
 from .web import pages as page_routes
@@ -49,6 +50,7 @@ async def lifespan(app: FastAPI):
     set_timezone(rt.tz)
     app.state.rt = rt
     await rt.recover_stale()
+    await rt.load_all_settings()
     if os.environ.get("WDT_SCHEDULER", "true").lower() not in ("0", "false", "no"):
         rt.start_scheduler()
     log.info("wazuh-daily-triage %s started — %d environment(s)%s", __version__, len(settings.environments),
@@ -63,6 +65,7 @@ app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 auth_routes.install(app)
 app.include_router(page_routes.router)
 app.include_router(api_routes.router)
+app.include_router(admin_routes.router)
 
 from .mcp import router as mcp_router  # noqa: E402
 

@@ -48,6 +48,8 @@ Where the project is going, roughly ordered by impact. This is a living document
 
 ## Earlier releases
 
+- v0.10.0 — the watch (rule-based alerts without the AI), AI-round verdicts, settings page, masking profile,
+  encrypted backup/restore with S3, storage safety checks, per-environment pseudonyms, proxy verification.
 - v0.5.0 — mail saturation, coverage, vuln SLA, live verification, promotion package, monthly audit report.
 - v0.6.0 — MCP server, Prometheus/Loki/Kubernetes tools, anomalies, incident drafts, evaluation.
 - v0.6.1 — CodeQL fixes, defusedxml, bounded regexes, safe language cookie.

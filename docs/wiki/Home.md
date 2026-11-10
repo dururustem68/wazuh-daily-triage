@@ -6,7 +6,7 @@ findings, questions and rule drafts that a human decides on.
 
 ![Watch board](images/dashboard.png)
 
-**Current release:** 0.9.2 · **Licence:** AGPL-3.0-only · **Python:** 3.11–3.15 · **Wazuh:** 4.x
+**Current release:** 0.10.0 · **Licence:** AGPL-3.0-only · **Python:** 3.11–3.15 · **Wazuh:** 4.x
 
 ## What it does
 

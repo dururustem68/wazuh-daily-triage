@@ -1345,6 +1345,11 @@ DE: dict[str, str] = {
 }
 
 CATALOG = {"en": EN, "tr": TR, "es": ES, "de": DE}
+
+from .i18n_v10 import EXTRA as _V10  # noqa: E402 - 0.10 messages live in their own module
+
+for _lang, _msgs in _V10.items():
+    CATALOG[_lang].update(_msgs)
 LANG_NAMES = {"en": "English", "tr": "Türkçe", "es": "Español", "de": "Deutsch"}
 OUTPUT_LANGUAGE = {"en": "English", "tr": "Turkish", "es": "Spanish", "de": "German"}
 

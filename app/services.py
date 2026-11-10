@@ -39,4 +39,6 @@ class EnvRuntime:
         self.lock = asyncio.Lock()
         self.deploy_lock = asyncio.Lock()
         self.current_run: str | None = None
+        self.settings = None            # EnvSettings, loaded lazily from <prefix>-settings (Runtime.env_settings)
+        self.settings_at = 0.0
         self.sources: dict = build_sources(env) if not isinstance(store, MemoryStore) else {}

@@ -451,6 +451,16 @@ class FakeIndexer:
     async def delete_doc(self, index, doc_id):
         self.docs.get(index, {}).pop(doc_id, None)
 
+    async def index_meta(self, pattern):
+        pre = pattern.rstrip("*")
+        return {n: {"created": 1_760_000_000_000} for n in self.docs if n.startswith(pre)}
+
+    async def ism_explain(self, pattern):
+        return getattr(self, "ism", {})
+
+    async def ism_policy(self, policy_id):
+        return getattr(self, "policies", {}).get(policy_id)
+
     async def delete_by_query(self, index, query):
         docs = self.docs.get(index, {})
         doomed = [doc_id for doc_id, d in docs.items() if _match(d, query)]

@@ -30,7 +30,7 @@ spec:
       ports:
         - { port: 9200 }
         - { port: 55000 }
-    - ports:              # hosted LLM, Telegram, Teams, Slack, Discord, ntfy (HTTPS)
+    - ports:              # hosted LLM, Telegram, Teams, Slack, Discord, ntfy, S3 backups (HTTPS)
         - { port: 443 }
     - ports:              # SMTP (only if e-mail notifications are used)
         - { port: 587 }

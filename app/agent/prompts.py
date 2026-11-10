@@ -168,7 +168,24 @@ User time zone: {timezone}. Index timestamps are UTC; say UTC in the text.
 {method}"""
 
 
-def triage_user_message(collected: dict, previous: list[dict], answers: list[dict], requests: list[dict]) -> str:
+WATCH_EVENTS = """
+## Watch events since the last round (rule-based alerts — already announced to the operator, NOT reviewed by AI)
+The watch checks the alerts every few minutes with local rules and notifies immediately; you are asked once per
+round to judge all of them together. For EVERY event below return one entry in `event_verdicts`:
+`real_incident` (confirmed or very likely), `investigate` (cannot be decided from the data), `expected`
+(explained: maintenance, known admin activity, a verified change) or `noise` (not worth a notification).
+Check the data with the tools before deciding; do not judge from the title alone. When an event is noise or the
+threshold is clearly wrong, add a `suggestion`: either `{{"mute": true}}` for this exact event key, or
+`{{"param": ..., "value": ...}}` for one of critical_level, group_min_level, brute_failures, spike_factor,
+spike_min, agent_minutes. A suggestion changes nothing until an administrator accepts it.
+```watch-events
+{events}
+```
+"""
+
+
+def triage_user_message(collected: dict, previous: list[dict], answers: list[dict], requests: list[dict],
+                        events: list[dict] | None = None) -> str:
     prev_lines = []
     for r in previous:
         f = r.get("findings") or []
@@ -182,6 +199,8 @@ def triage_user_message(collected: dict, previous: list[dict], answers: list[dic
             prev_lines.append(f"    · open: {o}")
     ans = "\n".join(f"- Q: {a.get('question') or a['title']}\n  A: {a['body']}" for a in answers) or "(none)"
     req = "\n".join(f"- {r['title']}{': ' + r['body'] if r.get('body') else ''}" for r in requests) or "(none)"
+    watch = WATCH_EVENTS.format(events=json.dumps(events, ensure_ascii=False, separators=(",", ":"),
+                                                  default=str)) if events else ""
     return f"""Time for the daily review. Window: {collected['window']['from']} → {collected['window']['to']} ({collected['window']['hours']} hours).
 
 ## Previous reports (newest first)
@@ -193,10 +212,9 @@ def triage_user_message(collected: dict, previous: list[dict], answers: list[dic
 ## The user's requests / notes for this run
 {req}
 Address each of these requests and record the outcome in the report.
-
 ## Collected summary (deterministic queries)
 ```json
 {json.dumps(collected, ensure_ascii=False, separators=(',', ':'), default=str)}
 ```
-
+{watch}
 Dig deeper with the tools if needed, then submit with `submit_report`."""

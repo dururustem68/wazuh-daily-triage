@@ -26,7 +26,7 @@ class SchedulerMixin:
                 hm = now.strftime("%H:%M")
                 day = DAYS[now.weekday()]
                 for rt in self.envs.values():
-                    s = rt.env.schedule
+                    s = self.schedule_for(rt)
                     if not (s.enabled and day in s.days and hm in s.all_times):
                         continue
                     key = f"{rt.env.id}:{now:%Y-%m-%d}:{hm}"
@@ -45,6 +45,12 @@ class SchedulerMixin:
                 await self._pending_tick()
             except Exception:  # noqa: BLE001
                 log.exception("pending reminder scheduler error")
+            for name, tick in (("watch", self._watch_tick), ("storage", self._storage_tick),
+                               ("backup", self._backup_tick)):
+                try:
+                    await tick()
+                except Exception:  # noqa: BLE001
+                    log.exception("%s scheduler error", name)
             try:
                 await self._retention_tick()
             except Exception:  # noqa: BLE001
@@ -52,7 +58,8 @@ class SchedulerMixin:
             await asyncio.sleep(20)
 
     def next_run(self, env: Environment, lang: str = "en") -> str | None:
-        s = env.schedule
+        rt = self.envs.get(env.id)
+        s = self.schedule_for(rt) if rt else env.schedule
         if not s.enabled:
             return None
         now = datetime.now(self.tz)

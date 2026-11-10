@@ -5,6 +5,52 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-11-10
+
+### Added
+- **The watch** — rule-based alerts between AI rounds, without calling the model. Every few minutes local
+  rules look for: alerts at a critical level, watched rules and groups, Active Response, a successful login
+  after failed attempts from the same source, a sudden increase in volume and agents that stopped reporting.
+  Events are sorted out (mute list, known noise from the knowledge base, repeat window), announced at once
+  as "rule-based alert — not reviewed by AI" and kept in `<prefix>-events`. Off by default
+  ([docs/watch.md](docs/watch.md)).
+- **AI round**: the scheduled run receives all watch events in one call and returns a verdict per event
+  (`event_verdicts`) plus tuning suggestions. A suggestion changes nothing until an administrator accepts it.
+  The round times (one or two a day) can be set in the UI.
+- **Settings page** (`/e/<env>/settings`, admin only): watch triggers and thresholds, notification channels
+  (chosen among the configured ones — no address or key is entered in the UI), quiet hours, AI-round times,
+  masking profile, backup. Stored in `<prefix>-settings`; every change is audited.
+- **Masking profile**: the standard profile is fixed; a site adds its own detectors (`x_…`), exceptions and
+  can switch off non-secret detectors (confirmation + audit). Preview, YAML import/export, and each run
+  records the profile version. Custom patterns are compiled with RE2 when `google-re2` is installed,
+  otherwise only a conservative subset is accepted and timed against repetitive input.
+- **Backup** ([docs/backup.md](docs/backup.md)): encrypted export (scrypt + AES-256-GCM) as a download and
+  optionally to S3; import with a preview and "add what is missing" / "overwrite"; automatic backups only
+  with S3 and `BACKUP_PASSPHRASE`; reminder after 30 days. Imported rule drafts need approval again.
+- **Storage safety**: a missing storage index is no longer recreated silently — the loss is recorded, raises
+  a critical flag, a banner and a notification until acknowledged. The settings page reports a risky
+  `storage_prefix` and any ISM policy that would delete the application's indices, with the date.
+
+### Security
+- **Pseudonyms are per environment**: a token created for one environment no longer resolves in another
+  (MCP clients, shared installations).
+- **Client address**: login throttling and audit use the real client behind `TRUSTED_PROXIES` instead of the
+  proxy's address. **`/mcp` is rate limited** (`MCP_RATE_PER_MINUTE`, default 120) and locks an address out
+  after repeated wrong tokens.
+- **SSO mode verifies the proxy**: a request without a user header is refused (`SSO_REQUIRE_USER`, default
+  on); `TRUSTED_PROXIES` restricts the peers and `PROXY_SECRET` requires a shared header. Production startup
+  warns when neither is set. The Helm chart's NetworkPolicy is **on by default**.
+
+### Upgrading
+- New dependency: `cryptography` (already in the image).
+- **SSO (`AUTH_DISABLED=true`)**: make sure your proxy forwards one of the `USER_HEADER` headers; otherwise
+  every page answers 401 after the upgrade (`SSO_REQUIRE_USER=false` restores the old behaviour).
+- **Helm**: `networkPolicy.enabled` is now `true`. Set `networkPolicy.ingressNamespace` to your ingress
+  controller's namespace or the UI becomes unreachable.
+- Two indices are created on first start: `<prefix>-events`, `<prefix>-settings`. The indexer user needs the
+  same rights on them as on the existing `<prefix>-*` indices; reading ISM policies is optional.
+- Nothing changes in behaviour until the watch is switched on in the settings page.
+
 ## [0.9.2] — 2026-11-10
 
 Security hardening after a code review; no new features. **Read "Upgrading" before you roll it out.**

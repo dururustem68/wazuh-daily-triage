@@ -23,8 +23,11 @@ from .common import (
     COOKIE_SECURE,
     TTL,
     VIEWER_PASSWORD,
+    Throttle,
     actor,
+    client_ip,
     ctx,
+    proxy_problem,
     role,
     sign,
     ui_lang,
@@ -100,8 +103,12 @@ def cross_origin(request: Request) -> str:
 
 def explicit_perm(method: str, path: str) -> str | None:
     """Permission of a known route; ``None`` when a state-changing route has no mapping."""
+    if "/settings" in path or "/backup/" in path or path.endswith("/backup"):
+        return authz.ADMINISTER          # also for GET: the settings page and the profile export are admin-only
     if method in SAFE_METHODS:
         return authz.READ
+    if path.endswith("/watch/scan"):
+        return authz.RUN
     if path == "/logout":
         return authz.READ
     if path.endswith("/deploy") or path.endswith("/undeploy") or path.endswith("/promoted"):
@@ -151,6 +158,12 @@ async def handle_request(request: Request, call_next, p: str, role_: str | None)
     if why:
         resp = deny(request, 403, "cross-origin request refused")
         return finish(request, resp, role_, f"denied:{why}")
+    if AUTH_DISABLED and not public and not (p == "/metrics" and os.environ.get("METRICS_TOKEN")):
+        why = proxy_problem(request)
+        if why:
+            resp = deny(request, 401 if why == "no_user" else 403, "this request did not come through the "
+                        "authenticating proxy" + (" (no user header)" if why == "no_user" else ""))
+            return finish(request, resp, role_, f"denied:{why}")
     if not public and not AUTH_DISABLED:
         if not APP_PASSWORD:
             resp = HTMLResponse(f"<p>{t(ui_lang(request), 'auth.no_password')}</p>", status_code=503)
@@ -197,28 +210,24 @@ async def login_page(request: Request):
     return tpl.TemplateResponse(request, "login.html", ctx(request, err=None))
 
 
-_fails: dict[str, list[float]] = {}
+LOGIN_THROTTLE = Throttle(limit=8, window=300)
 
 
 @router.post("/login")
 async def login(request: Request, password: str = Form(...)):
-    ip = request.client.host if request.client else "?"
-    now = time.time()
-    if len(_fails) > 2000:
-        for k in [k for k, v in _fails.items() if not v or now - v[-1] > 300]:
-            _fails.pop(k, None)
-    hist = [x for x in _fails.get(ip, []) if now - x < 300]
+    ip = client_ip(request)          # the client behind TRUSTED_PROXIES, else the peer
     lang = ui_lang(request)
-    if len(hist) >= 8:
+    if LOGIN_THROTTLE.blocked(ip):
         return tpl.TemplateResponse(request, "login.html", ctx(request, err=t(lang, "login.throttled")), status_code=429)
+    now = time.time()
     if APP_PASSWORD and hmac.compare_digest(password.encode(), APP_PASSWORD.encode()):
-        _fails.pop(ip, None)
+        LOGIN_THROTTLE.clear(ip)
         role_ = "admin"
     elif VIEWER_PASSWORD and hmac.compare_digest(password.encode(), VIEWER_PASSWORD.encode()):
-        _fails.pop(ip, None)
+        LOGIN_THROTTLE.clear(ip)
         role_ = "viewer"
     else:
-        _fails[ip] = hist + [now]
+        LOGIN_THROTTLE.add(ip)
         auditlog.record("login.failed", actor=ip, role="anonymous", result="401", request_id=REQUEST_ID.get(),
                         method="POST", path_="/login")
         return tpl.TemplateResponse(request, "login.html", ctx(request, err=t(lang, "login.wrong")), status_code=401)

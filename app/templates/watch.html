@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ _('nav.watch') }} · {{ env.name }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div class="titles"><div class="eyebrow">{{ env.name }}</div><h1>{{ _('nav.watch') }}
+      {% if st.watch.enabled %}<span class="pill green">{{ _('set.on') }}</span>{% else %}<span class="pill gray">{{ _('set.off') }}</span>{% endif %}</h1>
+    <div class="sub">{{ _('watch.intro') }}
+      {% if state.last_scan %} · {{ _('watch.last_scan', t=state.last_scan.at|ts, n=state.last_scan.new) }}{% if state.last_scan.quiet %} · {{ _('set.quiet') }}{% endif %}{% endif %}</div></div>
+  <div class="tools">
+    <select data-autosubmit-get="status" aria-label="{{ _('watch.c_status') }}">
+      <option value="">{{ _('watch.all') }}</option>
+      {% for s in ['notified', 'held', 'muted', 'judged'] %}<option value="{{ s }}" {{ 'selected' if status == s }}>{{ _('watch.status.' ~ s) }}</option>{% endfor %}
+    </select>
+    {% if can.run and st.watch.enabled %}<button class="btn" data-post="/api/e/{{ env.id }}/watch/scan" data-reload="1">{{ _('watch.scan_now') }}</button>{% endif %}
+    {% if can.admin %}<a class="btn" href="/e/{{ env.id }}/settings#watch">{{ _('set.title') }}</a>{% endif %}
+    <span class="small saved"></span>
+  </div>
+</div>
+{% if state.last_scan and state.last_scan.errors %}<div class="card err small">{{ _('watch.scan_errors', e=state.last_scan.errors|join(', ')) }}</div>{% endif %}
+{% if state.last_scan and state.last_scan.gap %}<div class="card small">{{ _('watch.gap', a=state.last_scan.gap.from|ts, b=state.last_scan.gap.to|ts) }}</div>{% endif %}
+{% if not st.watch.enabled %}<div class="card"><b>{{ _('watch.off_title') }}</b><p class="small muted">{{ _('watch.off_help') }}</p></div>{% endif %}
+<div class="card table-card">
+<table class="tbl">
+  <thead><tr><th>{{ _('watch.c_time') }}</th><th>{{ _('watch.c_what') }}</th><th>{{ _('watch.c_where') }}</th><th class="r">{{ _('watch.c_count') }}</th><th>{{ _('watch.c_status') }}</th><th>{{ _('watch.c_verdict') }}</th></tr></thead>
+  <tbody>
+  {% for e in events %}
+    <tr>
+      <td class="small"><b>{{ e.created_at|ts }}</b></td>
+      <td><span class="pill {{ 'red' if e.severity == 'critical' else 'amber' }}">{{ _('watch.trigger.' ~ e.trigger) }}</span>
+        {{ e.title or e.key }}{% if e.rule_ids and e.rule_ids[0] %} <span class="small muted">· {{ e.rule_ids|join(', ') }}{% if e.level %} (L{{ e.level }}){% endif %}</span>{% endif %}
+        {% if e.sample %}<details class="small"><summary class="muted">{{ _('watch.sample') }}</summary><pre class="code">{{ e.sample }}</pre></details>{% endif %}</td>
+      <td class="small">{{ (e.agents or [])[:4]|join(', ') }}{% if e.srcips %}<div class="muted">{{ e.srcips|join(', ') }}</div>{% endif %}</td>
+      <td class="r">{{ e.count|n }}</td>
+      <td class="small"><span class="pill {{ {'notified': 'blue', 'held': 'purple', 'muted': 'gray', 'judged': 'green'}.get(e.status, 'gray') }}">{{ _('watch.status.' ~ e.status) }}</span>
+        {% if e.why_silent %}<div class="muted">{{ _('watch.silent.' ~ e.why_silent) }}</div>{% endif %}</td>
+      <td class="small">{% if e.verdict %}<span class="pill {{ {'real_incident': 'red', 'investigate': 'amber', 'expected': 'green', 'noise': 'gray'}[e.verdict] }}">{{ _('watch.verdict.' ~ e.verdict) }}</span>
+        <div class="muted">{{ e.reason }}</div>{% if e.suggestion %}<div>💡 {{ _('watch.sugg.' ~ e.suggestion.state) }}</div>{% endif %}
+        {% else %}<span class="muted">{{ _('watch.waiting') }}</span>{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6"><div class="empty"><b>{{ _('watch.none') }}</b></div></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="small muted">{{ _('watch.footer') }}</p>
+{% endblock %}

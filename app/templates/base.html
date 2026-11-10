@@ -23,7 +23,10 @@
   "wi_working": _('wi.working'), "wi_title": _('wi.title'), "wi_parent": _('wi.parent'), "wi_matched": _('wi.matched'),
   "wi_day": _('wi.day'), "wi_sample": _("wi.sample"), "wi_level": _('wi.level'), "wi_high": _('wi.high'),
   "wi_agents": _('wi.agents'), "wi_ips": _('wi.ips'), "wi_locs": _('wi.locs'), "wi_ex": _('wi.ex'), "wi_unex": _('wi.unex'),
-  "wi_skipped": _('wi.skipped'), "wi_note": _('wi.note'), "nm_done": _('nm.done')
+  "wi_skipped": _('wi.skipped'), "wi_note": _('wi.note'), "nm_done": _('nm.done'),
+  "set_confirm_off": _('mask.confirm_off'), "bk_mismatch": _('bk.mismatch'), "bk_done": _('bk.done'),
+  "bk_plan": _('bk.plan'), "bk_imported": _('bk.imported'), "bk_reset": _('bk.reset'), "bk_other_env": _('bk.other_env'),
+  "bk_working": _('bk.working'), "set_scan": _('watch.scan_result')
 } | tojson }}</script>
 <script src="/static/app.js?v={{ version }}" defer></script>
 </head>
@@ -53,7 +56,9 @@
     <a href="/e/{{ env.id }}" class="{{ 'on' if path == '/e/' ~ env.id or '/r/' in path }}"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 3v5h5M9 12h8M9 16h8"/></svg>{{ _('nav.reports') }}</a>
     <a href="/e/{{ env.id }}/k" class="{{ 'on' if path.endswith('/k') }}"><svg viewBox="0 0 24 24"><path d="M5 3h12a2 2 0 0 1 2 2v16H7a2 2 0 0 1-2-2zM5 17a2 2 0 0 1 2-2h12"/></svg>{{ _('nav.knowledge') }}</a>
     <a href="/e/{{ env.id }}/noise" class="{{ 'on' if path.endswith('/noise') }}"><svg viewBox="0 0 24 24"><path d="M4 20V10M9 20V4M14 20v-7M19 20v-11"/></svg>{{ _('nav.noise') }}</a>
+    <a href="/e/{{ env.id }}/watch" class="{{ 'on' if path.endswith('/watch') }}"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>{{ _('nav.watch') }}</a>
     <a href="/e/{{ env.id }}/audit" class="{{ 'on' if path.endswith('/audit') }}"><svg viewBox="0 0 24 24"><path d="M9 3h6v3H9zM6 5h12v16H6zM9 11l2 2 4-4M9 17h6"/></svg>{{ _('nav.audit') }}</a>
+    {% if can.admin %}<a href="/e/{{ env.id }}/settings" class="{{ 'on' if path.endswith('/settings') }}"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>{{ _('set.title') }}</a>{% endif %}
   </nav>
   {% endif %}
 </header>
@@ -66,6 +71,13 @@
       {% if storage_errors|length > 1 %}<div class="muted">{{ _('storage.more', n=storage_errors|length - 1) }}</div>{% endif %}
       {% if request_id %}<div class="muted small">{{ _('storage.request', id=request_id) }}</div>{% endif %}
     </div>
+  </div>
+  {% endif %}
+  {% if storage_lost %}
+  <div class="banner banner-warn" role="alert">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20zM11 9h2v6h-2zm0 8h2v2h-2z"/></svg>
+    <div class="banner-body">{% for x in storage_lost %}<div><b>{{ x.env }}</b>: {{ _('flag.storage_lost', index=x.index, at=x.detected_at[:16]) }}
+      {% if can.admin %}<a href="/e/{{ x.env }}/settings#lost">{{ _('stor.lost_open') }}</a>{% endif %}</div>{% endfor %}</div>
   </div>
   {% endif %}
   <main>{% block body %}{% endblock %}</main>

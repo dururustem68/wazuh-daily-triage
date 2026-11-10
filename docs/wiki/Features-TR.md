@@ -152,6 +152,25 @@ Diğer ortam anahtarları:
 | `language` | — |
 | `run_retention_days` | `0` (sonsuza kadar sakla; bilgi tabanı hiç silinmez) |
 
+## Nöbet: yapay zekâsız acil uyarılar
+
+Varsayılan olarak kapalıdır; **Ayarlar → Nöbet** bölümünden açılır. Yerel kurallar alarmları birkaç dakikada
+bir denetler — kritik seviyede alarm, izlenen kural ya da grup, Active Response, aynı kaynaktan başarısız
+denemelerden sonra başarılı giriş, ani artış, veri göndermeyi kesen ajanlar — ve hemen "kural tabanlı uyarı —
+yapay zekâ incelemedi" diye bildirir. Model çağrılmaz. Sıradaki planlı **AI turu** (günde bir ya da iki kez,
+saatler Ayarlar'dan) tüm olayları tek istekte alır; olay başına hüküm ve eşik önerisi döner. Öneri, yönetici
+kabul edene kadar hiçbir şeyi değiştirmez. Kanallar tanımlı olanlar arasından seçilir; sessiz saatlerde kritik
+olaylar dışındakiler bekletilir. Ayrıntı: [docs/watch.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/watch.md).
+
+## Ayarlar, maskeleme profili, yedekleme
+
+`/e/<ortam>/settings` (yalnızca yönetici) yeniden kurulum gerektirmeyen ayarları tutar: nöbet, AI turu
+saatleri, maskeleme profili (kendi `x_…` algılayıcılarınız, istisnalar, önizleme, YAML içe/dışa aktarım; sır
+algılayıcıları kapatılamaz) ve yedekleme. **Yedekleme**, bilgi tabanı, raporlar, nöbet olayları ve ayarların
+şifreli arşivini indirir, isterseniz S3'e de gönderir; içe aktarımda önce önizleme gösterir. **Depolama
+güvenliği**, bir indeks silme politikasının uygulamanın kendi indekslerini silip silmeyeceğini gösterir ve
+bir indeks kaybolduğunda kritik bayrak kaldırır. Ayrıntı: [docs/backup.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/backup.md).
+
 ## Aylık denetim raporu
 
 `/e/<ortam>/audit` LLM kullanmadan deterministik bir rapor üretir: hacim, koşular, bulgular ve kararlar, kural

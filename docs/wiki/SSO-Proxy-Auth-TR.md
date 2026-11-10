@@ -191,8 +191,8 @@ Overlay'de etkinleştirin:
 
 ```yaml
 components:   # uzak ve sürümü sabit — host adlarını düzenlemek için klasörleri overlay'in yanına kopyalayın
-  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/networkpolicy?ref=v0.9.2
-  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/ingress-traefik-authentik?ref=v0.9.2
+  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/networkpolicy?ref=v0.10.0
+  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/ingress-traefik-authentik?ref=v0.10.0
 ```
 
 Bileşen `AUTH_DISABLED=true`, `COOKIE_SECURE=true` ve `NOTIFY_UI_URL` değerlerini zaten ayarlar (host'u
@@ -248,3 +248,16 @@ fiilen kimlik doğrulamasızdır. Dışarı açmadan önce ağ politikasını d�
 ---
 
 [English](SSO-Proxy-Auth) · [Türkçe](SSO-Proxy-Auth-TR)
+
+## İsteklerin proxy'den geldiğini doğrulama (0.10)
+
+`AUTH_DISABLED=true` iken uygulama kendisine ulaşan herkese güvenir. Üç ayar bunu "proxy" anlamına getirir:
+
+| Değişken | Etki |
+|---|---|
+| `SSO_REQUIRE_USER` (varsayılan `true`) | `USER_HEADER` başlıklarından biri olmayan istek 401 ile reddedilir. |
+| `TRUSTED_PROXIES` | Proxy'nin adresleri/CIDR'leri. Başka adresler 403 alır; bu adreslerden gelen `X-Forwarded-For` denetim kaydında kullanılır. |
+| `PROXY_SECRET` | Proxy, `X-WDT-Proxy-Secret` başlığını bu değerle eklemelidir. |
+
+`/healthz`, `/readyz`, `/mcp` (kendi belirteci) ve `METRICS_TOKEN` tanımlıyken `/metrics` etkilenmez.
+NetworkPolicy'yi koruyun: bu denetimler onu tamamlar, yerini almaz.

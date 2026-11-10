@@ -60,6 +60,11 @@ aksi halde                    → WAZUH_* değişkenleriyle tek ortam modu
 | `AUDIT_STRICT` | *(üretimde açık)* | Denetim dosyası yazılamıyorken durum değiştiren istekler iz bırakmadan çalışmak yerine 503 döner. |
 | `PRIVACY_SALT` | *(`APP_SECRET`, yoksa rastgele)* | Kişisel veri takma adlarının anahtarı (`openssl rand -hex 32`). İkisi de yoksa her açılışta rastgele anahtar üretilir: güvenlidir, ama takma adlar yeniden başlatmada değişir. |
 | `WDT_TRUSTED_ORIGINS` | *(boş)* | Durum değiştiren istek gönderebilecek ek kaynaklar (virgülle). Yalnızca dış adres, uygulamanın gördüğü `Host`/`X-Forwarded-Host` değerinden farklıysa gerekir. |
+| `TRUSTED_PROXIES` | *(boş)* | Reverse proxy'nizin adresleri/CIDR'leri: `X-Forwarded-For` başlığına güvenilir (giriş kısıtlaması, denetim kaydı) ve SSO modunda arayüze yalnızca bu adresler ulaşabilir. |
+| `PROXY_SECRET` | *(boş)* | SSO modu: istekler bunu `X-WDT-Proxy-Secret` başlığıyla taşımalıdır. |
+| `SSO_REQUIRE_USER` | `true` | SSO modu: kullanıcı başlığı olmayan istekler reddedilir. |
+| `MCP_RATE_PER_MINUTE` | `120` | İstemci adresi başına dakikalık MCP isteği (`0` = sınırsız). |
+| `BACKUP_S3_*`, `BACKUP_PASSPHRASE` | *(boş)* | S3 hedefi ve otomatik yedek parolası — bkz. [docs/backup.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/backup.md). |
 | `METRICS_TOKEN` | *(boş)* | `/metrics` için Bearer token; boşsa admin oturumu gerekir. |
 | `MCP_TOKEN` | *(boş)* | `POST /mcp`'yi açar; yoksa uç nokta `404` döner. [MCP](MCP-TR). |
 

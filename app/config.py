@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .backupcfg import BackupCfg, backup_from_env
 from .notify import NotifyCfg
 
 _ENV_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
@@ -430,6 +431,7 @@ class Settings(BaseModel):
     app: AppConfig = Field(default_factory=AppConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     notify: NotifyCfg = Field(default_factory=NotifyCfg)
+    backup: BackupCfg = Field(default_factory=BackupCfg)
     environments: list[Environment]
     base_dir: Path = Path(".")
 
@@ -556,6 +558,7 @@ def settings_from_env() -> dict:
         "app": {"timezone": E("TZ", "UTC"), "language": E("APP_LANGUAGE", "en")},
         "llm": llm_from_env(),
         "notify": notify_from_env(),
+        "backup": backup_from_env(),
         "environments": [env],
     }
 
@@ -580,6 +583,8 @@ def load_settings(path: str | os.PathLike | None = None) -> Settings:
             raw["llm"] = llm_from_env()
         if "notify" not in raw:  # no notify block → NOTIFY_*/SMTP_*/TELEGRAM_*/TEAMS_*
             raw["notify"] = notify_from_env()
+        if "backup" not in raw:  # no backup block → BACKUP_* variables
+            raw["backup"] = backup_from_env()
         app_cfg = dict(raw.get("app") or {})   # app.language / app.timezone fall back to APP_LANGUAGE / TZ
         if "language" not in app_cfg and os.environ.get("APP_LANGUAGE") in LANGUAGES:
             app_cfg["language"] = os.environ["APP_LANGUAGE"]

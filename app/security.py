@@ -88,6 +88,12 @@ def validate(settings, env=os.environ, demo: bool = False) -> tuple[list[str], l
     errors: list[str] = []
     warnings: list[str] = []
     _privacy_key(settings, env, warnings)
+    for e in getattr(settings, "environments", []):
+        pre = str(getattr(e, "storage_prefix", "") or "").lower()
+        if pre.startswith(("wazuh-", "wazuh_", ".")) or pre == "wazuh":
+            warnings.append(f"{e.id}: storage_prefix {e.storage_prefix!r} falls under Wazuh/system index patterns — "
+                            "an index retention policy for those indices can delete the application's data "
+                            "(docs/backup.md)")
 
     if not prod:
         if (env.get("APP_PASSWORD") or "").strip().lower() in WEAK_PASSWORDS:
@@ -100,8 +106,12 @@ def validate(settings, env=os.environ, demo: bool = False) -> tuple[list[str], l
 
     auth_disabled = _true(env, "AUTH_DISABLED")
     if auth_disabled:
-        warnings.append("AUTH_DISABLED=true: the app trusts the reverse proxy's user header — the UI/API "
-                        "must only be reachable through that proxy (NetworkPolicy or host firewall)")
+        if not env.get("TRUSTED_PROXIES") and not env.get("PROXY_SECRET"):
+            warnings.append("AUTH_DISABLED=true without TRUSTED_PROXIES or PROXY_SECRET: the app believes any "
+                            "client that can reach it and sends a user header — restrict the network "
+                            "(NetworkPolicy) and set one of the two (docs/sso-proxy-auth.md)")
+        if (env.get("SSO_REQUIRE_USER") or "true").strip().lower() in ("0", "false", "no", "off"):
+            warnings.append("SSO_REQUIRE_USER=false: requests without a user header are accepted as admin")
     else:
         pw = env.get("APP_PASSWORD") or ""
         if not pw:

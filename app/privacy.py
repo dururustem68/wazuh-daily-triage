@@ -143,7 +143,7 @@ DETECTORS: list[Detector] = [
 ]
 KINDS = [d.kind for d in DETECTORS] + ["ip"]
 _IPV4 = re.compile(r"(?<![\d.])(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?![\d.])")
-_TOKEN = re.compile(r"<(?P<k>[a-z_]+):(?P<h>[0-9a-f]{6,32})>")
+_TOKEN = re.compile(r"<(?P<k>[a-z_][a-z0-9_]*):(?P<h>[0-9a-f]{6,32})>")
 TOKEN_HEX = 16          # 64 bit: no realistic collision inside the registry, no brute-force table
 _random_salt: bytes | None = None
 
@@ -172,7 +172,7 @@ def _salt() -> bytes:
 
 
 class _Registry:
-    """Process-wide token → value map (bounded), so a pseudonym resolves in any later tool call or MCP request."""
+    """Token → value map of one scope (bounded), so a pseudonym resolves in a later tool call or MCP request."""
 
     def __init__(self, cap: int = 200_000):
         self.cap = cap
@@ -188,7 +188,99 @@ class _Registry:
         return self.m.get(tok)
 
 
-REGISTRY = _Registry()
+class _Registries:
+    """One registry per scope (the environment id).
+
+    A pseudonym created for one environment must not resolve in another: with one shared map, an MCP
+    client limited to environment A could pass a token it saw there to a tool of environment B — or
+    simply guess — and have B's real value substituted into a query.
+    """
+
+    def __init__(self):
+        self._by_scope: dict[str, _Registry] = {}
+
+    def scope(self, name: str = "") -> _Registry:
+        r = self._by_scope.get(name)
+        if r is None:
+            r = self._by_scope[name] = _Registry()
+        return r
+
+    # the pre-0.10 single registry is the unnamed scope
+    def put(self, tok: str, val: str):
+        self.scope().put(tok, val)
+
+    def get(self, tok: str) -> str | None:
+        return self.scope().get(tok)
+
+
+REGISTRY = _Registries()
+
+# ------------------------------------------------------------------ custom detectors
+MAX_PATTERN = 200
+_UNSAFE = [
+    (re.compile(r"\\[1-9]|\(\?P=|\(\?P<[^>]*>.*\\g<"), "back-references"),
+    (re.compile(r"\(\?<?[=!]"), "look-around"),
+    (re.compile(r"\(\?[a-zA-Z]*[^:)a-zA-Z<P]"), "this group syntax"),
+    # a quantified group that itself contains a quantifier or alternation: (a+)+, (a|aa)*, (.*a){3,}
+    (re.compile(r"\((?:[^()\\]|\\.)*(?:[+*]|\{\d*,\d*\}|\|)(?:[^()\\]|\\.)*\)\s*(?:[+*]|\{\d*,?\d*\})"),
+     "a repeated group that contains a repetition or alternative"),
+    (re.compile(r"\.[+*][+*?]?(?:\.|\\[wWsSdD]|\[[^\]]*\])[+*]|(?:\\[wWsSdD]|\[[^\]]*\])[+*][+*?]?\.[+*]"
+                r"|(\\[wWsSdD])[+*][+*?]?\1[+*]"), "adjacent unbounded wildcards"),
+]
+_PROBES = ("a", "1", " ", "a1", "a ", "ab", "<>")
+
+
+def _probe(c) -> None:
+    """Time the compiled pattern on inputs built to trigger backtracking; reject what grows too fast."""
+    import time
+    for n, budget in ((16, 0.02), (20, 0.02), (24, 0.02), (500, 0.05)):
+        for unit in _PROBES:
+            text = unit * n + "\x00"
+            t0 = time.perf_counter()
+            c.search(text)
+            if time.perf_counter() - t0 > budget:
+                raise ValueError("the pattern is too slow on repetitive text (catastrophic backtracking)")
+
+
+def compile_custom(pattern: str):
+    """Compile a user-supplied pattern so that it can never stall a run.
+
+    With ``google-re2`` installed the pattern is compiled by RE2 (linear time by construction). Without
+    it, only a conservative subset of the standard syntax is accepted: no back-references, no
+    look-around, no nested or adjacent unbounded repetition. Either way the pattern is short.
+    """
+    p = str(pattern or "")
+    if not p.strip():
+        raise ValueError("empty pattern")
+    if len(p) > MAX_PATTERN:
+        raise ValueError(f"pattern is longer than {MAX_PATTERN} characters")
+    try:
+        import re2
+    except ImportError:
+        re2 = None
+    if re2 is not None:
+        try:
+            return re2.compile(p)
+        except Exception as e:  # noqa: BLE001 - re2.error
+            raise ValueError(f"not a valid RE2 pattern: {e}") from e
+    for rx, what in _UNSAFE:
+        if rx.search(p):
+            raise ValueError(f"{what} is not allowed in custom patterns (it can make matching very slow)")
+    try:
+        c = re.compile(p)
+    except re.error as e:
+        raise ValueError(f"not a valid pattern: {e}") from e
+    if c.match(""):
+        raise ValueError("the pattern matches empty text")
+    _probe(c)
+    return c
+
+
+def _allow_rx(a: str):
+    try:
+        return re.compile(a)
+    except re.error:
+        return compile_custom(a)
 
 
 class Masker:
@@ -200,17 +292,23 @@ class Masker:
     """
 
     def __init__(self, kinds: list[str] | None = None, ips: str = "keep", allow: list[str] | None = None,
-                 enabled: bool = True):
+                 enabled: bool = True, scope: str = "", custom: list[tuple[str, str]] | None = None,
+                 disabled: list[str] | None = None):
         self.enabled = enabled
-        self.kinds = set(kinds or KINDS)
+        self.scope = scope
+        secret = {d.kind for d in DETECTORS if d.secret}
+        base = set(kinds or KINDS)
+        self.kinds = (base - set(disabled or ())) | (base & secret)      # a profile can never switch a secret off
         self.ips = ips
-        self.allow = [re.compile(a) for a in allow or []]
+        self.allow = [_allow_rx(a) for a in allow or []]
+        self.custom = [(name, compile_custom(rx)) for name, rx in custom or []]
         self.counts: dict[str, int] = {}
 
     def _tok(self, kind: str, val: str) -> str:
-        h = hmac.new(_salt(), f"{kind}:{val}".encode(), hashlib.sha256).hexdigest()[:TOKEN_HEX]
+        h = hmac.new(_salt(), f"{self.scope}|{kind}:{val}".encode() if self.scope else f"{kind}:{val}".encode(),
+                     hashlib.sha256).hexdigest()[:TOKEN_HEX]
         tok = f"<{kind}:{h}>"
-        REGISTRY.put(tok, val)
+        REGISTRY.scope(self.scope).put(tok, val)
         return tok
 
     def _allowed(self, v: str) -> bool:
@@ -235,6 +333,14 @@ class Masker:
                     return full[:a] + new + full[b:]
                 return new
             text = d.rx.sub(rep, text)
+        for name, rx in self.custom:
+            def crep(m, name=name):
+                v = m.group(0)
+                if not v or "<" in v or self._allowed(v):      # never re-mask a token
+                    return v
+                self.counts[name] = self.counts.get(name, 0) + 1
+                return self._tok(name, v)
+            text = rx.sub(crep, text[:2_000_000])
         if self.ips != "keep" and "ip" in self.kinds:
             def iprep(m):
                 v = m.group(0)
@@ -252,27 +358,41 @@ class Masker:
         return text
 
     @staticmethod
-    def unmask(text: str) -> str:
+    def unmask(text: str, scope: str = "") -> str:
         if not text or "<" not in text:
             return text
-        return _TOKEN.sub(lambda m: REGISTRY.get(m.group(0)) or m.group(0), text)
+        reg = REGISTRY.scope(scope)
+        return _TOKEN.sub(lambda m: reg.get(m.group(0)) or m.group(0), text)
 
     @classmethod
-    def unmask_obj(cls, o):
+    def unmask_obj(cls, o, scope: str = ""):
         if isinstance(o, str):
-            return cls.unmask(o)
+            return cls.unmask(o, scope)
         if isinstance(o, list):
-            return [cls.unmask_obj(x) for x in o]
+            return [cls.unmask_obj(x, scope) for x in o]
         if isinstance(o, dict):
-            return {k: cls.unmask_obj(v) for k, v in o.items()}
+            return {k: cls.unmask_obj(v, scope) for k, v in o.items()}
         return o
 
 
-def masker_for(env) -> Masker | None:
+def masker_for(env, profile=None) -> Masker | None:
+    """The environment's masker: the standard profile plus what the site added in the settings page."""
     p = getattr(env, "privacy", None)
     if not p or p.mode == "off":
         return None
-    return Masker(kinds=p.kinds or None, ips=p.ips, allow=p.allow)
+    allow = list(p.allow) + list(getattr(profile, "allow", None) or [])
+    custom = [(d.name, d.pattern) for d in getattr(profile, "custom", None) or []]
+    return Masker(kinds=p.kinds or None, ips=p.ips, allow=allow, scope=getattr(env, "id", ""),
+                  custom=custom, disabled=list(getattr(profile, "disabled", None) or []))
+
+
+def profile_info(env, profile=None) -> dict:
+    """What a run records about the masking in force (no patterns, no values)."""
+    p = getattr(env, "privacy", None)
+    return {"mode": getattr(p, "mode", "off"), "ips": getattr(p, "ips", "keep"),
+            "profile_version": int(getattr(profile, "version", 0) or 0),
+            "custom": [d.name for d in getattr(profile, "custom", None) or []],
+            "disabled": list(getattr(profile, "disabled", None) or [])}
 
 
 # ------------------------------------------------------------------ LLM wrapper
@@ -299,9 +419,9 @@ class MaskingLLM:
     async def complete(self, system, messages, tools, force_tool=None):
         r = await self.inner.complete(self.masker.mask(system), [self._msg(m) for m in messages], tools,
                                       force_tool=force_tool)
-        r.text = Masker.unmask(r.text or "")
+        r.text = Masker.unmask(r.text or "", self.masker.scope)
         for c in r.tool_calls:
-            c.input = Masker.unmask_obj(c.input)
+            c.input = Masker.unmask_obj(c.input, self.masker.scope)
         return r
 
     def __getattr__(self, n):

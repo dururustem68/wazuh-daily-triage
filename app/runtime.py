@@ -11,6 +11,9 @@ The behaviour lives in focused mixins so each file stays reviewable:
 - ``diagnostics.py`` — the connection test
 - ``knowledgeio.py`` — seed import and knowledge import/export
 - ``scheduler.py`` — scheduler loop, retention tick, shutdown
+- ``watch.py`` — rule-based alerts between AI rounds (no model), verdict hand-over
+- ``admin.py`` — settings document, storage safety (lost indices, retention policies)
+- ``backup.py`` — encrypted export/import, S3
 
 ``Runtime`` itself only builds the environments and keeps the shared caches; existing imports
 (``normalize_report``, ``_compact``, ``demo_enabled``, ``build_sources``) are re-exported here.
@@ -23,6 +26,8 @@ from datetime import UTC
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from .admin import AdminMixin
+from .backup import BackupMixin
 from .config import Environment, LLMConfig, Settings
 from .diagnostics import DiagnosticsMixin
 from .incident_ops import IncidentMixin
@@ -37,6 +42,7 @@ from .scheduler import SchedulerMixin
 from .services import EnvRuntime
 from .services import build_sources as build_sources
 from .store import IndexStore, MemoryStore
+from .watch import WatchMixin
 from .wazuh.api import WazuhAPI
 from .wazuh.indexer import Indexer
 
@@ -47,7 +53,7 @@ __all__ = ["Runtime", "EnvRuntime", "build_sources", "demo_enabled", "normalize_
 
 
 class Runtime(KnowledgeIOMixin, RunMixin, ReviewMixin, RuleDeployMixin, IncidentMixin, DiagnosticsMixin,
-              SchedulerMixin):
+              WatchMixin, AdminMixin, BackupMixin, SchedulerMixin):
     def __init__(self, settings: Settings, demo: bool = False):
         self.settings = settings
         self.demo = demo
@@ -66,6 +72,10 @@ class Runtime(KnowledgeIOMixin, RunMixin, ReviewMixin, RuleDeployMixin, Incident
         self.live_state: dict[str, dict] = {}
         self._live_last: dict[str, float] = {}
         self._live_busy: set[str] = set()
+        self._watch_last: dict[str, float] = {}
+        self._watch_busy: set[str] = set()
+        self._storage_last: dict[str, float] = {}
+        self._backup_done: set[str] = set()
         for e in settings.environments:
             ix: Any
             api: Any
@@ -89,7 +99,8 @@ class Runtime(KnowledgeIOMixin, RunMixin, ReviewMixin, RuleDeployMixin, Incident
         if key not in self._llms:
             self._llms[key] = make_llm(cfg)
         from .privacy import MaskingLLM, masker_for
-        m = masker_for(env)
+        rt = self.envs.get(env.id)
+        m = masker_for(env, getattr(getattr(rt, "settings", None), "mask", None))
         return MaskingLLM(self._llms[key], m) if m else self._llms[key]
 
     def lang(self, env: Environment) -> str:
