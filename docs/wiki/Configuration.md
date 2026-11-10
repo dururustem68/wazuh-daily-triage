@@ -64,7 +64,7 @@ otherwise                → single-environment mode from WAZUH_* variables
 | `PROXY_SECRET` | *(empty)* | SSO mode: requests must carry it as `X-WDT-Proxy-Secret`. |
 | `SSO_REQUIRE_USER` | `true` | SSO mode: refuse requests without a user header. |
 | `MCP_RATE_PER_MINUTE` | `120` | MCP requests per minute and client address (`0` = unlimited). |
-| `BACKUP_S3_*`, `BACKUP_PASSPHRASE` | *(empty)* | S3 target and the passphrase for automatic backups — see [docs/backup.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/backup.md). |
+| `BACKUP_S3_*`, `BACKUP_PASSPHRASE` | *(empty)* | S3 target and the passphrase for automatic backups — see [Backup](Backup). |
 | `METRICS_TOKEN` | *(empty)* | Bearer token for `/metrics`; when empty an admin session is required. |
 | `MCP_TOKEN` | *(empty)* | Enables `POST /mcp`; without it the endpoint answers `404`. See [MCP](MCP). |
 
@@ -228,6 +228,30 @@ each block.
 The model never sends raw queries: tools build them and `app/query_guard.py` validates the field names, the
 window and the bucket counts first. The collector itself uses fixed, reviewed queries and is not limited by
 these values, so a tight cap cannot break a scheduled run.
+
+## Settings in the UI (0.10)
+
+Since 0.10 some behaviour is set in **Settings** (`/e/<env>/settings`, admin only) instead of the YAML file, and
+stored in the indexer (`<prefix>-settings`): the [Watch](Watch) (triggers, thresholds, channels, quiet hours,
+muted events), the AI-round times (override `schedule.times`/`days` when set), the masking profile
+([Privacy](Privacy)) and the backup reminder. Connections and credentials never move there. Every change is
+written to the audit trail with the names of the changed fields.
+
+Backups are configured in YAML (or with the `BACKUP_*` variables):
+
+```yaml
+backup:
+  passphrase: ${BACKUP_PASSPHRASE:-}   # automatic backups only
+  keep_events_days: 180                # watch events older than this are pruned (0 = keep)
+  s3:
+    endpoint: ${BACKUP_S3_ENDPOINT:-}
+    bucket: ${BACKUP_S3_BUCKET:-}
+    region: eu-central-1
+    access_key: ${BACKUP_S3_ACCESS_KEY:-}
+    secret_key: ${BACKUP_S3_SECRET_KEY:-}
+```
+
+See [Backup](Backup).
 
 ## Add an environment
 

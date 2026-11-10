@@ -515,7 +515,12 @@ def settings_from_env() -> dict:
     """Single-environment configuration from plain environment variables (no YAML needed)."""
     E = os.environ.get
     if not E("WAZUH_INDEXER_URL"):
-        raise FileNotFoundError("no config file and WAZUH_INDEXER_URL is not set")
+        want = E("WDT_CONFIG") or "config/environments.yaml"
+        raise FileNotFoundError(
+            f"no configuration: {want} does not exist and WAZUH_INDEXER_URL is not set. "
+            f"For a real Wazuh, create the YAML file or set WAZUH_INDEXER_URL. For the demo set WDT_DEMO=true "
+            f"(currently WDT_DEMO={E('WDT_DEMO', '')!r}; if .env sets a variable twice, the last line wins — "
+            f"or simply: cp .env.demo .env)")
     verify = _bool(E("WAZUH_VERIFY_TLS"), True)
     env: dict = {
         "id": E("WAZUH_ENV_ID", "default"), "name": E("WAZUH_ENV_NAME", "Wazuh"),

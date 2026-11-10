@@ -59,6 +59,30 @@ Sınırlar: bu bir takma adlandırmadır, DLP değildir. Serbest metindeki adlar
 kullanıcı adları tespit edilmez. Düzenlemeye tabi veride (BDDK, KVKK) bunu veri işleme sözleşmesi olan bir
 sağlayıcıyla ya da yerel bir modelle birlikte kullanın.
 
+## Maskeleme profili (0.10)
+
+Yukarıdaki algılayıcılar **standart profildir**: yerleşiktir, her kurulumda aynıdır, değiştirilemez.
+**Ayarlar → Kişisel veri maskeleme** (yalnızca yönetici) bir kurumun ihtiyacını üstüne ekler:
+
+| | Nedir | Kurallar |
+|---|---|---|
+| Kendi algılayıcılarınız | bir ad ve desen, örn. `x_musteri_no` = `CUST-\d{6}` → `<x_musteri_no:…>` | adlar `x_` ile başlar; en fazla 20; desenler en fazla 200 karakter, `google-re2` kuruluysa RE2 ile derlenir, değilse bir koşuyu kilitleyemeyecek biçimlerle sınırlıdır (ileri/geri bakış, geri başvuru, iç içe tekrar yok) ve tekrarlı girdiyle süre testinden geçer |
+| Hiç maskeleme | okunabilir kalacak değerlerin desenleri (servis hesapları, kendi alan adınız) | YAML'daki `privacy.allow` listesine eklenir |
+| Kapatma | sır olmayan bir standart algılayıcı (örn. `phone`) | onay ister, denetim kaydına yazılır; **sır algılayıcıları (parola, belirteç, JWT, anahtarlar) kapatılamaz** |
+
+**Önizleme**, yapıştırılan bir log satırı için modelin ne alacağını kaydedilmemiş formla gösterir; hiçbir şey
+gönderilmez ya da saklanmaz. Profil YAML olarak dışa ve içe aktarılabilir. Her değişiklik profil sürümünü artırır
+ve her koşu kullandığı sürümü kaydeder (`run.privacy`); böylece bir rapor, geçerli kurallarla ilişkilendirilebilir.
+
+Profil yalnızca ortamda `privacy.mode: mask` ayarlıysa uygulanır; modun kendisi YAML'da kalır.
+
+## Takma ad anahtarı ve kapsamı
+
+Takma adlar, değerin `PRIVACY_SALT` (yoksa `APP_SECRET`) ile HMAC'idir. Yerleşik anahtar yoktur: ikisi de yoksa
+her açılışta rastgele bir anahtar üretilir — güvenlidir ama takma adlar yeniden başlatmada değişir (açılışta uyarı
+verilir). Belirteçler 64 bittir ve 0.10'dan beri **ortam başınadır**: bir ortamda üretilen `<email:…>` başka bir
+ortamda çözülmez.
+
 ## Tespit: loglarınızdaki kişisel veri
 
 Her koşu, penceredeki alarmlardan bir örneklemi aynı türler için tarar. Örneklem en yeni `detect_sample` alarm

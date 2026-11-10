@@ -40,6 +40,10 @@ async def lifespan(app: FastAPI):
     if demo and want and cfg != want:
         log.warning("WDT_DEMO=true: %s not found, using %s", want, cfg)
     settings = load_settings(cfg)
+    if demo and settings.llm.provider != "mock" and not settings.llm.api_key and not settings.llm.base_url:
+        # .env.example sets LLM_PROVIDER=anthropic; a demo without a key would only show "AI analysis failed"
+        log.warning("WDT_DEMO=true: LLM_PROVIDER=%s has no API key — using the mock provider", settings.llm.provider)
+        settings.llm = settings.llm.model_copy(update={"provider": "mock"})
     warnings = security.check(settings, demo=demo)          # refuses to start on fatal problems
     for w in warnings:
         log.warning("security: %s", w)

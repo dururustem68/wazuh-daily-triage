@@ -59,6 +59,30 @@ Limits: this is pseudonymisation, not DLP. Names in free text ("Betül Eser") an
 addresses are not detected. For regulated data, combine it with a provider under a data-processing agreement, or
 use a local model.
 
+## Masking profile (0.10)
+
+The detectors above are the **standard profile**: built in, the same on every installation, not editable.
+**Settings → Personal data masking** (admin only) adds what a site needs on top:
+
+| | What it is | Rules |
+|---|---|---|
+| Your detectors | a name and a pattern, e.g. `x_customer_no` = `CUST-\d{6}` → `<x_customer_no:…>` | names start with `x_`; at most 20; patterns up to 200 characters, compiled with RE2 when `google-re2` is installed, otherwise limited to forms that cannot stall a run (no look-around, back-references or nested repetition) and timed on repetitive input |
+| Never mask | patterns for values that stay readable (service accounts, your own domain) | added to `privacy.allow` from the YAML |
+| Switch off | a non-secret standard detector (e.g. `phone`) | asks for confirmation, written to the audit trail; **secret detectors (password, token, JWT, keys) cannot be switched off** |
+
+**Preview** shows what the model would receive for a pasted log line, with the unsaved form, without sending or
+storing anything. The profile can be exported and imported as YAML. Every change raises the profile version and
+every run records the version it used (`run.privacy`), so a report can be tied to the rules in force.
+
+The profile only applies when `privacy.mode: mask` is set for the environment; the mode itself stays in the YAML.
+
+## Pseudonym key and scope
+
+Pseudonyms are an HMAC of the value with `PRIVACY_SALT` (else `APP_SECRET`). There is no built-in key: without
+either, a random key is drawn at every start — safe, but pseudonyms change on restart (a startup warning says so).
+Tokens are 64 bit and, since 0.10, **per environment**: `<email:…>` created in one environment does not resolve
+in another.
+
 ## Detection: personal data in your logs
 
 Every run scans a sample of the window's alerts for the same kinds. The sample is the newest `detect_sample`

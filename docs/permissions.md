@@ -183,11 +183,12 @@ default footprint stays under ~80 MB. Each generation is a complete hash chain o
 new file has no `prev`), so verify every file you ship. For compliance, ship the files to central storage
 (Vector, Fluent Bit, Filebeat, a sidecar) and keep them according to your retention policy — the application
 does not delete history beyond rotation. The shipped manifests mount a writable directory at `/app/logs`
-(`docker-compose` bind-mounts `./logs`, Kubernetes an `emptyDir`), so records vanish with the pod there:
+(`docker-compose` keeps it in the named volume `audit`, Kubernetes in an `emptyDir`), so records vanish with the pod there:
 ship them or replace the volume with a PVC. Set `AUDIT_LOG=false` only for tests: production startup then
-warns that there is no trail. If the path is not writable the application keeps running and logs a single
-warning; a mounted read-only volume is fine as long as the log directory itself is writable or shipped
-elsewhere.
+warns that there is no trail. If the path is not writable, production mode (`AUDIT_STRICT`, default on with
+`ENVIRONMENT=production`) refuses state-changing requests with `503` until it is fixed; outside production every
+lost record is logged as an error and counted in `wdt_audit_write_failures_total`. A read-only root filesystem
+is fine as long as the log directory itself is writable.
 
 ## 6. Metrics endpoint
 

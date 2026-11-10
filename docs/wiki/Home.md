@@ -15,8 +15,10 @@ findings, questions and rule drafts that a human decides on.
 - Keeps a knowledge base (known noise, decisions, open items) that is given to the model on every run.
 - Never writes to Wazuh: the only writes go to its own `daily-triage-*` indices, plus the optional rule
   deployment you explicitly approve.
-- Runs one triage per schedule, notifies on critical items, and has a read-only viewer role and an MCP server
-  for external assistants.
+- Watches the alerts every few minutes with local rules and notifies at once — without calling the model —
+  and lets the scheduled AI round (once or twice a day) judge everything the watch saw in one call.
+- Has a settings page for the watch, the AI-round times, the personal-data masking profile and encrypted
+  backups, a read-only viewer role and an MCP server for external assistants.
 
 ## Pick your path
 
@@ -27,6 +29,8 @@ findings, questions and rule drafts that a human decides on.
 | Put Keycloak or Authentik in front (SSO proxy) | [SSO proxy authentication](SSO-Proxy-Auth) |
 | Give a colleague read-only access | [Viewer mode](Viewer-Mode) |
 | Use the investigation tools from Claude Desktop or another MCP client | [MCP server](MCP) |
+| Get urgent alerts within minutes, without the AI | [Watch](Watch) |
+| Back up the knowledge base, protect it from index retention rules | [Backup](Backup) |
 | Rule deploy, promotion, incident records, extra sources, audit report, eval | [Features](Features) |
 | Keep personal data away from the LLM and find it in your logs (GDPR / KVKK) | [Privacy](Privacy) |
 | Understand the security model | [docs/security-exceptions.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/security-exceptions.md), [docs/permissions.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/permissions.md) |
@@ -37,12 +41,11 @@ findings, questions and rule drafts that a human decides on.
 ```sh
 git clone https://github.com/dururustem68/wazuh-daily-triage.git
 cd wazuh-daily-triage
-cp .env.example .env
-# set WDT_DEMO=true and LLM_PROVIDER=mock in .env, then:
+cp .env.demo .env
 docker compose up -d --build
 ```
 
-Open <http://127.0.0.1:8080> and sign in with the `APP_PASSWORD` from `.env`. The demo uses synthetic data
+Open <http://127.0.0.1:8080> and sign in with `demo-password-change-me` (the `APP_PASSWORD` in `.env.demo`). The demo uses synthetic data
 (a Jenkins brute force, SSH attempts, a disconnected agent, a vulnerability burst) and the `mock` provider,
 which writes a placeholder report without calling a model.
 

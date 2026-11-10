@@ -788,3 +788,19 @@ def test_pages_render_events_suggestions_and_the_loss_banner_in_every_language(c
     finally:
         er.store.health["lost"] = []
         c.post("/lang", data={"lang": "en"})
+
+
+def test_demo_start_is_forgiving_and_the_error_says_what_to_do(monkeypatch, tmp_path):
+    from app.config import settings_from_env
+    monkeypatch.delenv("WAZUH_INDEXER_URL", raising=False)
+    monkeypatch.setenv("WDT_DEMO", "false")
+    with pytest.raises(FileNotFoundError, match="last line wins.*cp .env.demo .env"):
+        settings_from_env()
+    env = {}
+    for line in open(os.path.join(ROOT, ".env.demo"), encoding="utf-8"):
+        if line.strip() and not line.startswith("#"):
+            k, v = line.strip().split("=", 1)
+            env[k] = v
+    assert env["WDT_DEMO"] == "true" and env["LLM_PROVIDER"] == "mock"
+    example = open(os.path.join(ROOT, ".env.example"), encoding="utf-8").read()
+    assert "\nWDT_DEMO=" not in example                                          # nothing to override the demo

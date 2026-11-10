@@ -160,7 +160,7 @@ attempts from the same source, a sudden increase, agents that stopped reporting 
 "rule-based alert — not reviewed by AI". No model is called. The next scheduled **AI round** (one or two a
 day, times set in Settings) receives all events in one request and returns a verdict per event and tuning
 suggestions; a suggestion changes nothing until an administrator accepts it. Channels are chosen among the
-configured ones, quiet hours hold back everything but critical events. Details: [docs/watch.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/watch.md).
+configured ones, quiet hours hold back everything but critical events. Details: [Watch](Watch).
 
 ## Settings, masking profile, backup
 
@@ -169,7 +169,7 @@ masking profile (your own `x_…` detectors, exceptions, preview, YAML import/ex
 be switched off) and backup. **Backup** exports an encrypted archive of the knowledge base, reports, watch
 events and settings — as a download and optionally to S3 — and imports it with a preview. **Storage safety**
 shows whether an index retention policy would delete the application's own indices and raises a critical
-flag when one went missing. Details: [docs/backup.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/backup.md).
+flag when one went missing. Details: [Backup](Backup).
 
 ## Monthly audit report
 

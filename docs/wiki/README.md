@@ -1,6 +1,6 @@
 # Wiki source (bilingual)
 
-This folder holds the source of the project wiki: eight pages in English, eight in Turkish, one screenshot
+This folder holds the source of the project wiki: ten pages in English, ten in Turkish, one screenshot
 folder. The pages are plain Markdown and are published to the GitHub wiki repository; they are not built by
 any tool.
 
@@ -14,6 +14,8 @@ any tool.
 | SSO proxy authentication | [`SSO-Proxy-Auth.md`](SSO-Proxy-Auth.md) | [`SSO-Proxy-Auth-TR.md`](SSO-Proxy-Auth-TR.md) | platform / identity team |
 | Viewer mode | [`Viewer-Mode.md`](Viewer-Mode.md) | [`Viewer-Mode-TR.md`](Viewer-Mode-TR.md) | SOC lead, auditor |
 | MCP server | [`MCP.md`](MCP.md) | [`MCP-TR.md`](MCP-TR.md) | AI tooling, integrator |
+| Watch (urgent alerts) | [`Watch.md`](Watch.md) | [`Watch-TR.md`](Watch-TR.md) | operator, SOC on call |
+| Backup and retention | [`Backup.md`](Backup.md) | [`Backup-TR.md`](Backup-TR.md) | operator, auditor |
 
 `_Sidebar.md` is the navigation that GitHub renders on every wiki page. `images/` holds the screenshots,
 taken from a running 0.8.0 demo instance.
@@ -73,7 +75,7 @@ across whenever they change.
 # from the project root
 WIKI=../wazuh-daily-triage.wiki
 for p in Home Home-TR Installation Installation-TR Configuration Configuration-TR Features Features-TR Privacy Privacy-TR \
-         SSO-Proxy-Auth SSO-Proxy-Auth-TR Viewer-Mode Viewer-Mode-TR MCP MCP-TR _Sidebar; do
+         SSO-Proxy-Auth SSO-Proxy-Auth-TR Viewer-Mode Viewer-Mode-TR MCP MCP-TR Watch Watch-TR Backup Backup-TR _Sidebar; do
   cp "docs/wiki/$p.md" "$WIKI/"
 done
 mkdir -p "$WIKI/images"
@@ -90,7 +92,7 @@ In PowerShell:
 ```powershell
 $wiki = '..\wazuh-daily-triage.wiki'
 'Home','Home-TR','Installation','Installation-TR','Configuration','Configuration-TR','Features','Features-TR','Privacy','Privacy-TR',
-'SSO-Proxy-Auth','SSO-Proxy-Auth-TR','Viewer-Mode','Viewer-Mode-TR','MCP','MCP-TR','_Sidebar' |
+'SSO-Proxy-Auth','SSO-Proxy-Auth-TR','Viewer-Mode','Viewer-Mode-TR','MCP','MCP-TR','Watch','Watch-TR','Backup','Backup-TR','_Sidebar' |
   ForEach-Object { Copy-Item "docs\wiki\$_.md" $wiki -Force }
 New-Item -ItemType Directory -Force "$wiki\images" | Out-Null
 Copy-Item docs\wiki\images\*.png "$wiki\images" -Force

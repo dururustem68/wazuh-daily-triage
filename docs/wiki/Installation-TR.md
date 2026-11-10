@@ -28,30 +28,23 @@ birini seçin ve [Yapılandırma](Configuration-TR) sayfasıyla devam edin.
 ```sh
 git clone https://github.com/dururustem68/wazuh-daily-triage.git
 cd wazuh-daily-triage
-cp .env.example .env
-```
-
-`.env` içinde:
-
-```sh
-WDT_DEMO=true
-LLM_PROVIDER=mock
-APP_PASSWORD=uzun-bir-demo-parolasi
-```
-
-```sh
+cp .env.demo .env
 docker compose up -d --build
 ```
 
-<http://127.0.0.1:8080> adresini açın, giriş yapın ve bir kez **Run check now** düğmesine basın. Demo
+`.env.demo` yalnızca demonun ihtiyacını içerir (`WDT_DEMO=true`, `LLM_PROVIDER=mock`, bir demo parolası).
+Bunun yerine `.env.example` kopyasına `WDT_DEMO=true` eklemeyin: `.env` içinde bir değişken iki kez geçerse
+**son** satır geçerlidir. <http://127.0.0.1:8080> adresini açın, `demo-password-change-me` ile giriş yapın ve
+bir kez **Run check now** düğmesine basın. Nöbeti denemek için **Ayarlar**'dan nöbeti açın ve **Nöbet**
+sayfasında **Şimdi tara**'ya basın. Demo
 `config/demo.yaml` ve sentetik veri kullanır; Wazuh'a bağlanmaz. `WDT_DEMO=true` ile
 `ENVIRONMENT=production` birlikte kullanılamaz — uygulama açılmaz. (Hazır 0.7.0 imajı ayrıca
 `WDT_CONFIG=config/demo.yaml` istiyordu; 0.8.0'da düzeltildi.)
 
 ### A2. Gerçek Wazuh (tek ortam)
 
-`docker-compose.yml` portu yalnızca `127.0.0.1` üzerinde yayınlar, `./config` dizinini salt okunur ve `./logs`
-dizinini denetim kaydı için bağlar. Örnek dosyadan başlayın:
+`docker-compose.yml` portu yalnızca `127.0.0.1` üzerinde yayınlar, `./config` dizinini salt okunur bağlar ve
+denetim kaydını `audit` adlı volume'da tutar (`docker compose cp triage:/app/logs/audit.jsonl .` ile dışarı alınır). Örnek dosyadan başlayın:
 
 ```sh
 cp .env.example .env
@@ -281,7 +274,9 @@ Ardından:
 1. Ortam sayfasını açıp **Test connections** düğmesine basın.
 2. **Run check now** ile (veya zamanlamayı bekleyerek) bir raporun oluştuğunu doğrulayın.
 3. Bir bulguyu onaylayın veya reddedin; **Knowledge base** sayfasında kararın saklandığını görün.
-4. `logs/audit.jsonl` içinde giriş ve karar kaydını kontrol edin.
+4. Denetim kaydında kararı kontrol edin (`docker compose exec triage tail logs/audit.jsonl`).
+5. **Ayarlar → Depolama güvenliği** bölümünü açın: önek OK olmalı; ISM okuma yetkisi varsa tablo, bir silme
+   politikasının uygulamanın indekslerini silip silmeyeceğini gösterir.
 
 Başarılı açılış; ortamları, zamanlamayı, denetim dosyasını ve güvenlik uyarılarını loglar. Üretimde
 `app/security.py` şu durumlarda **açılmayı reddeder**: `WDT_DEMO=true`, eksik veya örnek `APP_PASSWORD`, eksik
@@ -306,6 +301,17 @@ helm upgrade wazuh-daily-triage wazuh-daily-triage/wazuh-daily-triage \
 helm rollback wazuh-daily-triage 1     # gerekirse
 ```
 
+### 0.10'a yükseltme
+
+- İlk açılışta iki indeks oluşturulur: `<önek>-events` ve `<önek>-settings`. `<önek>-*` üzerindeki bir indexer
+  rolü bunları kapsar; `-runs` ve `-knowledge` adlarını tek tek sayan bir rol kapsamaz.
+- Nöbet **Ayarlar**'dan açılana kadar davranış değişmez.
+- **SSO (`AUTH_DISABLED=true`)**: kullanıcı başlığı olmayan istekler artık 401 alır. Proxy'nin `USER_HEADER`
+  başlıklarından birini ilettiğinden emin olun ([SSO proxy kimlik doğrulama](SSO-Proxy-Auth-TR)).
+- **Helm**: `networkPolicy.enabled` artık `true`; `networkPolicy.ingressNamespace` değerini ayarlayın.
+- **Docker Compose**: denetim kaydı `./logs` yerine `audit` adlı volume'da.
+- İlk yedeği alın (**Ayarlar → Yedekleme**) — hatırlatma yükseltme tarihinden itibaren sayılır.
+
 Yükseltmeden önce [CHANGELOG.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/CHANGELOG.md) okuyun: yapılandırma anahtarları zaman zaman değişir.
 Mevcut koşular aranabilir kalır; `run_retention_days` (YAML) yalnızca eski koşu belgelerini siler, bilgi tabanına
 dokunmaz.
@@ -315,7 +321,13 @@ dokunmaz.
 | Belirti | Neden ve çözüm |
 |---|---|
 | Konteyner `refusing to start in production` ile çıkıyor | Mesaj değişkeni söyler. Gerçek `APP_PASSWORD`, `APP_SECRET`, `COOKIE_SECURE=true` ayarlayın veya TLS doğrulamasını düzeltin. |
-| `FileNotFoundError: no config file and WAZUH_INDEXER_URL is not set` | Ne `config/environments.yaml` ne de `WAZUH_INDEXER_URL` var. Birini oluşturun. |
+| `FileNotFoundError: no configuration: … does not exist and WAZUH_INDEXER_URL is not set` | Ne YAML dosyası ne de `WAZUH_INDEXER_URL` var. Demo için: `cp .env.demo .env` — `.env` içinde başka bir `WDT_DEMO=` satırının üstüne eklenen `WDT_DEMO=true` ezilir (son satır geçerlidir). |
+| 127.0.0.1:8080'de `ERR_EMPTY_RESPONSE` | Konteyner yeniden başlıyor: nedenini `docker compose logs triage` gösterir (genellikle üstteki satır). |
+| `401` "did not come through the authenticating proxy" | Kullanıcı başlığı olmadan SSO modu (`AUTH_DISABLED=true`). Proxy'den `X-Forwarded-User` / `X-authentik-username` iletin ya da `TRUSTED_PROXIES` / `PROXY_SECRET` ayarını kontrol edin. |
+| Bir düğmede `403` "cross-origin request refused" | Tarayıcının `Origin` değeri uygulamanın gördüğü host değil. `WDT_TRUSTED_ORIGINS=https://dis.adresiniz` ayarlayın. |
+| `503` "audit trail is not writable" | Üretim modu denetim kaydı olmadan yazma işlemini reddeder. `AUDIT_LOG_FILE` yolunu yazılabilir yapın (`audit` volume'u) ya da `AUDIT_STRICT=false`. |
+| Kırmızı uyarı "… indeksi yoktu" | Bir silme politikası ya da biri uygulama verisini sildi. **Ayarlar → Yedekleme → İçe aktar** ya da **Ayarlar**'dan onaylayın. Bkz. [Yedekleme](Backup-TR). |
+| Nöbet hiçbir şey bildirmiyor | Nöbet kapalı, kanal seçili/tanımlı değil, sessiz saatler ya da olay susturulmuş / bilinen gürültü — **Nöbet** sayfası her olayın durumunu gösterir. |
 | Vekilden `502`, konteyner sağlıklı | Vekil yanlış porta (8080) ya da hosta gidiyor; `docker compose ps` kontrol edin. |
 | Giriş sürekli `/login`'e dönüyor | Düz HTTP üzerinde `COOKIE_SECURE=true` veya vekil çerezleri siliyor. HTTPS kullanın; yerel testte geçici olarak `COOKIE_SECURE=false`. |
 | `ZoneInfoNotFoundError` / bilinmeyen saat dilimi | `TZ`'yi IANA adı yapın (`Europe/Istanbul`) ve `tzdata` kurulu kalsın. |

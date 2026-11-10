@@ -28,12 +28,15 @@ Konteyneri yeniden başlatın. Giriş sayfası artık salt okunur görüntüleyi
 
 | İzin | Admin | Görüntüleyici | Kapsam |
 |---|---|---|---|
-| `read` | ✓ | ✓ | pano, raporlar, öneri gelen kutusu, bilgi tabanı ve YAML dışa aktarımı, denetim raporu, terfi paketi görüntüleme, kopyalar ve PDF'ler |
-| `run` | ✓ | – | triage koşusu, canlılık kontrolü, bağlantı testi, bildirim testi |
+| `read` | ✓ | ✓ | pano, raporlar, öneri gelen kutusu, bilgi tabanı ve YAML dışa aktarımı, denetim raporu, terfi paketi görüntüleme, **Nöbet** sayfası (olaylar ve AI hükümleri), kopyalar ve PDF'ler |
+| `run` | ✓ | – | triage koşusu, canlılık kontrolü, bağlantı testi, bildirim testi, Nöbet sayfasında **Şimdi tara** |
 | `decide` | ✓ | – | bulgu kararları, soruları yanıtlama, gelen kutusu işlemleri, olay kayıtları |
 | `knowledge` | ✓ | – | bilgi kaydı oluşturma/güncelleme/silme, içe aktarma |
 | `deploy` | ✓ | – | kural taslağı onaylama/dağıtma/geri alma/kalıcılaştırma |
-| `admin` | ✓ | – | ortam düzeyi işlemler ve `METRICS_TOKEN` olmadan `/metrics` |
+| `admin` | ✓ | – | ortam düzeyi işlemler, `METRICS_TOKEN` olmadan `/metrics` ve **Ayarlar** altındaki her şey — okumak dahil: nöbet, AI turu, maskeleme profili (ve YAML dışa aktarımı), yedek dışa/içe aktarma, depolama kaybını onaylama |
+
+Hiçbir izne eşlenmemiş bir yazma rotası `admin` ister (0.9.2'den beri kapalı varsayılan); bir test tüm rotaları
+denetler, böylece yeni bir özellik kendini yanlışlıkla görüntüleyiciye açamaz.
 
 Matris `app/authz.py` içindedir; HTTP middleware **her** rotada kontrol eder. Düğmeyi gizlemek kontrol değildir:
 elle hazırlanmış bir `POST` `403` alır ve denetim kaydına `denied:<izin>` olarak yazılır.

@@ -101,10 +101,10 @@ Regel funktioniert“, Herabstufen statt Stummschalten.
 
 ```sh
 git clone https://github.com/dururustem68/wazuh-daily-triage.git && cd wazuh-daily-triage
-cp .env.example .env
-sed -i 's/^WDT_DEMO=.*/WDT_DEMO=true/; s/^LLM_PROVIDER=.*/LLM_PROVIDER=mock/; s/^APP_LANGUAGE=.*/APP_LANGUAGE=de/' .env
+cp .env.demo .env
+sed -i 's/^APP_LANGUAGE=.*/APP_LANGUAGE=de/' .env     # optional: die Sprache lässt sich auch in der Oberfläche wählen
 docker compose up -d --build
-# http://127.0.0.1:8080 öffnen — Passwort: APP_PASSWORD aus .env
+# http://127.0.0.1:8080 öffnen — Passwort: demo-password-change-me
 ```
 
 Die Demo verwendet synthetische Daten (Jenkins-Basic-Auth-Brute-Force, SSH-Versuche, ein getrennter Agent, eine

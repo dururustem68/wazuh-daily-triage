@@ -64,7 +64,7 @@ aksi halde                    → WAZUH_* değişkenleriyle tek ortam modu
 | `PROXY_SECRET` | *(boş)* | SSO modu: istekler bunu `X-WDT-Proxy-Secret` başlığıyla taşımalıdır. |
 | `SSO_REQUIRE_USER` | `true` | SSO modu: kullanıcı başlığı olmayan istekler reddedilir. |
 | `MCP_RATE_PER_MINUTE` | `120` | İstemci adresi başına dakikalık MCP isteği (`0` = sınırsız). |
-| `BACKUP_S3_*`, `BACKUP_PASSPHRASE` | *(boş)* | S3 hedefi ve otomatik yedek parolası — bkz. [docs/backup.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/backup.md). |
+| `BACKUP_S3_*`, `BACKUP_PASSPHRASE` | *(boş)* | S3 hedefi ve otomatik yedek parolası — bkz. [Yedekleme](Backup-TR). |
 | `METRICS_TOKEN` | *(boş)* | `/metrics` için Bearer token; boşsa admin oturumu gerekir. |
 | `MCP_TOKEN` | *(boş)* | `POST /mcp`'yi açar; yoksa uç nokta `404` döner. [MCP](MCP-TR). |
 
@@ -227,6 +227,30 @@ Yalnızca YAML'da bulunan ortam seçenekleri (tek ortam modunda `.env` karşıl�
 Model asla ham sorgu göndermez: araçlar sorguyu kurar ve `app/query_guard.py` alan adlarını, pencereyi ve kova
 sayılarını önce doğrular. Toplayıcı sabit, gözden geçirilmiş sorgular kullanır ve bu limitlerden etkilenmez;
 yani dar bir tavan zamanlanmış koşuyu bozamaz.
+
+## Arayüzdeki ayarlar (0.10)
+
+0.10'dan beri bazı davranışlar YAML yerine **Ayarlar** sayfasından (`/e/<ortam>/settings`, yalnızca yönetici)
+yapılır ve indexer'da (`<önek>-settings`) saklanır: [Nöbet](Watch-TR) (tetikleyiciler, eşikler, kanallar, sessiz
+saatler, susturulan olaylar), AI turu saatleri (girildiyse `schedule.times`/`days` değerinin yerine geçer),
+maskeleme profili ([Gizlilik](Privacy-TR)) ve yedek hatırlatması. Bağlantılar ve kimlik bilgileri oraya asla
+taşınmaz. Her değişiklik, değişen alanların adlarıyla denetim kaydına yazılır.
+
+Yedekleme YAML'da (ya da `BACKUP_*` değişkenleriyle) yapılandırılır:
+
+```yaml
+backup:
+  passphrase: ${BACKUP_PASSPHRASE:-}   # yalnızca otomatik yedek için
+  keep_events_days: 180                # bundan eski nöbet olayları silinir (0 = tut)
+  s3:
+    endpoint: ${BACKUP_S3_ENDPOINT:-}
+    bucket: ${BACKUP_S3_BUCKET:-}
+    region: eu-central-1
+    access_key: ${BACKUP_S3_ACCESS_KEY:-}
+    secret_key: ${BACKUP_S3_SECRET_KEY:-}
+```
+
+Bkz. [Yedekleme](Backup-TR).
 
 ## Yeni ortam ekleme
 

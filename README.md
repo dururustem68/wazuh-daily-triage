@@ -92,10 +92,9 @@ of silencing.
 
 ```sh
 git clone https://github.com/dururustem68/wazuh-daily-triage.git && cd wazuh-daily-triage
-cp .env.example .env
-sed -i 's/^WDT_DEMO=.*/WDT_DEMO=true/; s/^LLM_PROVIDER=.*/LLM_PROVIDER=mock/' .env
+cp .env.demo .env
 docker compose up -d --build
-# open http://127.0.0.1:8080 — password: APP_PASSWORD from .env
+# open http://127.0.0.1:8080 — password: demo-password-change-me
 ```
 
 The demo uses synthetic data (Jenkins Basic-Auth brute force, SSH attempts, a disconnected agent, a

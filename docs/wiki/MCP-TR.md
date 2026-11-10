@@ -146,7 +146,25 @@ MCP istemcileri de tıpkı model gibi `app/query_guard.py` üzerinden geçer:
 ```
 
 Bilinmeyen alan, tavanı aşan pencere veya ayrıştırılamayan zaman damgası, sorgu Indexer'a ulaşmadan reddedilir.
-Bir istemci MCP'yi pahalı bir sorgu motoruna dönüştüremez.
+0.9.2'den beri aynı alan izin listesi serbest metin `query` içinde geçen alanlara da uygulanır (`secret.field:x`
+reddedilir), baştaki joker reddedilir ve düzenli ifadeler sınırlıdır. Bir istemci MCP'yi pahalı bir sorgu
+motoruna dönüştüremez.
+
+### Hız sınırı (0.10)
+
+| Değişken | Varsayılan | Etki |
+|---|---|---|
+| `MCP_RATE_PER_MINUTE` | `120` | İstemci adresi başına dakikalık istek; aşılırsa `Retry-After: 60` ile `429`. `0` = sınırsız. |
+| — | 5 dk'da 10 yanlış belirteç | Adres 5 dakika kilitlenir (`429`), doğru belirteçle de. |
+
+İstemci adresi, bağlanan adres ya da `TRUSTED_PROXIES` arkasındaki gerçek istemcidir.
+
+### Hatalar ve takma adlar
+
+Başarısız bir araç `{"error", "kind", "ref"}` döner — `timeout`, `unreachable` gibi bir kategori ve bir referans;
+istisna metni (adresler, indeks adları, ham yanıtlar) yalnızca o referansla uygulama loguna yazılır. Takma adlar
+(`<email:…>`) yalnızca onları üreten ortamda çözülür: bir ortamda görülen belirteçle başka bir ortamdaki değer
+sorgulanamaz.
 
 ## Proxy arkasında
 

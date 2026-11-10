@@ -90,10 +90,10 @@ sayı = besleme olayı", "sıfır, kuralın çalıştığı anlamına gelmez", s
 
 ```sh
 git clone https://github.com/dururustem68/wazuh-daily-triage.git && cd wazuh-daily-triage
-cp .env.example .env
-sed -i 's/^WDT_DEMO=.*/WDT_DEMO=true/; s/^LLM_PROVIDER=.*/LLM_PROVIDER=mock/; s/^APP_LANGUAGE=.*/APP_LANGUAGE=tr/' .env
+cp .env.demo .env
+sed -i 's/^APP_LANGUAGE=.*/APP_LANGUAGE=tr/' .env     # isteğe bağlı: dil arayüzden de seçilir
 docker compose up -d --build
-# http://127.0.0.1:8080 — parola: .env'deki APP_PASSWORD
+# http://127.0.0.1:8080 — parola: demo-password-change-me
 ```
 
 ### 2. Tek Wazuh ortamı — YAML gerekmez

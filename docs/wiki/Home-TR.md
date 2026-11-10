@@ -15,7 +15,10 @@ bulgulara, sorulara ve kural taslaklarına dönüştürür.
 - Her koşuda modele verilen bir bilgi tabanı tutar (bilinen gürültü, kararlar, açık maddeler).
 - Wazuh'a **yazmaz**: tek yazma işlemi kendi `daily-triage-*` indekslerine ve açıkça onayladığınız kural
   dağıtımına gider.
-- Zamanlanmış koşu, kritik bildirim, salt okunur görüntüleyici rolü ve harici asistanlar için MCP sunucusu sunar.
+- Alarmları birkaç dakikada bir yerel kurallarla izler ve modeli çağırmadan hemen bildirir; planlı AI turu
+  (günde bir ya da iki kez) nöbetin gördüğü her şeyi tek çağrıda değerlendirir.
+- Nöbet, AI turu saatleri, kişisel veri maskeleme profili ve şifreli yedek için bir ayarlar sayfası, salt okunur
+  görüntüleyici rolü ve harici asistanlar için MCP sunucusu sunar.
 
 ## Hangi sayfadan başlamalı?
 
@@ -26,6 +29,8 @@ bulgulara, sorulara ve kural taslaklarına dönüştürür.
 | Keycloak veya Authentik'i öne koymak (SSO proxy) | [SSO proxy kimlik doğrulama](SSO-Proxy-Auth-TR) |
 | Bir meslektaşa salt okunur erişim vermek | [Görüntüleyici modu](Viewer-Mode-TR) |
 | Claude Desktop'tan araştırma araçlarını kullanmak | [MCP sunucusu](MCP-TR) |
+| Acil durumlarda dakikalar içinde, yapay zekâsız uyarı almak | [Nöbet](Watch-TR) |
+| Bilgi tabanını yedeklemek, indeks silme kurallarından korumak | [Yedekleme](Backup-TR) |
 | Kural dağıtımı, terfi, olay kaydı, ek kaynaklar, denetim raporu, eval | [Özellikler](Features-TR) |
 | Kişisel veriyi LLM'den uzak tutmak ve loglarda bulmak (KVKK / GDPR) | [Gizlilik](Privacy-TR) |
 | Güvenlik modelini anlamak | [docs/permissions.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/permissions.md), [docs/security-exceptions.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/security-exceptions.md) |
@@ -36,12 +41,12 @@ bulgulara, sorulara ve kural taslaklarına dönüştürür.
 ```sh
 git clone https://github.com/dururustem68/wazuh-daily-triage.git
 cd wazuh-daily-triage
-cp .env.example .env
-# .env içinde WDT_DEMO=true ve LLM_PROVIDER=mock yapın, sonra:
+cp .env.demo .env
 docker compose up -d --build
 ```
 
-<http://127.0.0.1:8080> adresini açın ve `.env` içindeki `APP_PASSWORD` ile giriş yapın. Demo sentetik veri
+<http://127.0.0.1:8080> adresini açın ve `demo-password-change-me` ile (`.env.demo` içindeki `APP_PASSWORD`) giriş
+yapın. Arayüz dilini sağ üstten TR seçerek değiştirebilirsiniz. Demo sentetik veri
 kullanır (Jenkins brute force, SSH denemeleri, bağlantısı kopmuş ajan, zafiyet patlaması) ve `mock` sağlayıcısı
 model çağırmadan yer tutucu bir rapor yazar.
 

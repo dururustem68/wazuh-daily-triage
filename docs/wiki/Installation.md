@@ -28,30 +28,22 @@ pick one and continue with [Configuration](Configuration).
 ```sh
 git clone https://github.com/dururustem68/wazuh-daily-triage.git
 cd wazuh-daily-triage
-cp .env.example .env
-```
-
-Edit `.env`:
-
-```sh
-WDT_DEMO=true
-LLM_PROVIDER=mock
-APP_PASSWORD=a-long-demo-password
-```
-
-```sh
+cp .env.demo .env
 docker compose up -d --build
 ```
 
-Open <http://127.0.0.1:8080>, sign in, press **Run check now** once. The demo uses `config/demo.yaml` and
+`.env.demo` contains only what the demo needs (`WDT_DEMO=true`, `LLM_PROVIDER=mock`, a demo password). Do not
+add `WDT_DEMO=true` to a copy of `.env.example` instead: if a variable appears twice in `.env`, the **last**
+line wins. Open <http://127.0.0.1:8080>, sign in with `demo-password-change-me`, press **Run check now** once.
+To try the watch, open **Settings**, switch the watch on and press **Scan now** on the **Watch** page. The demo uses `config/demo.yaml` and
 synthetic data; no Wazuh connection is attempted. `WDT_DEMO=true` must never be combined with
 `ENVIRONMENT=production` — startup refuses it. (The pulled 0.7.0 image additionally needed
 `WDT_CONFIG=config/demo.yaml`; fixed in 0.8.0.)
 
 ### A2. A real Wazuh (single environment)
 
-`docker-compose.yml` publishes the port on `127.0.0.1` only, mounts `./config` read-only and `./logs` for the
-audit trail. Start from the example file:
+`docker-compose.yml` publishes the port on `127.0.0.1` only, mounts `./config` read-only and keeps the audit
+trail in the named volume `audit` (`docker compose cp triage:/app/logs/audit.jsonl .` copies it out). Start from the example file:
 
 ```sh
 cp .env.example .env
@@ -279,7 +271,9 @@ Then:
 1. Open the environment page and press **Test connections**.
 2. Press **Run check now** (or wait for the schedule) and confirm a report appears.
 3. Approve or reject one finding; open **Knowledge base** and confirm the decision is stored.
-4. Check `logs/audit.jsonl` for the login and the decision.
+4. Check the audit trail (`docker compose exec triage tail logs/audit.jsonl`) for the decision.
+5. Open **Settings → Storage safety**: the prefix should be OK; with ISM read permission the table shows
+   whether a retention policy would delete the application's indices.
 
 A successful startup logs the configured environments, the schedule, the audit file and any security warnings.
 In production, `app/security.py` **refuses to start** on: `WDT_DEMO=true`, a missing or example `APP_PASSWORD`,
@@ -304,6 +298,17 @@ helm upgrade wazuh-daily-triage wazuh-daily-triage/wazuh-daily-triage \
 helm rollback wazuh-daily-triage 1     # if needed
 ```
 
+### Upgrading to 0.10
+
+- Two indices are created on first start: `<prefix>-events` and `<prefix>-settings`. An indexer role on
+  `<prefix>-*` covers them; a role that lists `-runs` and `-knowledge` by name does not.
+- Nothing changes in behaviour until the watch is switched on in **Settings**.
+- **SSO (`AUTH_DISABLED=true`)**: requests without a user header now get 401. Make sure the proxy forwards one
+  of the `USER_HEADER` headers ([SSO proxy authentication](SSO-Proxy-Auth)).
+- **Helm**: `networkPolicy.enabled` is now `true`; set `networkPolicy.ingressNamespace`.
+- **Docker Compose**: the audit trail moved from `./logs` to the volume `audit`.
+- Take a first backup (**Settings → Backup**) — the reminder counts from the upgrade.
+
 Read [CHANGELOG.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/CHANGELOG.md) before upgrading: configuration keys occasionally change. Existing
 runs stay searchable; `run_retention_days` (YAML) prunes old run documents only, never the knowledge base.
 
@@ -312,7 +317,13 @@ runs stay searchable; `run_retention_days` (YAML) prunes old run documents only,
 | Symptom | Cause and fix |
 |---|---|
 | Container exits with `refusing to start in production` | The message names the variable. Set a real `APP_PASSWORD`, `APP_SECRET`, `COOKIE_SECURE=true`, or fix TLS verification. |
-| `FileNotFoundError: no config file and WAZUH_INDEXER_URL is not set` | No `config/environments.yaml` and no `WAZUH_INDEXER_URL` in the environment. Create one of them. |
+| `FileNotFoundError: no configuration: … does not exist and WAZUH_INDEXER_URL is not set` | Neither a YAML file nor `WAZUH_INDEXER_URL`. For the demo: `cp .env.demo .env` — a `WDT_DEMO=true` added above another `WDT_DEMO=` line in `.env` is overridden (the last line wins). |
+| `ERR_EMPTY_RESPONSE` on 127.0.0.1:8080 | The container is restarting: `docker compose logs triage` shows why (usually the line above). |
+| `401` "did not come through the authenticating proxy" | SSO mode (`AUTH_DISABLED=true`) without a user header. Forward `X-Forwarded-User` / `X-authentik-username` from the proxy, or check `TRUSTED_PROXIES` / `PROXY_SECRET`. |
+| `403` "cross-origin request refused" on a button | The browser's `Origin` is not the host the app sees. Set `WDT_TRUSTED_ORIGINS=https://your.public.host`. |
+| `503` "audit trail is not writable" | Production mode refuses writes without an audit trail. Make `AUDIT_LOG_FILE` writable (the `audit` volume), or `AUDIT_STRICT=false`. |
+| Red banner "The index … was missing" | A retention policy or a person deleted application data. **Settings → Backup → Import**, or acknowledge in **Settings**. See [Backup](Backup). |
+| The watch announces nothing | Watch switched off, no channel ticked/configured, quiet hours, or the event is muted / known noise — the **Watch** page shows the status of each event. |
 | `502` from the proxy, container healthy | The proxy points at the wrong port (8080) or host; check `docker compose ps`. |
 | Login loops back to `/login` | `COOKIE_SECURE=true` over plain HTTP, or the proxy strips cookies. Use HTTPS or set `COOKIE_SECURE=false` for a local test only. |
 | `ZoneInfoNotFoundError` / unknown timezone | Set `TZ` to an IANA name (`Europe/Istanbul`) and keep `tzdata` installed. |

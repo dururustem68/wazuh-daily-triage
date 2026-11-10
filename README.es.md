@@ -98,10 +98,10 @@ regla funcione», bajar el nivel en vez de silenciar.
 
 ```sh
 git clone https://github.com/dururustem68/wazuh-daily-triage.git && cd wazuh-daily-triage
-cp .env.example .env
-sed -i 's/^WDT_DEMO=.*/WDT_DEMO=true/; s/^LLM_PROVIDER=.*/LLM_PROVIDER=mock/; s/^APP_LANGUAGE=.*/APP_LANGUAGE=es/' .env
+cp .env.demo .env
+sed -i 's/^APP_LANGUAGE=.*/APP_LANGUAGE=es/' .env     # opcional: el idioma también se elige en la interfaz
 docker compose up -d --build
-# abre http://127.0.0.1:8080 — contraseña: APP_PASSWORD de .env
+# abre http://127.0.0.1:8080 — contraseña: demo-password-change-me
 ```
 
 La demo usa datos sintéticos (fuerza bruta Basic-Auth de Jenkins, intentos SSH, un agente desconectado, una oleada

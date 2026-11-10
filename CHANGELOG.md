@@ -5,6 +5,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- **Demo with Docker Compose did not start** when `WDT_DEMO=true` was added to a copy of `.env.example`
+  above its `WDT_DEMO=false` line (the last definition wins) — the container exited with
+  "no config file and WAZUH_INDEXER_URL is not set". The demo now has its own `.env.demo`
+  (`cp .env.demo .env`), `.env.example` no longer sets `WDT_DEMO`, and the startup error says what to do.
+- **Audit trail with Docker Compose**: `./logs` was created by Docker as root, so the app user could not
+  write the audit file. `docker-compose.yml` now uses the named volume `audit` (move an existing
+  `./logs/audit.jsonl` into it if you want to keep it).
+
+### Documentation
+- Wiki updated for 0.10: new pages *Watch* and *Backup* (English and Turkish), and the watch, settings page,
+  masking profile, per-environment pseudonyms, MCP rate limit and proxy checks on the existing pages.
+
 ## [0.10.0] — 2026-11-10
 
 ### Added
@@ -13,7 +26,7 @@ All notable changes to this project are documented here. The format follows
   after failed attempts from the same source, a sudden increase in volume and agents that stopped reporting.
   Events are sorted out (mute list, known noise from the knowledge base, repeat window), announced at once
   as "rule-based alert — not reviewed by AI" and kept in `<prefix>-events`. Off by default
-  ([docs/watch.md](docs/watch.md)).
+  ([wiki: Watch](https://github.com/dururustem68/wazuh-daily-triage/wiki/Watch)).
 - **AI round**: the scheduled run receives all watch events in one call and returns a verdict per event
   (`event_verdicts`) plus tuning suggestions. A suggestion changes nothing until an administrator accepts it.
   The round times (one or two a day) can be set in the UI.
@@ -24,7 +37,7 @@ All notable changes to this project are documented here. The format follows
   can switch off non-secret detectors (confirmation + audit). Preview, YAML import/export, and each run
   records the profile version. Custom patterns are compiled with RE2 when `google-re2` is installed,
   otherwise only a conservative subset is accepted and timed against repetitive input.
-- **Backup** ([docs/backup.md](docs/backup.md)): encrypted export (scrypt + AES-256-GCM) as a download and
+- **Backup** ([wiki: Backup](https://github.com/dururustem68/wazuh-daily-triage/wiki/Backup)): encrypted export (scrypt + AES-256-GCM) as a download and
   optionally to S3; import with a preview and "add what is missing" / "overwrite"; automatic backups only
   with S3 and `BACKUP_PASSPHRASE`; reminder after 30 days. Imported rule drafts need approval again.
 - **Storage safety**: a missing storage index is no longer recreated silently — the loss is recorded, raises

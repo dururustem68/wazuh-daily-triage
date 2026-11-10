@@ -146,7 +146,25 @@ MCP clients go through `app/query_guard.py`, exactly like the model:
 ```
 
 An unknown field, a window above the cap or an unparseable timestamp is rejected before the query reaches the
-Indexer. A client cannot turn MCP into an expensive query engine.
+Indexer. Since 0.9.2 the same field allow-list also applies to fields named inside the free-text `query`
+(`secret.field:x` is refused), leading wildcards are refused and regular expressions are bounded. A client
+cannot turn MCP into an expensive query engine.
+
+### Rate limit (0.10)
+
+| Variable | Default | Effect |
+|---|---|---|
+| `MCP_RATE_PER_MINUTE` | `120` | Requests per minute and client address; above it `429` with `Retry-After: 60`. `0` = unlimited. |
+| — | 10 wrong tokens / 5 min | The address is locked out for 5 minutes (`429`), also for the right token. |
+
+The client address is the peer, or the real client behind `TRUSTED_PROXIES`.
+
+### Errors and pseudonyms
+
+A failing tool returns `{"error", "kind", "ref"}` — a category such as `timeout` or `unreachable` and a
+reference; the exception text (URLs, index names, raw responses) only goes to the application log under that
+reference. Pseudonyms (`<email:…>`) resolve only in the environment that created them: a token seen in one
+environment cannot be used to look up a value in another.
 
 ## Behind a proxy
 

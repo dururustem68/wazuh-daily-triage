@@ -29,12 +29,15 @@ disables the role.
 
 | Permission | Admin | Viewer | Covers |
 |---|---|---|---|
-| `read` | ✓ | ✓ | dashboard, reports, recommendation inbox, knowledge base and its YAML export, audit report, promotion package view, copies and PDFs |
-| `run` | ✓ | – | start a triage run, liveness check, connection test, notification test |
+| `read` | ✓ | ✓ | dashboard, reports, recommendation inbox, knowledge base and its YAML export, audit report, promotion package view, the **Watch** page (events and AI verdicts), copies and PDFs |
+| `run` | ✓ | – | start a triage run, liveness check, connection test, notification test, **Scan now** on the Watch page |
 | `decide` | ✓ | – | finding decisions, answering questions, inbox actions, incident records |
 | `knowledge` | ✓ | – | create/update/delete knowledge entries, import |
 | `deploy` | ✓ | – | approve/deploy/undeploy/promote rule drafts |
-| `admin` | ✓ | – | environment-level operations and `/metrics` without `METRICS_TOKEN` |
+| `admin` | ✓ | – | environment-level operations, `/metrics` without `METRICS_TOKEN`, and everything under **Settings** — including reading it: watch, AI round, masking profile (and its YAML export), backup export/import, acknowledging a storage loss |
+
+A write route that nobody mapped to a permission needs `admin` (fail closed, since 0.9.2); a test checks every
+route, so a new feature cannot open itself to the viewer by accident.
 
 The matrix lives in `app/authz.py`; the HTTP middleware checks it for **every** route. Hiding a button is never
 the control: a crafted `POST` gets `403` and is written to the audit trail as `denied:<permission>`.

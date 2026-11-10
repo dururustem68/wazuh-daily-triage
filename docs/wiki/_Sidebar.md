@@ -9,6 +9,8 @@
 - [SSO proxy authentication](SSO-Proxy-Auth)
 - [Viewer mode](Viewer-Mode)
 - [MCP server](MCP)
+- [Watch (urgent alerts)](Watch)
+- [Backup and retention](Backup)
 
 **Türkçe**
 - [Ana sayfa](Home-TR)
@@ -19,6 +21,8 @@
 - [SSO proxy kimlik doğrulama](SSO-Proxy-Auth-TR)
 - [Görüntüleyici modu](Viewer-Mode-TR)
 - [MCP sunucusu](MCP-TR)
+- [Nöbet (acil uyarılar)](Watch-TR)
+- [Yedekleme ve silme kuralları](Backup-TR)
 
 ---
 

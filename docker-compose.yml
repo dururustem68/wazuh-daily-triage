@@ -9,7 +9,10 @@ services:
       - "127.0.0.1:8080:8080"     # put a TLS reverse proxy in front to expose it
     volumes:
       - ./config:/app/config:ro   # environments.yaml, context/*.md, seed/*.yaml, certs/
-      - ./logs:/app/logs          # audit trail (logs/audit.jsonl), ships with your own log collector
+      # Audit trail (logs/audit.jsonl). A named volume: it starts with the image's directory, owned by the app
+      # user (uid 10001). A host directory (./logs:/app/logs) also works, but it must be writable by uid 10001
+      # (sudo install -d -o 10001 -g 10001 logs) — Docker creates a missing one as root and nothing is audited.
+      - audit:/app/logs
     read_only: true
     tmpfs: [/tmp]
     security_opt: ["no-new-privileges:true"]
@@ -28,4 +31,5 @@ services:
       - ollama:/root/.ollama
 
 volumes:
+  audit:
   ollama:

@@ -160,7 +160,7 @@ denemelerden sonra başarılı giriş, ani artış, veri göndermeyi kesen ajanl
 yapay zekâ incelemedi" diye bildirir. Model çağrılmaz. Sıradaki planlı **AI turu** (günde bir ya da iki kez,
 saatler Ayarlar'dan) tüm olayları tek istekte alır; olay başına hüküm ve eşik önerisi döner. Öneri, yönetici
 kabul edene kadar hiçbir şeyi değiştirmez. Kanallar tanımlı olanlar arasından seçilir; sessiz saatlerde kritik
-olaylar dışındakiler bekletilir. Ayrıntı: [docs/watch.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/watch.md).
+olaylar dışındakiler bekletilir. Ayrıntı: [Nöbet](Watch-TR).
 
 ## Ayarlar, maskeleme profili, yedekleme
 
@@ -169,7 +169,7 @@ saatleri, maskeleme profili (kendi `x_…` algılayıcılarınız, istisnalar, �
 algılayıcıları kapatılamaz) ve yedekleme. **Yedekleme**, bilgi tabanı, raporlar, nöbet olayları ve ayarların
 şifreli arşivini indirir, isterseniz S3'e de gönderir; içe aktarımda önce önizleme gösterir. **Depolama
 güvenliği**, bir indeks silme politikasının uygulamanın kendi indekslerini silip silmeyeceğini gösterir ve
-bir indeks kaybolduğunda kritik bayrak kaldırır. Ayrıntı: [docs/backup.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main/docs/backup.md).
+bir indeks kaybolduğunda kritik bayrak kaldırır. Ayrıntı: [Yedekleme](Backup-TR).
 
 ## Aylık denetim raporu
 
