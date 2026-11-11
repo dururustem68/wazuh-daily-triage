@@ -15,3 +15,5 @@ configMapGenerator:
       - AUTH_DISABLED=true
       - COOKIE_SECURE=true
       - NOTIFY_UI_URL=https://triage.example.com
+      - SSO_ADMIN_GROUPS=wazuh-admins            # Authentik group(s) whose members are administrators
+      - SSO_VIEWER_GROUPS=wazuh-viewers          # read-only; users in neither group are refused

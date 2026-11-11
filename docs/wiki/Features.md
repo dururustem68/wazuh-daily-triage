@@ -3,7 +3,7 @@
 Everything below is configured per environment in `environments.yaml` (see [Configuration](Configuration)).
 Defaults are shown; omit a key to keep the default.
 
-The **About** page (top right) shows, per environment, which of these features are on, with links here.
+The **About** page (bottom of the sidebar) shows, per environment, which of these features are on, with links here.
 
 ![About page: features per environment](images/about.png)
 
@@ -18,7 +18,7 @@ copy-paste commands only, and the **Deploy** button is shown disabled with a lin
 ```yaml
 rule_deploy:
   enabled: false
-  username: ${PROD_DEPLOY_USER:-}     # NOT the read-only user — startup refuses a shared or weak account
+  username: ${PROD_DEPLOY_USER:-}     # NOT the read-only user — startup warns on a shared account and refuses an empty or example password
   password: ${PROD_DEPLOY_PASSWORD:-}
   file: wdt_rules.xml                 # plain file name in etc/rules; nothing else is written
   id_min: 100000                      # drafts outside the range are refused
@@ -47,6 +47,17 @@ real alerts of its parent rules (`if_sid`) and shows, before anything is deploye
 are fewer). CDB lists, time windows and frequency rules are listed as *not evaluated*; the numbers are then an
 upper bound. The AI uses the same check (`simulate_rule`, also over MCP) before it proposes a draft and puts the
 numbers in the proposal.
+
+## MITRE ATT&CK view
+
+*Since 0.11.* **ATT&CK** in the environment menu groups the alerts of the last 1, 7, 14 or 30 days by the tactics
+and techniques in the rules' `<mitre>` blocks (`rule.mitre.id`, `rule.mitre.tactic`, `rule.mitre.technique`).
+No AI is involved. It shows a tactic × technique matrix with heat colours, the change against the previous period,
+techniques seen for the first time in 30 days, techniques that disappeared, and tactics without any alert — a
+hint for a detection gap, not a measured coverage. The dashboard shows the same 14 tactics as a strip.
+
+Report findings carry the technique ids of their rules (plus the model's own, when the evidence supports it) as
+links to attack.mitre.org. Details: [User guide](User-Guide).
 
 ## Noise map
 

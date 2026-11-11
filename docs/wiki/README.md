@@ -1,7 +1,7 @@
 # Wiki source (bilingual)
 
-This folder holds the source of the project wiki: ten pages in English, ten in Turkish, one screenshot
-folder. The pages are plain Markdown and are published to the GitHub wiki repository; they are not built by
+This folder holds the source of the project wiki: 22 pages in English, each with a Turkish version, the home
+page also in Spanish and French, and one screenshot folder. The pages are plain Markdown and are published to the GitHub wiki repository; they are not built by
 any tool.
 
 | Page | English | Türkçe | Audience |
@@ -16,16 +16,29 @@ any tool.
 | MCP server | [`MCP.md`](MCP.md) | [`MCP-TR.md`](MCP-TR.md) | AI tooling, integrator |
 | Watch (urgent alerts) | [`Watch.md`](Watch.md) | [`Watch-TR.md`](Watch-TR.md) | operator, SOC on call |
 | Backup and retention | [`Backup.md`](Backup.md) | [`Backup-TR.md`](Backup-TR.md) | operator, auditor |
+| Getting started | [`Getting-Started.md`](Getting-Started.md) | [`Getting-Started-TR.md`](Getting-Started-TR.md) | first-time installer |
+| User guide | [`User-Guide.md`](User-Guide.md) | [`User-Guide-TR.md`](User-Guide-TR.md) | reviewer, SOC analyst |
+| Rule lifecycle | [`Rule-Lifecycle.md`](Rule-Lifecycle.md) | [`Rule-Lifecycle-TR.md`](Rule-Lifecycle-TR.md) | administrator approving rules |
+| Kubernetes | [`Kubernetes.md`](Kubernetes.md) | [`Kubernetes-TR.md`](Kubernetes-TR.md) | platform engineer |
+| Security model | [`Security-Model.md`](Security-Model.md) | [`Security-Model-TR.md`](Security-Model-TR.md) | security lead, DPO, auditor |
+| Security checklist | [`Security-Checklist.md`](Security-Checklist.md) | [`Security-Checklist-TR.md`](Security-Checklist-TR.md) | whoever signs off go-live |
+| Troubleshooting | [`Troubleshooting.md`](Troubleshooting.md) | [`Troubleshooting-TR.md`](Troubleshooting-TR.md) | operator |
+| Upgrade | [`Upgrade.md`](Upgrade.md) | [`Upgrade-TR.md`](Upgrade-TR.md) | operator |
+| Compatibility | [`Compatibility.md`](Compatibility.md) | [`Compatibility-TR.md`](Compatibility-TR.md) | evaluator, operator |
+| Development | [`Development.md`](Development.md) | [`Development-TR.md`](Development-TR.md) | contributor |
+| Scenarios | [`Scenarios.md`](Scenarios.md) | [`Scenarios-TR.md`](Scenarios-TR.md) | new user |
+| FAQ and glossary | [`FAQ.md`](FAQ.md) | [`FAQ-TR.md`](FAQ-TR.md) | everyone |
 
 `_Sidebar.md` is the navigation that GitHub renders on every wiki page. `images/` holds the screenshots,
-taken from a running 0.8.0 demo instance.
+taken from a running 0.11.0 demo instance.
 
 ## Screenshots
 
 | File | Page | Shows |
 |---|---|---|
 | `images/login.png` | Home, Installation | the sign-in page, including the viewer hint |
-| `images/dashboard.png` | Home | watch board with findings, open questions and the environment card |
+| `images/dashboard.png` | Home, User guide | the dashboard: key figures, alert volume, severity, ATT&CK tactic strip, top lists |
+| `images/attack.png` | User guide | the MITRE ATT&CK matrix |
 | `images/report.png` | Home, MCP | a daily report with findings and evidence |
 | `images/inbox.png` | — | the recommendation inbox |
 | `images/knowledge.png` | — | the knowledge base |
@@ -33,8 +46,8 @@ taken from a running 0.8.0 demo instance.
 | `images/about.png` | Features | the About page: features per environment, MCP setup |
 
 They were captured headlessly with Playwright against the demo (`WDT_DEMO=true`, `LLM_PROVIDER=mock`, synthetic
-data), 1280×900 at device scale 1.5. To refresh them, start the demo, run one check, then capture the same
-pages. Never use screenshots showing real customer alerts.
+data), 1280×900 at device scale 1.5, light theme. To refresh them, start the demo, then capture the same pages
+(the report image is scrolled to the first finding with ATT&CK tags). Never use screenshots showing real customer alerts.
 
 ## How the links work
 
@@ -69,21 +82,20 @@ across whenever they change.
 
 ### Every update
 
-`README.md` (this file) is a maintainer note and is **not** published, so the pages are copied by name:
+`README.md` (this file) is a maintainer note and is **not** published; every other `*.md` file is copied:
 
 ```sh
 # from the project root
 WIKI=../wazuh-daily-triage.wiki
-for p in Home Home-TR Home-ES Home-FR Installation Installation-TR Configuration Configuration-TR Features Features-TR Privacy Privacy-TR \
-         SSO-Proxy-Auth SSO-Proxy-Auth-TR Viewer-Mode Viewer-Mode-TR MCP MCP-TR Watch Watch-TR Backup Backup-TR _Sidebar; do
-  cp "docs/wiki/$p.md" "$WIKI/"
+for p in docs/wiki/*.md; do
+  [ "$(basename "$p")" = README.md ] || cp "$p" "$WIKI/"
 done
 mkdir -p "$WIKI/images"
 cp docs/wiki/images/*.png "$WIKI/images/"
 
 cd "$WIKI"
 git add -A
-git commit -m "wiki: sync from docs/wiki (0.10.1)"
+git commit -m "wiki: sync from docs/wiki (0.11.0)"
 git push
 ```
 
@@ -91,13 +103,12 @@ In PowerShell:
 
 ```powershell
 $wiki = '..\wazuh-daily-triage.wiki'
-'Home','Home-TR','Home-ES','Home-FR','Installation','Installation-TR','Configuration','Configuration-TR','Features','Features-TR','Privacy','Privacy-TR',
-'SSO-Proxy-Auth','SSO-Proxy-Auth-TR','Viewer-Mode','Viewer-Mode-TR','MCP','MCP-TR','Watch','Watch-TR','Backup','Backup-TR','_Sidebar' |
-  ForEach-Object { Copy-Item "docs\wiki\$_.md" $wiki -Force }
+Get-ChildItem docs\wiki\*.md | Where-Object Name -ne 'README.md' |
+  ForEach-Object { Copy-Item $_.FullName $wiki -Force }
 New-Item -ItemType Directory -Force "$wiki\images" | Out-Null
 Copy-Item docs\wiki\images\*.png "$wiki\images" -Force
 git -C $wiki add -A
-git -C $wiki commit -m "wiki: sync from docs/wiki (0.10.1)"
+git -C $wiki commit -m "wiki: sync from docs/wiki (0.11.0)"
 git -C $wiki push
 ```
 
@@ -112,8 +123,15 @@ otherwise the next sync silently reverts it.
 ## Conventions
 
 - One topic per page; do not add a page without adding it to `_Sidebar.md` (both languages).
+- Every page starts with who it is for, and ends with the version it applies to and the review date
+  (`*Applies to 0.11.0 · reviewed 2026-11-11*`). Update that line when you re-check a page against a release.
+- A command goes into a page only after it was run against the stated version. Say "tested", "expected" or
+  "not supported" with the meanings defined on the Compatibility page; never "should work".
+- Dangerous operations state their effect, prerequisite, confirmation and rollback.
+- README and wiki do not repeat each other: the README is the short version and links here; exact reference
+  material (permissions, deployment API, notification fields) stays in `docs/*.md` and is linked, not copied.
 - Every page ends with `[English](Page) · [Türkçe](Page-TR)`.
-- Keep commands copy-pasteable and version-pinned: `0.10.1`, chart `0.2.1`.
+- Keep commands copy-pasteable and version-pinned: `0.11.0`, chart `0.3.0`.
 - Update the version string in `Home.md`, `Home-TR.md`, `_Sidebar.md` when the release changes.
 - Never put a real password, token, hostname or customer alert in a page or a screenshot.
 
@@ -121,9 +139,9 @@ otherwise the next sync silently reverts it.
 
 ## Türkçe özet
 
-`docs/wiki/` bu wiki'nin kaynağıdır: sekiz İngilizce, sekiz Türkçe sayfa ve `images/` altında ekran görüntüleri.
+`docs/wiki/` bu wiki'nin kaynağıdır: 22 İngilizce sayfa, her birinin Türkçe eşi ve `images/` altında ekran görüntüleri.
 Yayınlamak için GitHub'da wiki'yi bir kez açın (Settings → Wikis ve Wiki sekmesinde ilk sayfa), sonra
 `wazuh-daily-triage.wiki.git` deposunu klonlayıp bu dizindeki `*.md` ve `images/` içeriğini kopyalayın, commit
 edip push edin. Sayfa bağlantıları `Configuration` gibi çıplak adlarla yazılır (`.md` eklenmez); depo
 belgelerine giden bağlantılar ise wiki ayrı bir depo olduğu için mutlak GitHub adresi olarak durur. Ekran
-görüntüleri 0.8.0 demo örneğinden alınmıştır; gerçek müşteri verisi içeren görüntü kullanmayın.
+görüntüleri 0.11.0 demo örneğinden alınmıştır; gerçek müşteri verisi içeren görüntü kullanmayın.

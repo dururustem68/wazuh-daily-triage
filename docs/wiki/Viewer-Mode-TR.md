@@ -1,6 +1,11 @@
 # Görüntüleyici modu (salt okunur rol)
 
-İkinci bir parola, meslektaşların hiçbir şeyi değiştirmeden her şeyi okumasını sağlar. Raporları ve açık
+Salt okunur rol, meslektaşların hiçbir şeyi değiştirmeden her şeyi okumasını sağlar. İki yolla verilir: ikinci bir
+uygulama parolası (`VIEWER_PASSWORD`, bu sayfa) ya da SSO vekili arkasında `SSO_VIEWER_GROUPS` içinde listelenen
+bir grubun üyeliği ([SSO proxy kimlik doğrulama](SSO-Proxy-Auth-TR), 0.11'den beri). İkisi de aynı rolü ve aynı
+yetki matrisini verir.
+
+Raporları ve açık
 önerileri görmesi gereken yöneticiler, denetçiler, SOC vardiya liderleri ve uygulama sahipleri için
 tasarlanmıştır; triage çalıştırma veya kural dağıtma yetkisi vermez.
 
@@ -43,8 +48,8 @@ elle hazırlanmış bir `POST` `403` alır ve denetim kaydına `denied:<izin>` o
 
 ### Bilinen kozmetik sınır
 
-Bazı yazma kontrolleri (örneğin **Run check now** ve karar düğmeleri) görüntüleyiciye hâlâ gösterilir.
-Kapalı davranırlar — sunucu isteği reddeder — ama görünürler. Sınır olarak düğmenin yokluğunu değil, 403'ü
+Kenar çubuğu görüntüleyiciden **Ayarlar**'ı gizler ve pano **Şimdi kontrol et** düğmesini pasif gösterir; ancak bazı
+yazma kontrolleri (örneğin rapordaki ve öneri kutusundaki karar düğmeleri) hâlâ gösterilir. Kapalı davranırlar — sunucu isteği reddeder — ama görünürler. Sınır olarak düğmenin yokluğunu değil, 403'ü
 kabul edin.
 
 ## Görüntüleyicinin gördüğü ortamları sınırlama
@@ -82,26 +87,32 @@ tail -n 5 logs/audit.jsonl
   Hepsini hemen geçersiz kılmak için `APP_SECRET` değiştirin.
 - **Parola tüm görüntüleyiciler tarafından paylaşılır.** Bireysel görüntüleyici hesabı ve kişi bazlı denetim
   kimliği yoktur: denetim kaydı rolü `viewer`, aktörü ortak `ui` olarak yazar (yalnızca giriş kayıtlarında
-  aktör `viewer`). Adlandırılmış salt okunur kullanıcılar
-  gerekiyorsa SSO proxy kullanın — ama aşağıdaki sınırlamaya bakın.
+  aktör `viewer`). Adlandırılmış salt okunur kullanıcılar gerekiyorsa SSO ile `SSO_VIEWER_GROUPS` kullanın
+  (aşağıda).
 - **GET isteklerinden CSRF riski yoktur.** Tüm durum değiştiren işlemler `POST`/`DELETE`'tir ve aynı izin
   kontrolünden geçer.
 
-## Görüntüleyici modu ile SSO
+## Görüntüleyici modu ve SSO (0.11)
 
-Bu ikisi mevcut tasarımda birbirini dışlar:
+SSO vekili arkasında (`AUTH_DISABLED=true`) parola girişi kapalıdır; bu yüzden `VIEWER_PASSWORD` kullanılmaz. Rol
+bunun yerine kullanıcının gruplarından gelir:
 
-- `AUTH_DISABLED=true` **her** isteği admin yapar, çünkü vekilden gelen grup/rol eşlemesi yoktur.
-  `VIEWER_PASSWORD` yetkilendirmede yok sayılır.
-- `AUTH_DISABLED=false` uygulama girişini korur ve görüntüleyici rolünü destekler, ancak bu durumda vekil
-  kullanıcıları doğrulamamalı (veya uygulama girişinin yerine geçmemelidir).
+```sh
+AUTH_DISABLED=true
+SSO_ADMIN_GROUPS=wazuh-admins       # yöneticiler
+SSO_VIEWER_GROUPS=soc,auditors      # salt okunur görüntüleyiciler; diğer herkes reddedilir
+```
 
-Hem SSO kimliği hem salt okunur kullanıcı gerekiyorsa pratik seçenekler:
+| | Görüntüleyici parolası | SSO görüntüleyici grubu |
+|---|---|---|
+| Kim | ortak parolayı bilen herkes | her kişi, kendi hesabıyla |
+| Denetim kaydındaki aktör | `ui` (ortak) | vekilden gelen kullanıcı adı |
+| Erişimi geri almak | parolayı ve `APP_SECRET`'i değiştirmek | kullanıcıyı gruptan çıkarmak |
+| Yetkiler | yukarıdaki matris | aynı matris |
+| Ortamlar | `VIEWER_ENVS` | `VIEWER_ENVS` |
 
-1. Uygulama parolalarını kullanın ve salt okunur erişim gereken kişilere görüntüleyici parolasını verin.
-2. Ayrı yapılandırmalı ikinci bir örnek çalıştırın ve yetkilerini ağ/vekil katmanında sınırlayın.
-3. Vekilde ayrı bir ana makine ve HTTP metodu allow-list'i ile salt okunur zorlayın — **önerilmez**, çünkü bir
-   `GET` bağlantısı uygulamayı korumaz.
+Grup başlığı adları, vekil yapılandırması ve hiçbir listede olmayan kullanıcıların varsayılan rolü:
+[SSO proxy kimlik doğrulama](SSO-Proxy-Auth-TR).
 
 ## Güvenlik kontrol listesi
 

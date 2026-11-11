@@ -22,7 +22,30 @@ Wazuh sans votre accord.
 
 ![Tableau de veille](images/dashboard.png)
 
-**Version :** 0.10 · **Licence :** AGPL-3.0-only · **Python :** 3.11–3.15 · **Wazuh :** 4.x
+**Version :** 0.11.0 · **Licence :** AGPL-3.0-only · **Python :** 3.11–3.15 · **Wazuh :** 4.x
+
+## Ce que c'est, et ce que ce n'est pas
+
+| C'est | Ce n'est pas |
+|---|---|
+| une aide à la revue quotidienne et à l'astreinte, qui lit ce que Wazuh a produit | un remplaçant de Wazuh ni de son tableau de bord |
+| en lecture seule vis-à-vis de Wazuh par défaut | un SOAR : il ne bloque pas, n'isole pas, n'exécute aucune commande sur les agents |
+| un assistant qui propose ; une personne décide | un système de réponse autonome |
+| un conteneur qui garde ses données dans votre propre Wazuh Indexer | un service hébergé ni une base de données de plus à exploiter |
+| une source d'éléments de preuve pour les revues de la surveillance | un certificat ISO 27001 ni d'aucune autre conformité |
+
+## À quoi il sert
+
+1. **Le contrôle du matin.** Les données arrivent-elles, les agents sont-ils connectés, qu'y a-t-il à un niveau
+   élevé, qu'est-ce qui relève du bruit habituel ? Un rapport au lieu d'une heure de requêtes.
+2. **Être prévenu la nuit.** Une connexion réussie après des échecs, ou un SIEM silencieux, parvient à une
+   personne en quelques minutes, sans attendre le rapport suivant et sans appel à un modèle.
+3. **Réduire le bruit sans risque.** Les brouillons de règles sont rejoués sur deux semaines d'alertes réelles,
+   déployés avec retour arrière automatique, puis vérifiés sur des événements réels.
+4. **Poser des questions en langage naturel.** Tout assistant compatible MCP interroge alertes, agents et rapports
+   avec les mêmes limites et le même masquage.
+5. **Montrer le travail accompli.** Décisions, modifications de règles et interruptions figurent dans un rapport
+   mensuel.
 
 ## Deux boucles
 
@@ -47,7 +70,11 @@ retiennent tout sauf les événements critiques. La surveillance s'active dans *
 - Repère les données personnelles stockées en clair dans vos journaux et en fait une recommandation.
 - Sauvegardes chiffrées de ses propres données (téléchargement ou S3) et un avertissement si une politique de
   rétention d'index allait les supprimer.
-- Page de réglages, rôle en lecture seule, SSO derrière Keycloak/Authentik, rapport d'audit mensuel.
+- Un tableau de bord avec courbes de tendance, niveaux de gravité et règles, agents et sources les plus actifs, et
+  une vue **MITRE ATT&CK** des alertes (bandeau des tactiques, matrice des techniques, nouvelles techniques,
+  tactiques sans alerte), le tout sans IA.
+- Page de réglages, rôle en lecture seule (par mot de passe ou par groupe SSO derrière Keycloak/Authentik),
+  rapport d'audit mensuel.
 
 ## Démo en cinq minutes (sans Wazuh)
 
@@ -81,8 +108,20 @@ flowchart LR
 
 ## Documentation
 
-Les pages détaillées du wiki sont en anglais et en turc : [Installation](Installation),
-[Configuration](Configuration), [Watch](Watch), [Backup](Backup), [Privacy](Privacy), [MCP](MCP), [Features](Features).
+Les pages détaillées du wiki sont en anglais et en turc.
+
+| Je veux… | Page (en anglais) |
+|---|---|
+| Aller de la démo à un premier rapport réel, pas à pas | [Getting started](Getting-Started) |
+| Installer et configurer | [Installation](Installation), [Kubernetes](Kubernetes), [Configuration](Configuration) |
+| L'utiliser au quotidien | [User guide](User-Guide), [Rule lifecycle](Rule-Lifecycle), [Watch](Watch), [MCP](MCP), [Features](Features) |
+| Savoir ce qu'il peut faire et où vont les données | [Security model](Security-Model), [Privacy](Privacy), [Security checklist](Security-Checklist) |
+| L'exploiter | [Troubleshooting](Troubleshooting), [Backup](Backup), [Upgrade](Upgrade), [Compatibility](Compatibility) |
+| Voir des exemples, des réponses rapides et un glossaire | [Scenarios](Scenarios), [FAQ](FAQ) |
+| Contribuer | [Development](Development) |
+
+Questions et anomalies : [GitHub issues](https://github.com/dururustem68/wazuh-daily-triage/issues). Problèmes de sécurité, en privé :
+[security advisories](https://github.com/dururustem68/wazuh-daily-triage/security/advisories/new).
 
 ---
 

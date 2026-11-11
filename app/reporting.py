@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 
 from .agent.tools import LABELS, SEVERITIES
 from .collector import _parse
@@ -45,6 +46,19 @@ def _s(v) -> str:
     return json.dumps(v, ensure_ascii=False)
 
 
+_TID = re.compile(r"^T\d{4}(?:\.\d{3})?$")
+
+
+def technique_ids(values, limit: int = 8) -> list[str]:
+    """Valid ATT&CK technique ids (``T1110``, ``T1110.001``), upper-cased, de-duplicated, in order."""
+    out: list[str] = []
+    for v in values:
+        x = str(v or "").strip().upper()
+        if _TID.match(x) and x not in out:
+            out.append(x)
+    return out[:limit]
+
+
 def normalize_report(sub: dict | None, fallback_text: str = "", lang: str = "en") -> dict:
     """Force model output into the schema so one malformed field cannot fail a paid run."""
     sub = sub if isinstance(sub, dict) else {}
@@ -58,6 +72,7 @@ def normalize_report(sub: dict | None, fallback_text: str = "", lang: str = "en"
              for k, v in f.items()}
         for k in ("evidence", "rule_ids", "agents"):
             f[k] = [_s(x) for x in _as_list(f.get(k))]
+        f["mitre"] = technique_ids(_as_list(f.get("mitre")))
         f["manual_checks"] = [{"host": _s(c.get("host")), "purpose": _s(c.get("purpose")), "command": _s(c.get("command"))}
                               for c in _as_list(f.get("manual_checks")) if isinstance(c, dict) and c.get("command")][:8]
         if f.get("label") not in LABELS:

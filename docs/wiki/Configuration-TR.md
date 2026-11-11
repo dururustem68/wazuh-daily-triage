@@ -63,6 +63,10 @@ aksi halde                    → WAZUH_* değişkenleriyle tek ortam modu
 | `TRUSTED_PROXIES` | *(boş)* | Reverse proxy'nizin adresleri/CIDR'leri: `X-Forwarded-For` başlığına güvenilir (giriş kısıtlaması, denetim kaydı) ve SSO modunda arayüze yalnızca bu adresler ulaşabilir. |
 | `PROXY_SECRET` | *(boş)* | SSO modu: istekler bunu `X-WDT-Proxy-Secret` başlığıyla taşımalıdır. |
 | `SSO_REQUIRE_USER` | `true` | SSO modu: kullanıcı başlığı olmayan istekler reddedilir. |
+| `SSO_ADMIN_GROUPS` | *(boş)* | SSO modu (0.11): üyeleri yönetici olan gruplar, virgülle. Boşsa kimse yönetici değildir. |
+| `SSO_VIEWER_GROUPS` | *(boş)* | SSO modu: üyeleri salt okunur görüntüleyici olan gruplar. |
+| `SSO_DEFAULT_ROLE` | `viewer` (`SSO_VIEWER_GROUPS` tanımlıysa `deny`) | SSO modu: hiçbir listede olmayan kullanıcının rolü: `viewer`, `admin` ya da `deny`. |
+| `GROUP_HEADER` | `X-authentik-groups,X-Forwarded-Groups,X-Auth-Request-Groups,Remote-Groups` | SSO modu: grupların okunduğu başlıklar (`|`, `,` ya da `;` ile ayrılmış). |
 | `MCP_RATE_PER_MINUTE` | `120` | İstemci adresi başına dakikalık MCP isteği (`0` = sınırsız). |
 | `BACKUP_S3_*`, `BACKUP_PASSPHRASE` | *(boş)* | S3 hedefi ve otomatik yedek parolası — bkz. [Yedekleme](Backup-TR). |
 | `METRICS_TOKEN` | *(boş)* | `/metrics` için Bearer token; boşsa admin oturumu gerekir. |
@@ -276,7 +280,7 @@ için `APP_SECRET` döndürün.
 ```sh
 docker compose exec triage python -m app.check          # indexer, alarmlar, zafiyetler, depolama, API, ek kaynaklar, model (--no-llm atlar)
 docker compose exec triage python -c "from app.config import load_settings; s=load_settings(); print([e.id for e in s.environments])"
-# bildirimler ayrıca test edilir: ortam sayfası → "Test notification" (POST /api/e/<env>/notify-test)
+# bildirimler ayrıca test edilir: Raporlar sayfası → "Bildirim testi" (POST /api/e/<env>/notify-test)
 ```
 
 `app/security.py` güvenlikle ilgili ayarları açılışta doğrular. Üretimde örnek parolalar, eksik oturum

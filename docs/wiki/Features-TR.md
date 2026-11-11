@@ -3,7 +3,7 @@
 Aşağıdakilerin hepsi `environments.yaml` içinde ortam bazında ayarlanır (bkz. [Yapılandırma](Configuration-TR)).
 Gösterilen değerler varsayılandır; bir anahtarı yazmazsanız varsayılan geçerli olur.
 
-Sağ üstteki **Hakkında** sayfası, bu özelliklerden hangisinin hangi ortamda açık olduğunu buraya bağlantılarla gösterir.
+Kenar çubuğunun altındaki **Hakkında** sayfası, bu özelliklerden hangisinin hangi ortamda açık olduğunu buraya bağlantılarla gösterir.
 
 ![Hakkında sayfası: ortamlara göre özellikler](images/about.png)
 
@@ -18,7 +18,7 @@ taslaklar yalnızca kopyala-yapıştır komutları gösterir; **Deploy** düğme
 ```yaml
 rule_deploy:
   enabled: false
-  username: ${PROD_DEPLOY_USER:-}     # salt okunur kullanıcı OLMAMALI — ortak ya da zayıf hesapla uygulama açılmaz
+  username: ${PROD_DEPLOY_USER:-}     # salt okunur kullanıcı OLMAMALI — ortak hesapta açılışta uyarı verilir; boş ya da örnek parolayla uygulama açılmaz
   password: ${PROD_DEPLOY_PASSWORD:-}
   file: wdt_rules.xml                 # etc/rules altındaki dosya adı; başka hiçbir şey yazılmaz
   id_min: 100000                      # aralık dışındaki taslaklar reddedilir
@@ -47,6 +47,17 @@ gerçek alarmları üzerinde dener ve dağıtmadan önce şunları gösterir:
 (daha azsa birebir). CDB listeleri, zaman pencereleri ve frekans kuralları *değerlendirilmedi* olarak listelenir;
 sayılar o zaman üst sınırdır. Yapay zekâ da bir taslak önermeden önce aynı kontrolü (`simulate_rule`, MCP'den de
 erişilebilir) çalıştırır ve sayıları öneriye yazar.
+
+## MITRE ATT&CK görünümü
+
+*0.11'den beri.* Ortam menüsündeki **ATT&CK**, son 1, 7, 14 ya da 30 günün alarmlarını kuralların `<mitre>`
+bloklarındaki taktik ve tekniklere göre gruplar (`rule.mitre.id`, `rule.mitre.tactic`, `rule.mitre.technique`).
+Yapay zekâ kullanılmaz. Isı renkli bir taktik × teknik matrisi, önceki döneme göre değişimi, 30 gün içinde ilk kez
+görülen teknikleri, kaybolan teknikleri ve hiç alarmı olmayan taktikleri gösterir — sonuncusu ölçülmüş bir kapsam
+değil, bir tespit boşluğu ipucudur. Pano aynı 14 taktiği bir şerit olarak gösterir.
+
+Rapor bulguları, kurallarının teknik kimliklerini (ve kanıt desteklediğinde modelin kendi eşlemesini)
+attack.mitre.org bağlantıları olarak taşır. Ayrıntı: [Kullanıcı rehberi](User-Guide-TR).
 
 ## Gürültü haritası
 

@@ -1,17 +1,20 @@
 # SSO proxy authentication (Keycloak, Authentik, oauth2-proxy)
 
 The application ships its own password login, but it can also run **behind an authenticating reverse proxy**.
-In that mode the proxy proves who the user is, forwards the user name in a header, and the application stops
-asking for a password.
+In that mode the proxy proves who the user is, forwards the user name and the user's groups in headers, and the
+application stops asking for a password. Since 0.11 the **groups decide the role**: members of
+`SSO_ADMIN_GROUPS` are administrators, members of `SSO_VIEWER_GROUPS` are read-only viewers, everyone else gets
+`SSO_DEFAULT_ROLE` (see [Roles from groups](#roles-from-groups-011)).
 
-> **This is a trust boundary, not a feature toggle.** With `AUTH_DISABLED=true` every request that reaches the
-> application is an **admin**. If the proxy can be bypassed, anyone who can reach the pod has full admin access.
-> Always combine SSO with a NetworkPolicy or host firewall that allows only the proxy.
+> **This is a trust boundary, not a feature toggle.** With `AUTH_DISABLED=true` the application believes the
+> user and group headers of every request that reaches it. If the proxy can be bypassed, anyone who can reach the
+> pod can name themselves and pick an administrator group. Always combine SSO with a NetworkPolicy or host
+> firewall that allows only the proxy, and set `TRUSTED_PROXIES` or `PROXY_SECRET`.
 
 ```mermaid
 flowchart LR
   U[Browser] -->|HTTPS| P[Keycloak + oauth2-proxy<br/>or Authentik forward auth]
-  P -->|X-Authentik-Username<br/>X-Forwarded-User| A[Wazuh Daily Triage]
+  P -->|user + groups headers| A[Wazuh Daily Triage]
   M[MCP client] -->|Authorization: Bearer MCP_TOKEN| A
   A --> W[Wazuh Indexer / API]
 ```
@@ -24,22 +27,65 @@ flowchart LR
 | `COOKIE_SECURE` | `true` | Still checked in production; the login cookie must be HTTPS-only. |
 | `FORWARDED_ALLOW_IPS` | proxy IP or pod CIDR | Uvicorn may only trust forwarded headers from the proxy. Never `*`. |
 | `USER_HEADER` | optional | Header order to read the user name from. Defaults: `X-authentik-username,X-Forwarded-User,Remote-User,X-Auth-Request-User`. |
+| `SSO_ADMIN_GROUPS` | e.g. `wazuh-admins` | Groups whose members are administrators. Without it nobody is (a startup warning says so). |
+| `SSO_VIEWER_GROUPS` | e.g. `soc,auditors` | Groups whose members are read-only viewers. |
+| `SSO_DEFAULT_ROLE` | `viewer`, `deny` or `admin` | Everyone in neither list. Default: `viewer`, or `deny` when `SSO_VIEWER_GROUPS` is set. |
+| `GROUP_HEADER` | optional | Headers to read the groups from. Defaults: `X-authentik-groups,X-Forwarded-Groups,X-Auth-Request-Groups,Remote-Groups`. |
 | `APP_PASSWORD` | can be empty | Not used for authorization in this mode. |
 | `APP_SECRET` | set it anyway | Keeps any app session valid across restarts; harmless behind SSO. |
 
 In production, `AUTH_DISABLED=true` produces a startup **warning** (not an error) and skips the
 `APP_PASSWORD`/`APP_SECRET` checks. The network restriction is your responsibility.
 
-The audit trail records the proxy user as the actor and the role as `proxy`; every state-changing request,
-denial and rule deployment is still written with that name.
+The audit trail records the proxy user as the actor and the role the groups gave them (`admin` or `viewer`);
+every state-changing request, denial and rule deployment is written with that name.
+
+## Roles from groups (0.11)
+
+| The user is in | Role | May |
+|---|---|---|
+| a group of `SSO_ADMIN_GROUPS` | administrator | everything: run checks, decide, edit the knowledge base, deploy rules, settings |
+| a group of `SSO_VIEWER_GROUPS` (and no admin group) | viewer | read every page of the environments `VIEWER_ENVS` allows; no button that changes something works |
+| neither | `SSO_DEFAULT_ROLE` | `viewer` (default), `admin`, or `deny`: the request is refused with 403 "no role" |
+
+```sh
+AUTH_DISABLED=true
+SSO_ADMIN_GROUPS=wazuh-admins
+SSO_VIEWER_GROUPS=soc,auditors        # with this set, everyone else is refused (SSO_DEFAULT_ROLE=deny)
+TRUSTED_PROXIES=10.42.0.0/16          # your ingress controller's pod CIDR
+```
+
+- Group names are compared without case, and a leading `/` is ignored, so the Keycloak full path `/wazuh-admins`
+  matches `wazuh-admins`. Several groups in one header may be separated by `|` (Authentik) or `,` (oauth2-proxy).
+- An administrator group wins over a viewer group.
+- The role is decided on every request; a group change in the identity provider applies as soon as the proxy
+  forwards it (for oauth2-proxy: at the next session refresh).
+- The sidebar shows the user name and the role; viewers see a **read-only** badge, and the same permission matrix
+  as [Viewer mode](Viewer-Mode) applies on the server.
+
+> **Upgrading from 0.10:** before 0.11 every SSO user was an administrator. Now an SSO user without an
+> administrator group is a viewer. Set `SSO_ADMIN_GROUPS` before you upgrade, or `SSO_DEFAULT_ROLE=admin` to keep
+> the old behaviour for a while (startup warns about it).
+
+### Which header carries the groups
+
+| Proxy | Header | Needed in the proxy configuration |
+|---|---|---|
+| Authentik forward auth (Traefik, nginx outpost) | `X-authentik-groups` (`a|b|c`) | `X-authentik-groups` in `authResponseHeaders` (the shipped component has it) |
+| oauth2-proxy, reverse-proxy mode (`--pass-user-headers`) | `X-Forwarded-Groups` | a `groups` claim in the token |
+| oauth2-proxy behind ingress-nginx / Traefik forward auth (`--set-xauthrequest`) | `X-Auth-Request-Groups` | `X-Auth-Request-Groups` in `auth-response-headers` / `authResponseHeaders` |
+| Other proxies | `Remote-Groups`, or any header named in `GROUP_HEADER` | – |
+
+The proxy must overwrite or remove these headers when a client sends them, exactly like the user header.
 
 ## Prerequisites (do not skip)
 
 1. **Network isolation.** Only the ingress controller / proxy may reach port 8080. Use the
    `networkpolicy` component (Kubernetes), a Docker network with only the proxy attached, or a host firewall.
-2. **Strip client-supplied identity headers.** The proxy must *overwrite or remove* `X-authentik-username`,
-   `X-Forwarded-User`, `Remote-User` and `X-Auth-Request-User` coming from the client. Otherwise a client could
-   choose its own admin name.
+2. **Strip client-supplied identity headers.** The proxy must *overwrite or remove* the user headers
+   (`X-authentik-username`, `X-Forwarded-User`, `Remote-User`, `X-Auth-Request-User`) and the group headers
+   (`X-authentik-groups`, `X-Forwarded-Groups`, `X-Auth-Request-Groups`, `Remote-Groups`) coming from the client.
+   Otherwise a client could choose its own name and an administrator group.
 3. **TLS everywhere.** `COOKIE_SECURE=true`; never expose the app directly over HTTP.
 4. **Keep probes public.** `/healthz` and `/readyz` are unauthenticated in the app, but the proxy must also let
    the kubelet reach them, or use `httpGet` probes directly against the pod.
@@ -61,7 +107,9 @@ Create a confidential client:
 - Valid redirect URI: `https://triage.example.com/oauth2/callback`
 - Web origins: `https://triage.example.com`
 
-Optionally add a group claim if you plan to restrict access at the proxy.
+Add a **group claim**, so the application can tell administrators from viewers: *Client scopes →
+wazuh-triage-dedicated → Add mapper → By configuration → Group Membership*, token claim name `groups`,
+"Full group path" on or off (both work), "Add to ID token" and "Add to userinfo" on.
 
 ### 2. oauth2-proxy
 
@@ -76,12 +124,14 @@ Optionally add a group claim if you plan to restrict access at the proxy.
 - --cookie-secure=true
 - --email-domain=*
 - --reverse-proxy=true
-- --set-xauthrequest=true          # emits X-Auth-Request-User
+- --set-xauthrequest=true          # emits X-Auth-Request-User and X-Auth-Request-Groups
+- --oidc-groups-claim=groups       # the claim the Keycloak mapper writes
 - --skip-auth-route=POST=^/mcp$    # only if you use the MCP server
 ```
 
-`--set-xauthrequest=true` is what makes `<proxy>/oauth2/auth` return `X-Auth-Request-User`; without it the
-application sees no actor name and records `proxy-user`.
+`--set-xauthrequest=true` is what makes `<proxy>/oauth2/auth` return `X-Auth-Request-User` and
+`X-Auth-Request-Groups`; without it the application sees no actor name (`proxy-user`) and no groups (everyone gets
+`SSO_DEFAULT_ROLE`).
 
 ### 3. ingress-nginx
 
@@ -90,11 +140,11 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/auth-url: "https://oauth2.example.com/oauth2/auth"
     nginx.ingress.kubernetes.io/auth-signin: "https://oauth2.example.com/oauth2/start?rd=$scheme://$host$escaped_request_uri"
-    nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User,X-Auth-Request-Email"
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-User,X-Auth-Request-Email,X-Auth-Request-Groups"
 ```
 
 The `auth-response-headers` annotation is required; without it nginx authenticates the request but does not
-pass the user name to the application.
+pass the user name and groups to the application.
 
 ### 3′. Traefik instead of nginx
 
@@ -110,6 +160,7 @@ spec:
     authResponseHeaders:
       - X-Auth-Request-User
       - X-Auth-Request-Email
+      - X-Auth-Request-Groups
 ```
 
 Attach the middleware to the `IngressRoute` for the application. Add a second, higher-priority route for
@@ -121,9 +172,12 @@ Attach the middleware to the `IngressRoute` for the application. Add a second, h
 AUTH_DISABLED=true
 COOKIE_SECURE=true
 FORWARDED_ALLOW_IPS=10.0.0.0/8        # your ingress controller's pod CIDR
+TRUSTED_PROXIES=10.0.0.0/8
+SSO_ADMIN_GROUPS=wazuh-admins         # Keycloak group names, with or without the leading /
+SSO_VIEWER_GROUPS=soc
 ```
 
-Restart, then log out of Keycloak and back in to verify the forwarded header is present.
+Restart, then log out of Keycloak and back in: the sidebar shows your name and role.
 
 ## Option 2 — Authentik forward auth (Traefik)
 
@@ -134,7 +188,8 @@ Authentik's **embedded outpost** can act as a forward-auth server. The repositor
 
 1. Create a **Proxy provider** (forward auth / single application) with external host
    `https://triage.example.com`.
-2. Create an **application** bound to that provider and to the group that may use the triage UI.
+2. Create an **application** bound to that provider. Bind it to every group that may use the triage UI —
+   administrators and viewers — and put their names into `SSO_ADMIN_GROUPS` / `SSO_VIEWER_GROUPS`.
 3. Assign the application to the embedded outpost (or a dedicated outpost) in the same namespace as your
    Traefik instance.
 
@@ -194,8 +249,8 @@ Enable it in your overlay:
 
 ```yaml
 components:   # remote, pinned — or copy the folders next to your overlay to edit the host names
-  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/networkpolicy?ref=v0.10.1
-  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/ingress-traefik-authentik?ref=v0.10.1
+  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/networkpolicy?ref=v0.11.0
+  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/ingress-traefik-authentik?ref=v0.11.0
 ```
 
 The component already sets `AUTH_DISABLED=true`, `COOKIE_SECURE=true` and `NOTIFY_UI_URL` (edit the host). Add
@@ -233,7 +288,9 @@ effectively unauthenticated. Fix the network policy before exposing it.
 | App still shows its own login page | `AUTH_DISABLED` is not `true` (only `true`, `1` and `yes` are accepted), or the environment change was not applied to the running pod. |
 | App answers `401 not authenticated` | Same as above: the app is still requiring a session because `AUTH_DISABLED` is off. |
 | Audit actor is `proxy-user` | The identity header is missing or has a different name. Set `USER_HEADER` or forward `X-Auth-Request-User` / `X-authentik-username`. |
-| Everyone is an admin | Expected: SSO mode has no role mapping. For read-only users use [Viewer mode](Viewer-Mode) with app passwords instead. |
+| Everyone is read-only after the upgrade | No group header arrives, or `SSO_ADMIN_GROUPS` is not set. Forward `X-authentik-groups` / `X-Auth-Request-Groups`, and set the group names. |
+| `403` "no role in this application" | `SSO_VIEWER_GROUPS` is set and the user is in none of the listed groups (`SSO_DEFAULT_ROLE=deny`). Add the user to a group, or set `SSO_DEFAULT_ROLE=viewer`. |
+| An administrator sees the read-only badge | The group name differs (spelling, a prefix). Compare with the header the proxy sends; case and a leading `/` do not matter. |
 | `/mcp` returns `401` behind the proxy | The proxy strips `Authorization`; add the skip route (`POST=^/mcp$`) or a middleware-free `/mcp` route. |
 | `/mcp` returns `404` | `MCP_TOKEN` is not set; that is the intended “disabled” answer. See [MCP](MCP). |
 | Probes fail after enabling SSO | The proxy intercepts `/healthz`/`/readyz`. Let those paths through, or point the probe at the pod. |
@@ -241,9 +298,10 @@ effectively unauthenticated. Fix the network policy before exposing it.
 
 ## Limitations to plan around
 
-- **No group → role mapping.** Every user authenticated by the proxy is an admin. Per-user read-only access
-  needs [Viewer mode](Viewer-Mode) (app password), not SSO.
-- **Environment scoping is per role, not per user.** `ADMIN_ENVS` applies to all SSO users.
+- **Two roles only.** A group maps to administrator or viewer; there is no finer role (for example "may decide
+  but not deploy").
+- **Environment scoping is per role, not per user.** `ADMIN_ENVS` applies to all SSO administrators,
+  `VIEWER_ENVS` to all SSO viewers.
 - **The app does not see the IdP session.** It only sees the header on each request; a revoked IdP session is
   honoured only as long as the proxy checks it.
 - **The header is the identity.** There is no signature on it — the network path is the control.

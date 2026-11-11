@@ -452,6 +452,8 @@ FINDING = _obj({
     "evidence": {"type": "array", "items": {"type": "string"}, "description": "Concrete numbers / times / IPs"},
     "rule_ids": {"type": "array", "items": {"type": "string"}},
     "agents": {"type": "array", "items": {"type": "string"}},
+    "mitre": {"type": "array", "items": {"type": "string"},
+              "description": "MITRE ATT&CK technique ids the evidence supports, e.g. T1110.001 (optional)"},
     "recommendation": {"type": "string", "description": "Recommended manual action or next step"},
     "rule_draft_xml": {"type": "string", "description": "Optional Wazuh rule draft (XML). Also propose it as a rule_draft so the user can approve it."},
     "manual_checks": {"type": "array", "description":

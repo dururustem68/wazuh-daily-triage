@@ -1350,6 +1350,10 @@ from .i18n_v10 import EXTRA as _V10  # noqa: E402 - 0.10 messages live in their 
 
 for _lang, _msgs in _V10.items():
     CATALOG[_lang].update(_msgs)
+from .i18n_v11 import EXTRA as _V11  # noqa: E402 - 0.11 messages (dashboard, ATT&CK, SSO roles)
+
+for _lang, _msgs in _V11.items():
+    CATALOG[_lang].update(_msgs)
 LANG_NAMES = {"en": "English", "tr": "Türkçe", "es": "Español", "de": "Deutsch"}
 OUTPUT_LANGUAGE = {"en": "English", "tr": "Turkish", "es": "Spanish", "de": "German"}
 

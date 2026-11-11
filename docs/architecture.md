@@ -59,7 +59,7 @@ and — when explicitly enabled — one custom rules file on the manager.
 | `app/promote.py` | Promote a rule draft into a local rules file managed by GitOps/ConfigMap |
 | `app/notify.py` | E-mail, Telegram, Teams, Slack, Discord, ntfy, generic webhook |
 | `app/sources.py` | Optional Prometheus, Loki and Kubernetes read-only sources |
-| `app/incident.py` | Incident draft and ticket (Jira/ServiceNow) helpers |
+| `app/incident.py` | Incident draft and ticket (Zammad/Jira) helpers |
 | `app/audit.py` | Monthly ISMS report built from the index — *not* the operational audit trail |
 | `app/authz.py` | Role → permission matrix and per-role environment allow-lists |
 | `app/auditlog.py` | Append-only, hash-chained operational audit trail (`logs/audit.jsonl`) |

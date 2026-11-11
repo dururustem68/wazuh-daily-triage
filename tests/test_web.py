@@ -199,7 +199,7 @@ def test_edit_rule_draft_xml(c):
 def test_about_templates_and_simple_import(c):
     assert c.post("/login", data={"password": "pw"}, follow_redirects=False).status_code == 303
     page = c.get("/about")
-    assert page.status_code == 200 and "MCP" in page.text and 'class="topbar"' in page.text
+    assert page.status_code == 200 and "MCP" in page.text and 'class="side"' in page.text
     for fmt in ("txt", "csv", "yaml"):
         r = c.get(f"/api/kb/template?fmt={fmt}")
         assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]

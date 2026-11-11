@@ -111,7 +111,17 @@ def validate(settings, env=os.environ, demo: bool = False) -> tuple[list[str], l
                             "client that can reach it and sends a user header — restrict the network "
                             "(NetworkPolicy) and set one of the two (docs/sso-proxy-auth.md)")
         if (env.get("SSO_REQUIRE_USER") or "true").strip().lower() in ("0", "false", "no", "off"):
-            warnings.append("SSO_REQUIRE_USER=false: requests without a user header are accepted as admin")
+            warnings.append("SSO_REQUIRE_USER=false: requests without a user header are accepted with the "
+                            "default SSO role (SSO_DEFAULT_ROLE)")
+        default_role = (env.get("SSO_DEFAULT_ROLE") or "").strip().lower()
+        if default_role == "admin":
+            warnings.append("SSO_DEFAULT_ROLE=admin: every user the proxy lets through is an administrator — "
+                            "prefer SSO_ADMIN_GROUPS (docs: SSO proxy authentication)")
+        elif not (env.get("SSO_ADMIN_GROUPS") or "").strip():
+            warnings.append("AUTH_DISABLED=true without SSO_ADMIN_GROUPS: nobody is an administrator — set the "
+                            "group(s) whose members may run checks, decide and deploy (since 0.11 SSO users are "
+                            "viewers unless a group makes them admin; SSO_DEFAULT_ROLE=admin restores the old "
+                            "behaviour)")
     else:
         pw = env.get("APP_PASSWORD") or ""
         if not pw:

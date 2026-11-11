@@ -55,6 +55,9 @@ placeholders inside `config.environments`:
 | `config.environments` | the `environments.yaml` — one block per Wazuh |
 
 Non-secret process env (language, timezone, cookie, proxy) goes in `app.*` / `env:`.
+Behind an SSO proxy (`env.AUTH_DISABLED: "true"`), set the roles there too, for example
+`env.SSO_ADMIN_GROUPS: wazuh-admins` and `env.SSO_VIEWER_GROUPS: soc` (since 0.11 SSO users without an
+administrator group are read-only).
 
 ## Optional blocks
 

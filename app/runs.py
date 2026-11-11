@@ -15,6 +15,7 @@ from .collector import Collector, _parse, health_status, iso
 from .config import Environment
 from .i18n import t
 from .llm.base import LLMError
+from .mitre import enrich_mitre
 from .observability import metrics
 from .reporting import _compact, flags_only_report, normalize_report
 from .store import new_id, now_iso
@@ -149,6 +150,10 @@ class RunMixin:
                 return run
             if tb.submitted is not None:
                 rep = normalize_report(tb.submitted, res.text, lang)
+                try:   # add the rules' own ATT&CK mapping to the findings (deterministic, best effort)
+                    await enrich_mitre(env, rt.ix, rep["findings"], frm, started)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("run %s: ATT&CK enrichment failed: %s", run_id, e)
             else:
                 # No usable report (text only, truncated/invalid JSON): keep the deterministic findings.
                 why = "; ".join(res.notes[-3:]) or res.stopped

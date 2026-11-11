@@ -164,6 +164,18 @@ async def handle_request(request: Request, call_next, p: str, role_: str | None)
             resp = deny(request, 401 if why == "no_user" else 403, "this request did not come through the "
                         "authenticating proxy" + (" (no user header)" if why == "no_user" else ""))
             return finish(request, resp, role_, f"denied:{why}")
+        if not role_:
+            resp = deny(request, 403, t(ui_lang(request), "auth.no_role"))
+            return finish(request, resp, role_, "denied:no_role")
+    if not public and AUTH_DISABLED and not (p == "/metrics" and os.environ.get("METRICS_TOKEN")):
+        need = required_perm(request.method, p)
+        if not authz.permitted(role_, need):
+            resp = deny(request, 403, t(ui_lang(request), "auth.read_only"))
+            return finish(request, resp, role_, f"denied:{need}")
+        env_id = env_from_path(p)
+        if env_id and not authz.may_access_env(role_, env_id):
+            resp = deny(request, 403, t(ui_lang(request), "err.no_env"))
+            return finish(request, resp, role_, "denied:env")
     if not public and not AUTH_DISABLED:
         if not APP_PASSWORD:
             resp = HTMLResponse(f"<p>{t(ui_lang(request), 'auth.no_password')}</p>", status_code=503)

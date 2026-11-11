@@ -1,6 +1,11 @@
 # Viewer mode (read-only role)
 
-A second password lets colleagues read everything without changing anything. It is intended for managers,
+The read-only role lets colleagues read everything without changing anything. There are two ways to give it:
+a second application password (`VIEWER_PASSWORD`, this page), or — behind an SSO proxy — membership of a group
+listed in `SSO_VIEWER_GROUPS` ([SSO proxy authentication](SSO-Proxy-Auth), since 0.11). Both lead to the same
+role and the same permission matrix.
+
+It is intended for managers,
 auditors, SOC shift leads and application owners who need the reports and the open recommendations, not the
 ability to run triage or deploy rules.
 
@@ -44,8 +49,9 @@ the control: a crafted `POST` gets `403` and is written to the audit trail as `d
 
 ### Known cosmetic limitation
 
-Some write controls (for example **Run check now** and the decision buttons) are still rendered for a viewer.
-They fail closed — the server rejects the request — but they are visible. Treat the 403 as the boundary, not
+The sidebar hides **Settings** and the dashboard shows **Run check now** disabled for a viewer, but some write
+controls (for example the decision buttons in a report and in the inbox) are still rendered. They fail closed —
+the server rejects the request — but they are visible. Treat the 403 as the boundary, not
 the absence of a button.
 
 ## Limit the environments a viewer sees
@@ -84,26 +90,31 @@ tail -n 5 logs/audit.jsonl
   password. Change `APP_SECRET` to invalidate every session immediately.
 - **The password is shared by all viewers.** There are no individual viewer accounts and no per-viewer audit
   identity: the audit trail records the role `viewer` with the shared actor `ui` (only login records say
-  `viewer`). If you need named read-only users, use an SSO proxy
-  — but see the caveat below.
+  `viewer`). If you need named read-only users, use SSO with `SSO_VIEWER_GROUPS` (below).
 - **No CSRF risk from GETs.** All state-changing operations are `POST`/`DELETE` and go through the same
   permission check.
 
-## Viewer mode vs. SSO
+## Viewer mode and SSO (0.11)
 
-These two are mutually exclusive in the current design:
+Behind an SSO proxy (`AUTH_DISABLED=true`) the password login is off, so `VIEWER_PASSWORD` is not used. The role
+comes from the user's groups instead:
 
-- `AUTH_DISABLED=true` makes **every** request an admin, because there is no group/role mapping from the proxy.
-  `VIEWER_PASSWORD` is then ignored for authorization.
-- `AUTH_DISABLED=false` keeps the app login and therefore supports the viewer role, but then the proxy must not
-  authenticate users (or must only wrap, not replace, the app login).
+```sh
+AUTH_DISABLED=true
+SSO_ADMIN_GROUPS=wazuh-admins       # administrators
+SSO_VIEWER_GROUPS=soc,auditors      # read-only viewers; everyone else is refused
+```
 
-If you need SSO for identity **and** read-only users, the practical options are:
+| | Viewer password | SSO viewer group |
+|---|---|---|
+| Who is it | everyone who knows the shared password | each person, by their own account |
+| Audit trail actor | `ui` (shared) | the user name from the proxy |
+| Taking access away | change the password and `APP_SECRET` | remove the user from the group |
+| Permissions | the matrix above | the same matrix |
+| Environments | `VIEWER_ENVS` | `VIEWER_ENVS` |
 
-1. Use app passwords and give the viewer password to the people who need read-only access.
-2. Run a second instance with its own configuration and restrict what it can do at the network/proxy layer.
-3. Enforce read-only at the proxy with a separate host and an allow-list of methods, and accept that the app
-   still sees an admin — **not recommended**, because a `GET` link does not protect the app.
+Group header names, proxy configuration and the default role for users in no listed group:
+[SSO proxy authentication](SSO-Proxy-Auth).
 
 ## Security checklist
 

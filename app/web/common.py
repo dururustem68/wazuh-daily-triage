@@ -8,6 +8,7 @@ import hmac
 import ipaddress
 import logging
 import os
+import re
 import secrets
 import time
 
@@ -51,6 +52,27 @@ def _networks(value: str) -> list:
 TRUSTED_PROXIES = _networks(os.environ.get("TRUSTED_PROXIES", ""))
 PROXY_SECRET = os.environ.get("PROXY_SECRET", "")           # the proxy adds it as X-WDT-Proxy-Secret
 SSO_REQUIRE_USER = os.environ.get("SSO_REQUIRE_USER", "true").strip().lower() not in ("0", "false", "no", "off")
+
+# SSO roles (0.11): the proxy forwards the user's groups; membership decides the role.
+GROUP_HEADERS = [h.strip() for h in os.environ.get(
+    "GROUP_HEADER", "X-authentik-groups,X-Forwarded-Groups,X-Auth-Request-Groups,Remote-Groups").split(",") if h.strip()]
+
+
+def _group_set(value: str) -> set[str]:
+    return {_norm_group(x) for x in re.split(r"[|,;]", value or "") if x.strip()}
+
+
+def _norm_group(g: str) -> str:
+    """``/Admins``, ``admins`` and ``Admins`` are the same group (Keycloak sends full paths)."""
+    return g.strip().lstrip("/").casefold()
+
+
+SSO_ADMIN_GROUPS = _group_set(os.environ.get("SSO_ADMIN_GROUPS", ""))
+SSO_VIEWER_GROUPS = _group_set(os.environ.get("SSO_VIEWER_GROUPS", ""))
+SSO_DEFAULT_ROLE = (os.environ.get("SSO_DEFAULT_ROLE", "") or ("deny" if SSO_VIEWER_GROUPS else "viewer")).strip().lower()
+if SSO_DEFAULT_ROLE not in ("admin", "viewer", "deny"):
+    log.warning("SSO_DEFAULT_ROLE=%r is not admin, viewer or deny — using deny", SSO_DEFAULT_ROLE)
+    SSO_DEFAULT_ROLE = "deny"
 
 
 def _trusted(ip: str) -> bool:
@@ -153,10 +175,33 @@ def valid(tok: str | None) -> str | None:
         return None
 
 
+def sso_groups(request: Request) -> set[str]:
+    """Groups of the signed-in user as forwarded by the SSO proxy (normalised, possibly empty)."""
+    out: set[str] = set()
+    for h in GROUP_HEADERS:
+        v = request.headers.get(h)
+        if v:
+            out |= _group_set(v[:4000])
+    return out
+
+
+def sso_role(request: Request) -> str | None:
+    """Role behind an SSO proxy: ``SSO_ADMIN_GROUPS`` → admin, ``SSO_VIEWER_GROUPS`` → viewer, otherwise
+    ``SSO_DEFAULT_ROLE`` (``viewer`` unless viewer groups are listed, then ``deny`` → ``None``)."""
+    groups = sso_groups(request)
+    if groups & SSO_ADMIN_GROUPS:
+        return "admin"
+    if groups & SSO_VIEWER_GROUPS:
+        return "viewer"
+    return None if SSO_DEFAULT_ROLE == "deny" else SSO_DEFAULT_ROLE
+
+
 def role(request: Request) -> str | None:
-    """Session role of this request (None when auth is delegated to a proxy)."""
+    """Role of this request: from the signed cookie, or from the proxy's group header in SSO mode.
+
+    ``None`` means not signed in (password mode) or no role granted (SSO mode)."""
     if AUTH_DISABLED:
-        return None
+        return sso_role(request)
     return valid(request.cookies.get(COOKIE))
 
 
@@ -192,7 +237,8 @@ def ctx(request: Request, **kw):
     return {"envs": [r.env for r in visible(request)], "demo": rt.demo, "app_title": rt.settings.app.title,
             "auth": not AUTH_DISABLED, "lang": lang, "_": lambda key, **a: t(lang, key, **a),
             "deploy_any": any(rt.deploy_ready(r.env) for r in visible(request)), "path": request.url.path,
-            "viewer": role_ == "viewer", "can": can, "viewer_enabled": bool(VIEWER_PASSWORD),
+            "viewer": role_ == "viewer", "can": can, "viewer_enabled": bool(VIEWER_PASSWORD), "role": role_,
+            "who": sso_user(request) if AUTH_DISABLED else None,
             "storage_errors": getattr(request.state, "storage_errors", []), "request_id": REQUEST_ID.get(),
             "storage_lost": [{**x, "env": r.env.id} for r in visible(request)
                              for x in (getattr(r.store, "health", None) or {}).get("lost") or []],

@@ -101,8 +101,10 @@ disabled for any endpoint, unless `WDT_ALLOW_INSECURE_TLS=1` is set deliberately
 ## 4. Web UI roles and environment scoping
 
 Two roles exist. There is no user database: the admin password is `APP_PASSWORD`, the optional read-only role
-uses `VIEWER_PASSWORD`. Behind an SSO proxy (`AUTH_DISABLED=true`) every request is an admin, identified by the
-proxy's user header.
+uses `VIEWER_PASSWORD`. Behind an SSO proxy (`AUTH_DISABLED=true`) the user is identified by the proxy's user
+header and the role comes from the group header (0.11): `SSO_ADMIN_GROUPS` → admin, `SSO_VIEWER_GROUPS` → viewer,
+anyone else → `SSO_DEFAULT_ROLE` (`viewer` by default, `deny` when viewer groups are listed). See the wiki page
+*SSO proxy authentication*.
 
 | Permission | Admin | Viewer | Covers |
 |---|---|---|---|

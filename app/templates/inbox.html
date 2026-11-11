@@ -27,6 +27,7 @@
       <a href="/e/{{ env.id }}/r/{{ item.run_id }}#{{ f.id }}">{{ _('inbox.open_report') }}</a></p>
     <div class="detail">{{ f.detail|md }}</div>
     {% if f.evidence %}<ul class="evidence">{% for e in f.evidence %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+{% if f.mitre %}<div class="ttags">{% for x in f.mitre %}<a class="ttag" href="{{ attack_url(x) }}" rel="noopener" target="_blank" title="MITRE ATT&amp;CK">{{ x }}</a>{% endfor %}{% for t in f.mitre_tactics or [] %}<span class="ttag tac">{{ t }}</span>{% endfor %}</div>{% endif %}
     <div class="meta">{% if f.rule_ids %}<span>{{ _('rep.rules') }}: {{ f.rule_ids|join(', ') }}</span>{% endif %}
       {% if f.agents %}<span>{{ _('rep.agents') }}: {{ f.agents|join(', ') }}</span>{% endif %}</div>
     {% if f.recommendation %}<div class="reco"><b>{{ _('rep.recommendation') }}</b> {{ f.recommendation|md }}</div>{% endif %}

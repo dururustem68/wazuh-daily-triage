@@ -22,11 +22,24 @@ router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
+async def dashboard(request: Request, env: str | None = None, period: str = "24h"):
+    import asyncio
+
+    from ..dash import PERIODS, overview
     rt = _rt(request)
     lang = ui_lang(request)
+    period = period if period in PERIODS else "24h"
+    vis = _visible(request)
+    sel = next((er for er in vis if er.env.id == env), vis[0] if vis else None)
+    overviews = await asyncio.gather(*[_safe(overview(er.env, er.ix, period), None, request=request) for er in vis])
+    tiles = []
+    for er, ov in zip(vis, overviews, strict=True):
+        runs = await _safe(er.repo.list_runs(3, light=True), [], request=request)
+        last = next((r for r in runs if r.get("status") == "done"), None)
+        live = await _safe(rt.liveness_state(er.env.id), None, request=request) if er.env.liveness.enabled else None
+        tiles.append({"env": er.env, "ov": ov, "last": last, "live": live, "on": sel is er})
     cards = []
-    for er in _visible(request):
+    for er in [sel] if sel else []:
         runs = await _safe(er.repo.list_runs(8, light=True), [], request=request)
         last = next((r for r in runs if r.get("status") == "done"), None)
         props = await _safe(er.repo.list_knowledge(status="proposed"), [], request=request)
@@ -58,7 +71,20 @@ async def dashboard(request: Request):
                       "top": top, "urgent": urgent, "questions": questions[:6], "rules": rules[:6],
                       "requests": requests[:6], "open_items": open_items[:6],
                       "report_open": (last or {}).get("open_items") or [], "other_props": other_props[:6]})
-    return tpl.TemplateResponse(request, "dashboard.html", _ctx(request, cards=cards))
+    ov = next((t["ov"] for t in tiles if t["on"]), None)
+    return tpl.TemplateResponse(request, "dashboard.html", _ctx(request, cards=cards, tiles=tiles, ov=ov,
+                                                                period=period, periods=list(PERIODS),
+                                                                sel=sel.env if sel else None))
+
+
+@router.get("/e/{env_id}/attack", response_class=HTMLResponse)
+async def attack_page(request: Request, env_id: str, days: int = 7, tactic: str = ""):
+    from ..mitre import matrix
+    er = _env(request, env_id)
+    days = days if days in (1, 7, 14, 30) else 7
+    m = await _safe(matrix(er.env, er.ix, days=days), None, request=request)
+    return tpl.TemplateResponse(request, "attack.html", _ctx(request, er=er, env=er.env, m=m, days=days,
+                                                             tactic=tactic))
 
 
 @router.get("/e/{env_id}", response_class=HTMLResponse)

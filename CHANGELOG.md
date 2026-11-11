@@ -5,12 +5,54 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-11-11
+
 ### Added
+- **Dashboard.** The start page is a dashboard: per-environment tiles, key figures (alerts, high level, critical,
+  agents, waiting recommendations, open questions) with trend lines and the change against the previous period,
+  alert volume over time, severity bands, top rules / agents / source addresses and the ATT&CK tactic strip, for
+  24 h, 7 or 30 days. Deterministic, cached for a minute. The work queue (inbox, questions, rule changes, open
+  items) stays below.
+- **MITRE ATT&CK page** (`/e/<env>/attack`): tactic × technique matrix with heat colours, change against the
+  previous period, techniques seen for the first time in 30 days, techniques that disappeared, tactics without
+  alerts. Cells link to attack.mitre.org.
+- **ATT&CK on findings.** Findings get `mitre` (technique ids) from the rules' `<mitre>` blocks and from the model
+  (new optional `mitre` field in `submit_report`, validated), plus `mitre_tactics`; shown as tags in the report and
+  the inbox.
+- **SSO roles from groups.** Behind an SSO proxy the group header (`X-authentik-groups`, `X-Forwarded-Groups`,
+  `X-Auth-Request-Groups`, `Remote-Groups`; `GROUP_HEADER`) decides the role: `SSO_ADMIN_GROUPS` → administrator,
+  `SSO_VIEWER_GROUPS` → read-only viewer, anyone else → `SSO_DEFAULT_ROLE` (`viewer`; `deny` when viewer groups are
+  listed). The permission matrix and `ADMIN_ENVS` / `VIEWER_ENVS` now apply in SSO mode too; the audit trail
+  records the role.
+- Server-rendered SVG charts (`app/charts.py`): no JavaScript library, no change to the Content-Security-Policy.
 - **MCP over stdio**: `python -m app.mcp_stdio` serves the same tools as `POST /mcp` in one process, one JSON-RPC
   message per line. With `WDT_DEMO=true` it needs nothing else (synthetic data, sample AI round), so any stdio MCP
   client can try the tools with `docker run -i --rm -e WDT_DEMO=true <image> python -m app.mcp_stdio`, and MCP
   directories can start the server to list its tools. Logs go to stderr.
 - `glama.json` (maintainer entry for the Glama MCP directory).
+
+### Changed
+- **New interface:** sidebar navigation with the environments and the user's name and role, a cleaner layout,
+  light and dark themes. The report's hourly bars are an area chart.
+- **SSO users are no longer administrators by default.** Set `SSO_ADMIN_GROUPS` before upgrading, or
+  `SSO_DEFAULT_ROLE=admin` for the previous behaviour. Startup warns when no administrator group is set.
+- The demo alerts carry ATT&CK mappings.
+- Helm chart 0.3.0.
+
+### Documentation
+- **Wiki restructured around tasks.** Twelve new pages (English and Turkish): *Getting started* (from the demo to
+  a checked first report), *User guide*, *Rule lifecycle*, *Kubernetes*, *Security model* (with a data-flow
+  table), *Security checklist*, *Troubleshooting*, *Upgrade*, *Compatibility* (tested / expected / not
+  supported), *Development*, *Scenarios* and *FAQ and glossary*. The home page (English, Turkish, Spanish, French)
+  says what the tool is and is not and has a documentation map; the sidebar is grouped by task.
+- **README shortened** in all four languages: what it is, quick start, security in short, and links to the wiki
+  instead of repeating it.
+- Wiki for 0.11: the dashboard and the ATT&CK page in the *User guide* and *Features*, SSO roles in *SSO proxy
+  authentication*, *Viewer mode* and *Configuration*, upgrade notes, new screenshots.
+- Corrections: `docs/compatibility.md` and `docs/architecture.md` listed ServiceNow (the ticket integrations are
+  Zammad and Jira) and Python 3.11–3.13 (CI covers 3.11–3.15); the Kustomize example pinned `v0.7.0`; the
+  *Features* page said startup refuses a shared deploy account (it warns; it refuses an empty or example
+  password).
 
 ## [0.10.1] — 2026-11-10
 

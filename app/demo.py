@@ -57,6 +57,23 @@ RULES = {
 }
 
 
+# rule.mitre of the demo rules (the mappings the Wazuh ruleset uses, or plausible ones for the custom rules)
+MITRE = {
+    "31151": (["T1595.002"], ["Reconnaissance"], ["Vulnerability Scanning"]),
+    "31153": (["T1190"], ["Initial Access"], ["Exploit Public-Facing Application"]),
+    "5715": (["T1078"], ["Defense Evasion", "Persistence", "Privilege Escalation", "Initial Access"], ["Valid Accounts"]),
+    "5710": (["T1110.001", "T1021.004"], ["Credential Access", "Lateral Movement"], ["Password Guessing", "SSH"]),
+    "5712": (["T1110"], ["Credential Access"], ["Brute Force"]),
+    "550": (["T1565.001"], ["Impact"], ["Stored Data Manipulation"]),
+    "554": (["T1105"], ["Command and Control"], ["Ingress Tool Transfer"]),
+    "533": (["T1049"], ["Discovery"], ["System Network Connections Discovery"]),
+    "100212": (["T1110.001"], ["Credential Access"], ["Password Guessing"]),
+    "100213": (["T1110"], ["Credential Access"], ["Brute Force"]),
+    "110014": (["T1552.007"], ["Credential Access"], ["Container API"]),
+    "506": (["T1562.001"], ["Defense Evasion"], ["Disable or Modify Tools"]),
+}
+
+
 def _ev(ts: datetime, rid: str, agent: tuple, **data) -> dict:
     lvl, desc, groups = RULES[rid]
     full_log = data.pop("full_log", "")
@@ -64,6 +81,9 @@ def _ev(ts: datetime, rid: str, agent: tuple, **data) -> dict:
           "agent": {"id": agent[0], "name": agent[1], "ip": agent[2]},
           "manager": {"name": "wazuh-manager-worker-0"}, "full_log": full_log,
           "location": data.pop("location", "/var/log/syslog"), "decoder": {"name": data.pop("decoder", "syslog")}}
+    if rid in MITRE:
+        ids, tactics, names = MITRE[rid]
+        ev["rule"]["mitre"] = {"id": list(ids), "tactic": list(tactics), "technique": list(names)}
     if data:
         ev["data"] = data
     return ev

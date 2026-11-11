@@ -11,10 +11,11 @@ from fastapi.templating import Jinja2Templates
 from markdown_it import MarkdownIt
 from markupsafe import Markup
 
-from .. import __version__
+from .. import __version__, charts
 from ..agent.tools import LABELS, SEVERITIES
 from ..collector import _parse
 from ..i18n import LANG_NAMES
+from ..mitre import attack_url as _attack_url
 from ..store import KNOWLEDGE_KINDS
 
 APP_DIR = Path(__file__).parent.parent
@@ -53,6 +54,37 @@ def num(v):
     return v if v is not None else "—"
 
 
+def _xlabel(period: str):
+    fmt = "%H:%M" if period == "24h" else "%d.%m"
+
+    def f(p):
+        try:
+            return _parse(p.get("t")).astimezone(_tz).strftime(fmt if period != "7d" else "%d.%m %H")
+        except Exception:  # noqa: BLE001
+            return str(p.get("t", ""))[5:16]
+    return f
+
+
+def volume_chart(series, period: str, names: dict, label: str, height: int = 200):
+    """Alert volume over time: all alerts, high level and critical, as overlaid areas."""
+    return charts.area(series, [("total", "c-total", names["total"]), ("high", "c-high", names["high"]),
+                                ("crit", "c-crit", names["crit"])], label, height=height, xlabel=_xlabel(period))
+
+
+def hourly_chart(hourly, label: str, name: str):
+    """The report's hourly series ({t, n}) as one area."""
+    return charts.area([{"t": h.get("t"), "n": h.get("n", 0)} for h in hourly or []], [("n", "c-total", name)], label,
+                       height=150, xlabel=_xlabel("24h"))
+
+
+def delta(v):
+    """``+12 %`` / ``−8 %`` for a ratio, ``—`` when there is no previous value."""
+    if v is None:
+        return "—"
+    pct = round(v * 100)
+    return ("+" if pct > 0 else "−" if pct < 0 else "±") + f"{abs(pct)} %"
+
+
 tpl = Jinja2Templates(directory=APP_DIR / "templates")
 tpl.env.filters["md"] = lambda s: Markup(_md.render(s if isinstance(s, str) else str(s or "")))
 tpl.env.filters["ts"] = fmt_ts
@@ -60,4 +92,5 @@ tpl.env.filters["tss"] = lambda v: fmt_ts(v, True)
 tpl.env.filters["n"] = num
 tpl.env.globals.update(LABEL_COLORS=LABEL_COLORS, USER_STATUSES=USER_STATUSES, HEALTH_COLORS=HEALTH_COLORS,
                        KINDS=list(KNOWLEDGE_KINDS), LANGS=LANG_NAMES, version=__version__, SOURCE_URL=SOURCE_URL,
-                       LABELS=LABELS, SEVERITIES=SEVERITIES)
+                       LABELS=LABELS, SEVERITIES=SEVERITIES, chart=charts, volume_chart=volume_chart,
+                       hourly_chart=hourly_chart, delta=delta, attack_url=_attack_url)

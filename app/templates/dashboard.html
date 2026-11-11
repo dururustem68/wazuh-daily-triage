@@ -1,42 +1,139 @@
 {% extends "base.html" %}
 {% block body %}
+{% set c = cards[0] if cards else none %}{% set last = c.last if c else none %}
 <div class="page-head">
-  <div class="titles"><h1>{{ _('dash.title') }}</h1></div>
-</div>
-{% for c in cards %}
-{% set last = c.last %}
-<section class="env-block">
-  <div class="card env-card h-{{ (last.health or 'ok') if last else 'none' }}">
-    <div class="row">
-      <h2><a href="/e/{{ c.env.id }}">{{ c.env.name }}</a></h2>
-      {% if last %}<span class="pill {{ HEALTH_COLORS[last.health or 'ok'] }}">{{ _('health.' ~ (last.health or 'ok')) }}</span>{% endif %}
-      {% if c.live %}{% set lp = c.live.problems or {} %}
-        <span class="pill {{ 'red' if lp else 'green' }}" title="{{ _('live.checked', t=c.live.checked_at|ts) }}">● {{ _('live.bad', n=lp|length) if lp else _('live.ok') }}</span>
-      {% endif %}
-      <div class="spacer"></div>
-      <span class="small muted">{% if last %}{{ _('dash.last_report') }}: <a href="/e/{{ c.env.id }}/r/{{ last.run_id }}">{{ last.started_at|ts }}</a> · {% endif %}{% if c.next %}{{ _('dash.next', t=c.next) }}{% else %}{{ _('dash.schedule_off') }}{% endif %}</span>
-      <button class="btn primary small" data-run="{{ c.env.id }}" {{ 'disabled' if c.running }}>{{ _('run.running') if c.running else _('run.now') }}</button>
-    </div>
-    <div class="runstate small" data-runstate="{{ c.env.id }}" {% if c.running %}data-poll="{{ c.running }}"{% endif %}></div>
-    {% if last %}
-    <div class="stats">
-      <div><b>{{ last.metrics.total|n }}</b><span>{{ _('dash.alerts') }}</span></div>
-      <div><b>{{ last.metrics.high|n }}</b><span>{{ _('dash.level_plus', n=c.env.high_level) }}</span></div>
-      <div><b>{{ c.inbox }}</b><span>{{ _('nav.inbox') }}</span></div>
-      <div><b>{{ c.urgent }}</b><span>{{ _('dash.urgent_label') }}</span></div>
-      <div><b>{{ c.questions|length }}</b><span>{{ _('dash.q_label') }}</span></div>
-    </div>
-    {% if c.live and c.live.problems %}
-      <div class="flags">{% for code, p in c.live.problems.items() %}<div class="flag red">{{ p.msg }} <span class="small muted">· {{ _('live.since', t=p.since|ts) }}</span></div>{% endfor %}</div>
-    {% else %}
-      {% set crit = (last.flags or [])|selectattr('severity','equalto','critical')|list %}
-      {% if crit %}<div class="flags">{% for f in crit %}<div class="flag red">{{ f.message }}</div>{% endfor %}</div>{% endif %}
-    {% endif %}
-    {% else %}
-    <div class="empty"><b>{{ _('dash.no_report') }}</b></div>
-    {% endif %}
+  <div class="titles">
+    <div class="eyebrow">{{ _('nav.overview') }}{% if sel %} · {{ sel.name }}{% endif %}</div>
+    <h1>{{ _('dash.title') }}</h1>
+    {% if ov %}<div class="sub">{{ ov.from|ts }} → {{ ov.to|ts }} · {{ _('dash.vs_prev', p=_('dash.period.' ~ period)) }}</div>{% endif %}
   </div>
+  <div class="tools">
+    <div class="seg" role="group" aria-label="{{ _('dash.period') }}">
+      {% for p in periods %}<a class="{{ 'on' if p == period }}" href="/?{{ ('env=' ~ sel.id ~ '&') if sel else '' }}period={{ p }}">{{ _('dash.period.' ~ p) }}</a>{% endfor %}
+    </div>
+    {% if c %}<button class="btn primary" data-run="{{ c.env.id }}" {{ 'disabled' if c.running or not can.run }}>{{ _('run.running') if c.running else _('run.now') }}</button>{% endif %}
+  </div>
+</div>
+{% if c %}<div class="runstate small" data-runstate="{{ c.env.id }}" {% if c.running %}data-poll="{{ c.running }}"{% endif %}></div>{% endif %}
 
+{% if tiles|length > 1 %}
+<div class="envstrip">
+  {% for tl in tiles %}{% set h = (tl.last.health or 'ok') if tl.last else 'none' %}
+  <a class="etile h-{{ h }} {{ 'on' if tl.on }}" href="/?env={{ tl.env.id }}&period={{ period }}">
+    <div class="row"><span class="hdot"></span><b>{{ tl.env.name }}</b><span class="spacer"></span>
+      {% if tl.live and tl.live.problems %}<span class="pill red">{{ _('live.bad', n=tl.live.problems|length) }}</span>{% endif %}</div>
+    {% if tl.ov %}<div class="row"><span class="num">{{ chart.compact(tl.ov.total) }}</span>
+      <span class="small muted">{{ _('dash.k.alerts') }} · <span class="hi">{{ chart.compact(tl.ov.high) }}</span> L{{ tl.ov.high_level }}+</span></div>
+    {{ chart.spark(tl.ov.series|map(attribute='total')|list, 'c-total', _('dash.vol')) }}{% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if c %}
+{% if c.live and c.live.problems %}
+  <div class="flags">{% for code, p in c.live.problems.items() %}<div class="flag red">{{ p.msg }} <span class="small muted">· {{ _('live.since', t=p.since|ts) }}</span></div>{% endfor %}</div>
+{% elif last %}
+  {% set crit = (last.flags or [])|selectattr('severity','equalto','critical')|list %}
+  {% if crit %}<div class="flags">{% for f in crit %}<div class="flag red">{{ f.message }}</div>{% endfor %}</div>{% endif %}
+{% endif %}
+
+<div class="statusline">
+  {% if last %}<span class="pill {{ HEALTH_COLORS[last.health or 'ok'] }}">{{ _('health.' ~ (last.health or 'ok')) }}</span>{% endif %}
+  {% if c.live %}{% set lp = c.live.problems or {} %}<span class="pill {{ 'red' if lp else 'green' }}" title="{{ _('live.checked', t=c.live.checked_at|ts) }}">● {{ _('live.bad', n=lp|length) if lp else _('live.ok') }}</span>{% endif %}
+  <span class="small muted">{% if last %}{{ _('dash.last_report') }}: <a href="/e/{{ c.env.id }}/r/{{ last.run_id }}">{{ last.started_at|ts }}</a> · {% endif %}{% if c.next %}{{ _('dash.next', t=c.next) }}{% else %}{{ _('dash.schedule_off') }}{% endif %}</span>
+</div>
+
+{% if not ov %}<div class="card err">{{ _('dash.nodata') }}</div>{% else %}
+{% set lv = ov.high_level %}
+<div class="ktiles">
+  {% for key, val, d, cls, label in [
+      ('alerts', ov.total, ov.delta_total, 'c-total', _('dash.k.alerts')),
+      ('high', ov.high, ov.delta_high, 'c-high', _('dash.k.high', n=lv)),
+      ('crit', ov.crit, ov.delta_crit, 'c-crit', _('dash.k.crit'))] %}
+  <div class="ktile k-{{ key }}">
+    <span class="klabel">{{ label }}</span>
+    <b class="kval">{{ val|n }}</b>
+    <span class="kdelta {{ 'up' if d and d > 0.05 else 'down' if d and d < -0.05 else '' }}">{{ delta(d) }} <small>{{ _('dash.vs_prev_short') }}</small></span>
+    {{ chart.spark(ov.series|map(attribute={'alerts':'total','high':'high','crit':'crit'}[key])|list, cls, label) }}
+  </div>
+  {% endfor %}
+  <div class="ktile"><span class="klabel">{{ _('dash.k.agents') }}</span><b class="kval">{{ ov.agents|n }}</b>
+    <span class="kdelta">{{ _('dash.k.agents_sub') }}</span></div>
+  <a class="ktile link {{ 'warn' if c.urgent }}" href="/e/{{ c.env.id }}/inbox"><span class="klabel">{{ _('dash.k.inbox') }}</span><b class="kval">{{ c.inbox }}</b>
+    <span class="kdelta {{ 'up' if c.urgent }}">{{ _('dash.k.urgent', n=c.urgent) }}</span></a>
+  <div class="ktile"><span class="klabel">{{ _('dash.k.questions') }}</span><b class="kval">{{ c.questions|length }}</b>
+    <span class="kdelta">{{ _('dash.k.proposals', n=c.proposals) }}</span></div>
+</div>
+
+<div class="dgrid">
+  <section class="panel span2">
+    <div class="phead"><h2>{{ _('dash.vol') }}</h2><span class="spacer"></span>
+      <span class="legend"><i class="c-total"></i>{{ _('dash.legend.total') }} <i class="c-high"></i>{{ _('dash.legend.high', n=lv) }} <i class="c-crit"></i>{{ _('dash.legend.crit') }}</span></div>
+    {% if ov.total %}{{ volume_chart(ov.series, period, {'total': _('dash.legend.total'), 'high': _('dash.legend.high', n=lv), 'crit': _('dash.legend.crit')}, _('dash.vol')) }}
+    {% else %}<div class="bempty">{{ _('dash.none') }}</div>{% endif %}
+  </section>
+  <section class="panel">
+    <div class="phead"><h2>{{ _('dash.sev') }}</h2></div>
+    <div class="donutwrap">
+      {{ chart.donut([(_('band.critical'), ov.bands[0].count, 'c-crit'), (_('band.high'), ov.bands[1].count, 'c-high'),
+                      (_('band.medium'), ov.bands[2].count, 'c-med'), (_('band.low'), ov.bands[3].count, 'c-low')],
+                     _('dash.sev'), center=chart.compact(ov.total), sub=_('dash.k.alerts')) }}
+      <ul class="blist">{% for b in ov.bands %}<li><i class="c-{{ {'critical':'crit','high':'high','medium':'med','low':'low'}[b.band] }}"></i>
+        <span>{{ _('band.' ~ b.band) }} <small class="muted">{{ _('band.range', a=b['from'], b=b.to) }}</small></span><b>{{ b.count|n }}</b></li>{% endfor %}</ul>
+    </div>
+  </section>
+</div>
+
+<section class="panel">
+  <div class="phead"><h2>{{ _('dash.att') }}</h2>
+    {% if ov.total %}<span class="small muted">{{ _('dash.mitre_share', p=((100 * ov.mitre_total / ov.total)|round(0)|int) if ov.total else 0) }}</span>{% endif %}
+    <span class="spacer"></span><a class="small" href="/e/{{ c.env.id }}/attack?days={{ {'24h':1,'7d':7,'30d':30}[period] }}">{{ _('dash.att_open') }} →</a></div>
+  {% if ov.mitre_total %}
+  <div class="tstrip">
+    {% for t in ov.tactics[:14] %}
+    <a class="tcell {{ t.heat }}" href="/e/{{ c.env.id }}/attack?days={{ {'24h':1,'7d':7,'30d':30}[period] }}&tactic={{ t.tactic|urlencode }}"
+       title="{{ t.id }} {{ t.tactic }}: {{ t.count|n }} · L{{ lv }}+ {{ t.high|n }} · {{ _('dash.att_tech', n=t.techniques) }}">
+      <span class="tname">{{ t.tactic }}</span>
+      <b>{{ chart.compact(t.count) if t.count else '–' }}</b>
+      <span class="tsub">{% if t.count %}{{ _('dash.att_tech', n=t.techniques) }}{% if t.high %} · <span class="hi">{{ t.high|n }}</span>{% endif %}{% else %}{{ _('dash.att_silent') }}{% endif %}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}<div class="bempty">{{ _('dash.att_none') }}</div>{% endif %}
+</section>
+
+<div class="dgrid three">
+  <section class="panel">
+    <div class="phead"><h2>{{ _('dash.top_rules', n=lv) }}</h2></div>
+    {% set mx = (ov.top_high_rules|map(attribute='count')|max) if ov.top_high_rules else 0 %}
+    {% for r in ov.top_high_rules %}<div class="mrow">
+      <div class="row"><span class="pill {{ 'red' if r.level >= 12 else 'amber' }}">{{ r.level }}</span><code>{{ r.id }}</code>
+        <span class="mt" title="{{ r.desc }}">{{ r.desc }}</span><b>{{ r.count|n }}</b></div>
+      {{ chart.meter(r.count, mx, 'c-crit' if r.level >= 12 else 'c-high') }}</div>
+    {% else %}<div class="bempty">{{ _('dash.none') }}</div>{% endfor %}
+  </section>
+  <section class="panel">
+    <div class="phead"><h2>{{ _('dash.top_agents') }}</h2></div>
+    {% set mx = (ov.top_agents|map(attribute='count')|max) if ov.top_agents else 0 %}
+    {% for a in ov.top_agents %}<div class="mrow">
+      <div class="row"><span class="mt">{{ a.name }}</span><b>{{ a.count|n }}</b>{% if a.high %}<span class="small hi">{{ a.high|n }}</span>{% endif %}</div>
+      {{ chart.meter(a.count, mx, 'c-total', a.high, 'c-high') }}</div>
+    {% else %}<div class="bempty">{{ _('dash.none') }}</div>{% endfor %}
+  </section>
+  <section class="panel">
+    <div class="phead"><h2>{{ _('dash.top_src') }}</h2></div>
+    {% set mx = (ov.top_sources|map(attribute='count')|max) if ov.top_sources else 0 %}
+    {% for a in ov.top_sources %}<div class="mrow">
+      <div class="row"><code class="mt">{{ a.ip }}</code><b>{{ a.count|n }}</b>{% if a.high %}<span class="small hi">{{ a.high|n }}</span>{% endif %}</div>
+      {{ chart.meter(a.count, mx, 'c-total', a.high, 'c-high') }}</div>
+    {% else %}<div class="bempty">{{ _('dash.none') }}</div>{% endfor %}
+  </section>
+</div>
+{% endif %}
+
+<div class="section-title"><h2>{{ _('dash.work') }}</h2></div>
+{% if not last %}<div class="card empty"><b>{{ _('dash.no_report') }}</b></div>{% endif %}
   {% if last %}
   <div class="board">
     <div class="col">
@@ -111,6 +208,6 @@
     </div>
   </div>
   {% endif %}
-</section>
-{% endfor %}
+{% endif %}
+{% if not tiles %}<div class="card empty"><b>{{ _('auth.no_env') }}</b></div>{% endif %}
 {% endblock %}

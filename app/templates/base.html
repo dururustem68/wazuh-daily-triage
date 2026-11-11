@@ -31,37 +31,44 @@
 <script src="/static/app.js?v={{ version }}" defer></script>
 </head>
 <body>
-<header class="top">
-  <div class="topbar">
-    <a class="brand" href="/"><img src="/static/icon.svg" alt="" width="24" height="24"><span>{{ app_title }}</span></a>
-    {% if demo %}<span class="pill amber demo">DEMO</span>{% endif %}
-    {% if viewer %}<span class="pill gray demo">{{ _('nav.viewer') }}</span>{% endif %}
-    <nav class="tnav" aria-label="{{ _('nav.main') }}">
-      <a href="/" class="{{ 'on' if path == '/' }}"><svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z"/></svg>{{ _('dash.title') }}</a>
-      {% for e in envs %}{% set cur = env is defined and env and env.id == e.id %}
-      <a href="/e/{{ e.id }}" class="envtab {{ 'on' if cur }}"><span class="dot"></span>{{ e.name }}</a>
-      {% endfor %}
-    </nav>
-    <span class="spacer"></span>
-    <a href="/about" class="tlink {{ 'on' if path == '/about' }}"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v6M12 7.5v.5"/></svg><span>{{ _('nav.about') }}</span></a>
+{% set cur = env if (env is defined and env) else (sel if (sel is defined and sel) else none) %}
+<div class="shell">
+<aside class="side" aria-label="{{ _('nav.main') }}">
+  <a class="brand" href="/"><img src="/static/icon.svg" alt="" width="26" height="26"><span>{{ app_title }}</span></a>
+  <div class="badges">
+    {% if demo %}<span class="pill amber">DEMO</span>{% endif %}
+    {% if viewer %}<span class="role-badge viewer">{{ _('role.viewer') }}</span>{% endif %}
+  </div>
+  <nav class="snav">
+    <a href="/{{ ('?env=' ~ cur.id) if cur else '' }}" class="{{ 'on' if path == '/' }}"><svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z"/></svg><span>{{ _('nav.overview') }}</span></a>
+    {% if envs|length > 1 %}
+    <div class="sgroup">{{ _('dash.envs') }}</div>
+    {% for e in envs %}<a href="/?env={{ e.id }}" class="envlink {{ 'cur' if cur and cur.id == e.id }}"><span class="dot"></span><span>{{ e.name }}</span></a>{% endfor %}
+    {% endif %}
+    {% if cur %}
+    <div class="sgroup">{{ cur.name }}</div>
+    <a href="/e/{{ cur.id }}/inbox" class="{{ 'on' if path.endswith('/inbox') }}"><svg viewBox="0 0 24 24"><path d="M4 4h16v10h-5l-2 3h-2l-2-3H4zM4 16h4l2 3h4l2-3h4v4H4z"/></svg><span>{{ _('nav.inbox') }}</span></a>
+    <a href="/e/{{ cur.id }}" class="{{ 'on' if path == '/e/' ~ cur.id or '/r/' in path }}"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 3v5h5M9 12h8M9 16h8"/></svg><span>{{ _('nav.reports') }}</span></a>
+    <a href="/e/{{ cur.id }}/attack" class="{{ 'on' if path.endswith('/attack') }}"><svg viewBox="0 0 24 24"><path d="M3 3h5v5H3zM10 3h4v5h-4zM16 3h5v5h-5zM3 10h5v4H3zM10 10h4v4h-4zM16 10h5v4h-5zM3 16h5v5H3zM10 16h4v5h-4zM16 16h5v5h-5z"/></svg><span>{{ _('nav.attack') }}</span></a>
+    <a href="/e/{{ cur.id }}/noise" class="{{ 'on' if path.endswith('/noise') }}"><svg viewBox="0 0 24 24"><path d="M4 20V10M9 20V4M14 20v-7M19 20v-11"/></svg><span>{{ _('nav.noise') }}</span></a>
+    <a href="/e/{{ cur.id }}/watch" class="{{ 'on' if path.endswith('/watch') }}"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg><span>{{ _('nav.watch') }}</span></a>
+    <a href="/e/{{ cur.id }}/k" class="{{ 'on' if path.endswith('/k') }}"><svg viewBox="0 0 24 24"><path d="M5 3h12a2 2 0 0 1 2 2v16H7a2 2 0 0 1-2-2zM5 17a2 2 0 0 1 2-2h12"/></svg><span>{{ _('nav.knowledge') }}</span></a>
+    <a href="/e/{{ cur.id }}/audit" class="{{ 'on' if path.endswith('/audit') }}"><svg viewBox="0 0 24 24"><path d="M9 3h6v3H9zM6 5h12v16H6zM9 11l2 2 4-4M9 17h6"/></svg><span>{{ _('nav.audit') }}</span></a>
+    {% if can.admin %}<a href="/e/{{ cur.id }}/settings" class="{{ 'on' if path.endswith('/settings') }}"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg><span>{{ _('set.title') }}</span></a>{% endif %}
+    {% endif %}
+  </nav>
+  <div class="sfoot">
+    <a href="/about" class="{{ 'on' if path == '/about' }}"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v6M12 7.5v.5"/></svg><span>{{ _('nav.about') }}</span></a>
+    {% if who or auth %}<div class="who" title="{{ _('nav.signed_in', who=who or _('role.' ~ (role or 'admin'))) }}">
+      <span class="avatar">{{ ((who or role or 'a')[:1])|upper }}</span>
+      <span class="wname">{{ who or _('role.' ~ (role or 'admin')) }}<small>{{ _('role.' ~ (role or 'admin')) }}</small></span>
+      {% if auth %}<form method="post" action="/logout" class="inline"><button class="linkbtn" title="{{ _('nav.logout') }}">{{ _('nav.logout') }}</button></form>{% endif %}
+    </div>{% endif %}
     <form method="post" action="/lang" class="inline langsw">
       {% for code, name in LANGS.items() %}<button name="lang" value="{{ code }}" class="linkbtn {{ 'on' if code == lang }}" title="{{ name }}">{{ code|upper }}</button>{% endfor %}
     </form>
-    {% if auth %}<form method="post" action="/logout" class="inline"><button class="linkbtn">{{ _('nav.logout') }}</button></form>{% endif %}
   </div>
-  {% if env is defined and env %}
-  <nav class="subbar" aria-label="{{ env.name }}">
-    <span class="envlabel"><span class="dot"></span>{{ env.name }}</span>
-    <a href="/e/{{ env.id }}/inbox" class="{{ 'on' if path.endswith('/inbox') }}"><svg viewBox="0 0 24 24"><path d="M4 4h16v10h-5l-2 3h-2l-2-3H4zM4 16h4l2 3h4l2-3h4v4H4z"/></svg>{{ _('nav.inbox') }}</a>
-    <a href="/e/{{ env.id }}" class="{{ 'on' if path == '/e/' ~ env.id or '/r/' in path }}"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 3v5h5M9 12h8M9 16h8"/></svg>{{ _('nav.reports') }}</a>
-    <a href="/e/{{ env.id }}/k" class="{{ 'on' if path.endswith('/k') }}"><svg viewBox="0 0 24 24"><path d="M5 3h12a2 2 0 0 1 2 2v16H7a2 2 0 0 1-2-2zM5 17a2 2 0 0 1 2-2h12"/></svg>{{ _('nav.knowledge') }}</a>
-    <a href="/e/{{ env.id }}/noise" class="{{ 'on' if path.endswith('/noise') }}"><svg viewBox="0 0 24 24"><path d="M4 20V10M9 20V4M14 20v-7M19 20v-11"/></svg>{{ _('nav.noise') }}</a>
-    <a href="/e/{{ env.id }}/watch" class="{{ 'on' if path.endswith('/watch') }}"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>{{ _('nav.watch') }}</a>
-    <a href="/e/{{ env.id }}/audit" class="{{ 'on' if path.endswith('/audit') }}"><svg viewBox="0 0 24 24"><path d="M9 3h6v3H9zM6 5h12v16H6zM9 11l2 2 4-4M9 17h6"/></svg>{{ _('nav.audit') }}</a>
-    {% if can.admin %}<a href="/e/{{ env.id }}/settings" class="{{ 'on' if path.endswith('/settings') }}"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>{{ _('set.title') }}</a>{% endif %}
-  </nav>
-  {% endif %}
-</header>
+</aside>
 <div class="content">
   {% if storage_errors %}
   <div class="banner banner-warn" role="alert" aria-live="polite">
@@ -82,6 +89,7 @@
   {% endif %}
   <main>{% block body %}{% endblock %}</main>
   <footer>Wazuh Daily Triage {{ version }} · {{ _('footer.deploy') if deploy_any else _('footer') }} · <a href="/about">{{ _('nav.about') }}</a> · <a href="{{ SOURCE_URL }}" rel="noopener">{{ _('nav.source') }}</a> (AGPL-3.0)</footer>
+</div>
 </div>
 </body>
 </html>

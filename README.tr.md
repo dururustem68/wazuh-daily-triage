@@ -1,313 +1,170 @@
 # Wazuh Daily Triage
 
-**[Wazuh](https://wazuh.com) SIEM için yapay zekâ destekli günlük nöbet kontrolü.** Her sabah SIEM'in gerçekten
-çalıştığını kontrol eder, gerçek riski bilinen gürültüden ayırır, kısa bir teşhis raporunu Wazuh Indexer'ınıza
-geri yazar, yalnızca insan kararı gereken yerde size soru sorar ve cevaplarınızı ertesi gün hatırlar.
+**[Wazuh](https://wazuh.com) SIEM için nöbet yardımcısı.** Kural tabanlı nöbet, acil bir durum olduğunda
+dakikalar içinde ve yapay zekâ çağırmadan haber verir. Günde bir ya da iki kez çalışan AI turu ise SIEM'in
+gerçekten ayakta olduğunu denetler, gerçek riski bilinen gürültüden ayırır, kısa bir raporu kendi Wazuh
+Indexer'ınıza yazar ve yalnız insan kararı gereken yerde size sorar. Cevaplarınızı hatırlar.
 
-Yapay zekâ anahtarınız sizin: Anthropic, OpenAI, Azure OpenAI ya da OpenAI uyumlu herhangi bir uç nokta (Ollama,
-vLLM, LM Studio, LiteLLM). Tek Docker konteyner; varsayılan olarak Wazuh'a karşı salt okunur. Kritik durumları ve
-koşu özetlerini e-posta, Telegram, Microsoft Teams, Slack, Discord, ntfy ya da jenerik webhook ile bildirir.
+Model sizin: Anthropic, OpenAI, Azure OpenAI ya da OpenAI uyumlu herhangi bir uç nokta (Ollama, vLLM, LM Studio,
+LiteLLM). Tek Docker konteyner; varsayılan olarak Wazuh'a karşı salt okunur; kişisel veri modele ulaşmadan önce
+maskelenir.
 
-[English](README.md) · [Türkçe](README.tr.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Yapay zekâ sağlayıcıları](docs/providers.tr.md) · [Bildirimler](docs/notifications.md) · [Yetkiler ve ağ](docs/permissions.md) · [Kural uygulama](docs/rule-deployment.md) · [Mimari](docs/architecture.md) · [Uyumluluk](docs/compatibility.md) · [Katkı](CONTRIBUTING.md) · [Güvenlik](SECURITY.md)
+[English](README.md) · [Türkçe](README.tr.md) · [Deutsch](README.de.md) · [Español](README.es.md) ·
+**[Wiki](https://github.com/dururustem68/wazuh-daily-triage/wiki/Home-TR)** ·
+[Başlangıç](https://github.com/dururustem68/wazuh-daily-triage/wiki/Getting-Started-TR) ·
+[Güvenlik modeli](https://github.com/dururustem68/wazuh-daily-triage/wiki/Security-Model-TR) ·
+[Değişiklik günlüğü](CHANGELOG.md)
 
-![Rapor](docs/screenshot-report-tr.png)
+![Pano](docs/screenshot-dashboard-tr.png)
 
-| Öneri kuyruğu | Bilgi tabanı ve kural taslakları |
+| MITRE ATT&CK | Rapor |
 |---|---|
-| ![Öneriler](docs/screenshot-inbox-tr.png) | ![Bilgi tabanı](docs/screenshot-knowledge-tr.png) |
-
-<img src="docs/screenshot-audit-pdf.png" alt="Aylık denetim raporu (PDF)" width="430">
+| ![ATT&CK matrisi](docs/screenshot-attack-tr.png) | ![Rapor](docs/screenshot-report-tr.png) |
 
 ## Neden
 
-Sabahlarınız aynı Wazuh rutiniyle başlıyorsa — *veri akıyor mu, ajanlar bağlı mı, seviye 7+ üstünde ne var, bunun
-hangisi olağan gürültü, hangisi gerçek* — bu araç zahmetli kısmı yapar ve sizi yalnızca karar gereken yerde arar.
-Zor kazanılmış inceleme alışkanlıklarını kodlar: alarmdan önce sağlık, ortalama yerine dağılım, "her ajanda aynı
-sayı = besleme olayı", "sıfır, kuralın çalıştığı anlamına gelmez", susturmak yerine seviye düşürmek.
+Sabahlarınız aynı Wazuh rutiniyle başlıyorsa (veri akıyor mu, ajanlar bağlı mı, seviye 7 ve üstünde ne var,
+hangisi bildik gürültü, hangisi gerçek), bu araç ayak işini yapar ve sizi yalnız karar gereken yerde çağırır.
+Zor öğrenilmiş inceleme alışkanlıklarını içerir: önce sağlık sonra alarm, ortalama yerine dağılım, "her ajanda
+aynı sayı bir besleme olayıdır", "sıfır, kuralın çalıştığını göstermez", susturmak yerine seviye düşürmek.
 
-## Özellikler
+## Nedir, ne değildir
 
-- **Zamanlanmış kontrol** (ortam başına günde bir ya da birkaç saat + gün). Pencere "son başarılı koşudan bu yana"; pazartesi
-  sabahı hafta sonunu kapsar.
-- **Önce deterministik toplama** (yapay zekâdan bağımsız): son alarm zamanı ve boş saatler (kör nokta), indexer
-  sağlığı/diski, manager süreçleri, aktif olmayan ajanlar, `ossec.log` hataları, seviye dağılımı, yüksek
-  seviye gruplar (kural × ajan × ilk/son × kaynak IP × örnek), önceki pencereyle kıyas, **14 günde ilk kez
-  görülen kurallar**, izlenen kurallar, zafiyet özeti.
-- **Yapay zekâ teşhisi** — özeti ve bilgi tabanını okur, salt okunur araçlarla derinleşir (zaman dağılımı, IP
-  profili, ±30 dk korelasyon, logtest, kural tanımı) ve yapılandırılmış rapor teslim eder. Kural taslağı yazar;
-  XML, OS_Regex tuzakları ve ID çakışması için kontrol eder.
-- **Yayına alınabilir kural taslakları** — her taslakla manager'da çalıştırılacak hazır komutlar gelir (yedek,
-  `wazuh-analysisd -t`, restart, geri alma). İsteğe bağlı **Onayla ve uygula**: taslağı Wazuh API ile ayrı bir
-  kural dosyasına yazar, doğrular, yeniden başlatır, yüklendiğini kontrol eder, iki yönlü logtest yapar, hata
-  olursa geri alır; alarm susturan/seviye düşüren taslaklar ID yazarak ikinci onay ister
-  ([docs/rule-deployment.md](docs/rule-deployment.md)). Varsayılan kapalı.
-- **Size sorar** — "Bu SSH girişi sizin miydi?" Cevap bilgi tabanına yazılır, sonraki koşuya bağlam olur.
-- **Bilgi tabanı** — bilinen gürültü, kararlar, açık maddeler, dersler, "yarın şuna bak" istekleri. Yapay zekâ
-  önerileri **siz onaylayana kadar etkisizdir**. Mevcut notlarınızı YAML ile içe/dışa aktarın (arayüz ya da
-  `python -m app.kb`); tekrar çalıştırmak çift kayıt oluşturmaz.
-- **Öneri kuyruğu** — bulgular tek tek ve koşular arası tekilleştirilmiş gelir; bir karar tüm tekrarlara uygulanır.
-  Sunucuda bakılması gerekenler salt okunur komutlarla gelir; tek tıkla bulgu ve komutlar kopyalanır, çıktıyı
-  çalıştığınız yere yapıştırırsınız.
-- **E-posta, Telegram, Microsoft Teams, Slack, Discord, ntfy ve jenerik webhook bildirimleri** — kritik durumlar
-  (SIEM sessizliği, indexer red, gerçek olay; aynı konu her koşuda tekrarlanmaz), isteğe bağlı her koşu sonrası
-  kısa özet ve kural uygulamaları ([docs/notifications.md](docs/notifications.md)).
-- **Canlı doğrulama** — uygulanan, onaylanan ya da kalıcı yapılan kural her rapordan sonra gerçek olaylarla
-  kontrol edilir: "canlıda 12× doğrulandı (son …)" ya da "5 gündür görülmedi". Logtest'in geçmesi kanıt değildir;
-  gerçek olay kanıttır.
-- **Kalıcı hale getir** — test edilmiş taslak için *kendi* yapılandırma yönetiminize taşıma paketi: kaynağı
-  belirtilmiş kural bloğu, betik (yedek → ekle → çalışan manager'da `wazuh-analysisd -t` → `kubectl apply -k` ya
-  da restart → yüklendi mi) ve alarm kataloğunuz için § taslağı.
-- **Mail kanalı doluluğu** — `mail:` ayarlıysa her rapor, bir yığının `email_maxperhour` sınırını aştığı saatleri
-  ve o saatlerde tetiklenip maili hiç gitmemiş olabilecek diğer kuralları gösterir.
-- **Kapsam ve zafiyet SLA'sı** — durum/sürüm/node başına ajanlar, envanter listesinde olup kayıtlı olmayan
-  ajanlar ve şiddet başına SLA süresini aşan açık zafiyetler.
-- **Aylık denetim raporu** — alarm hacmi, raporlar, bulgular ve kararlarınız, kural değişiklikleri (kim, ne zaman,
-  neyi düşürdü), canlılık kontrolünden SIEM kesintileri, kapsam ve zafiyet SLA'sı. Deterministik (yapay zekâ yok),
-  PDF ya da Markdown olarak indirilebilir — ISO 27001 / ISMS gözden geçirmeleri için kanıt.
-- **Yapay zekâsız anomali** — her rapor kural × ajan sayılarını önceki 14 günle karşılaştırır: sıçramalar
-  (z-skoru) ve bir ajanda ilk kez görülen kurallar; yapay zekâ işe buradan başlar.
-- **Wazuh'un ötesi (isteğe bağlı)** — salt-okunur Prometheus, Loki ve Kubernetes araçları (pod'lar, yeniden
-  başlamalar, OOM, node baskısı, event'ler, pod logları; secret asla): alarmın nedeni tahmin edilmez, kontrol
-  edilir ([docs/sources.md](docs/sources.md)).
-- **Olay kaydı taslağı** — bulguda tek tık: yapay zekâ kanıtları toplar ve olay şablonunuzu doldurur (zaman
-  çizelgesi, kök neden, etki, kanıt sorguları, aksiyonlar); düzenleyin, indirin ya da Zammad veya Jira'da bilet
-  olarak açın.
-- **MCP sunucusu** — aynı salt-okunur araçlar Claude Desktop ya da herhangi bir MCP istemcisi için: kendi
-  asistanınızla canlı veriyle inceleyin ([docs/mcp.md](docs/mcp.md)).
-- **Değerlendirme** — `python -m app.eval`, elle incelediğiniz günleri yeniden çalıştırıp yapay zekâyı puanlar
-  (yakalama oranı, olay diye raporlanan gürültü, token): modelleri ve promptları sayıyla karşılaştırın
-  ([docs/eval.md](docs/eval.md)).
-- **Kopyalamaya hazır çıktı** — her bulgu ve soruda kopyala düğmesi (düz metin: kanıt, öneri, komutlar);
-  ticket, e-posta ya da terminale yapıştırın.
-- **Kayıtlar Wazuh'un içinde** — her ortamın kendi indexer'ında `daily-triage-runs / -knowledge`. Ek veritabanı
-  yok. İsteğe bağlı `run_retention_days` eski koşuları siler; bilgi tabanı asla silinmez.
-- **Çok ortam, çok dil** (İngilizce, Türkçe, İspanyolca, Almanca — sol menünün altından seçilir), ortam başına model (ör. düzenlemeye tabi veri
-  için yerel model), arayüzde ve komut satırında bağlantı testi.
+| Nedir | Ne değildir |
+|---|---|
+| Wazuh'un ürettiğini okuyan bir günlük inceleme ve nöbet yardımcısı | Wazuh'un ya da panosunun yerine geçen bir araç |
+| varsayılan olarak Wazuh'a karşı salt okunur | bir SOAR: engellemez, yalıtmaz, ajanlarda komut çalıştırmaz |
+| öneren bir asistan; kararı kişi verir | kendi başına müdahale eden bir sistem |
+| verisini sizin Wazuh Indexer'ınızda tutan tek konteyner | barındırılan bir hizmet ya da işletilecek ek bir veritabanı |
+
+## Öne çıkanlar
+
+- **Pano.** Eğilim çizgili ve önceki döneme göre değişimi gösteren ana göstergeler, zamana göre alarm hacmi, önem
+  bantları, en sık kurallar, ajanlar ve kaynak adresler — 24 saat, 7 ya da 30 gün için, yapay zekâsız.
+- **MITRE ATT&CK.** Panoda taktik şeridi ve ortam başına taktik × teknik matrisi: yeni teknikler, değişimler, hiç
+  alarmı olmayan taktikler; bulgular teknik kimliklerini taşır.
+- **Nöbet.** Yerel kurallar birkaç dakikada bir kritik alarm, izlenen kural, başarısız denemelerden sonra
+  başarılı giriş, Active Response, ani artış ya da kopan ajan arar ve hemen bildirir. Model çağrılmaz.
+- **AI turu.** Önce deterministik toplama (sağlık, hacim, yeni kurallar, anomaliler), sonra salt okunur
+  araçları olan bir model kanıtlı bulgular yazar, soru sorar ve her nöbet olayına hüküm verir.
+- **Sizden öğrenir.** Kararlar, bilinen gürültü ve cevaplar, sonraki her koşunun okuduğu bilgi tabanına girer.
+  Yapay zekânın önerileri siz onaylayana kadar etkisizdir.
+- **Öneri kutusu.** Bulgular tek tek, koşular arasında yinelenmeden; tek karar bütün tekrarları kapatır.
+- **Güvenilir kural taslakları.** Taslağı 14 günlük gerçek alarma karşı yeniden oynatın, kopyala-yapıştır
+  komutlarla ya da doğrulama ve otomatik geri alma içeren isteğe bağlı tek tık dağıtımla uygulayın, sonra canlı
+  olaylarla doğrulandığını görün.
+- **Kişisel veri içeride kalır.** E-posta adresleri, telefon numaraları, kimlik numaraları (TCKN), IBAN'lar,
+  kartlar ve sırlar modele bir şey gönderilmeden önce maskelenir (KVKK / GDPR). Varsayılan olarak açık.
+- **MCP sunucusu.** Aynı salt okunur araçlar Claude Desktop, Cursor, VS Code ya da herhangi bir MCP istemcisi
+  için.
+- **Bildirimler:** e-posta, Telegram, Microsoft Teams, Slack, Discord, ntfy ya da genel webhook.
+- **Ek veritabanı yok.** Durum kendi Indexer'ınızdaki `daily-triage-*` indekslerinde durur; şifreli yedek alınır.
+- **Aylık denetim raporu**, yapay zekâsız, PDF ya da Markdown: hacim, kararlar, kural değişiklikleri, kesintiler.
+- **Roller.** Yönetici ve salt okunur görüntüleyici; parolayla ya da Keycloak, Authentik veya oauth2-proxy
+  arkasında SSO grubuyla.
+- **Çok ortam, çok dil** (İngilizce, Türkçe, İspanyolca, Almanca); Docker Compose ya da Kubernetes.
+
+Her özellik [wiki](https://github.com/dururustem68/wazuh-daily-triage/wiki/Home-TR)'de anlatılır.
 
 ## Hızlı başlangıç
 
-### 1. Demo (Wazuh gerekmez)
+### Demoyu deneyin (Wazuh ve model gerekmez)
 
 ```sh
 git clone https://github.com/dururustem68/wazuh-daily-triage.git && cd wazuh-daily-triage
 cp .env.demo .env
-sed -i 's/^APP_LANGUAGE=.*/APP_LANGUAGE=tr/' .env     # isteğe bağlı: dil arayüzden de seçilir
 docker compose up -d --build
-# http://127.0.0.1:8080 — parola: demo-password-change-me
+# http://127.0.0.1:8080 adresini açın, parola: demo-password-change-me
 ```
 
-### 2. Tek Wazuh ortamı — YAML gerekmez
+Demo sentetik veri ve mock model kullanır; bitmiş bir rapor, nöbet olayları ve bekleyen önerilerle açılır.
 
-[docs/permissions.md](docs/permissions.md)'deki salt okunur hesapları açın, sonra `.env`'de `WAZUH_INDEXER_URL`,
-`WAZUH_INDEXER_USER`, `WAZUH_INDEXER_PASSWORD`, isteğe bağlı `WAZUH_API_*`, `WAZUH_CA_FILE` ve `LLM_*`
-değişkenlerini doldurun:
+### Kendi Wazuh'unuzu bağlayın
 
-```sh
-docker compose up -d
-docker compose exec triage python -m app.check    # ya da ortam sayfasında "Bağlantıları test et"
-```
+1. [docs/permissions.md](docs/permissions.md) içindeki salt okunur hesapları oluşturun. Yönetici kimlik
+   bilgilerini kullanmayın.
+2. Örnek dosyadan başlayıp kendi değerlerinizi girin:
 
-### 3. Birden çok ortam
+   ```sh
+   cp .env.example .env
+   openssl rand -hex 32            # APP_SECRET
+   vi .env                         # APP_PASSWORD, LLM_*, WAZUH_INDEXER_*, WAZUH_API_*, WAZUH_CA_FILE
+   docker compose up -d
+   docker compose exec triage python -m app.check
+   ```
 
-```sh
-cp config/environments.example.yaml config/environments.yaml
-vi config/environments.yaml        # her Wazuh için bir blok; parolalar .env'den ${DEGISKEN} ile
-vi config/context/<ortam>.md       # ortamı anlatan birkaç satır
-```
+3. **Şimdi kontrol et** düğmesine basın ve ilk raporu denetleyin.
 
-`config/environments.yaml`, `config/context/*`, `config/seed/*`, `config/certs/` ve `.env` git'e girmez.
+Beklenen sonuçlar ve sık hatalarla adım adım anlatım:
+**[Başlangıç](https://github.com/dururustem68/wazuh-daily-triage/wiki/Getting-Started-TR)**. Üretime almadan
+önce [güvenlik kontrol listesi](https://github.com/dururustem68/wazuh-daily-triage/wiki/Security-Checklist-TR)nin
+üzerinden geçin.
 
 ### Kubernetes
 
-Bir **[Helm chart](deploy/helm/wazuh-daily-triage)** ve kustomize tabanı, örnek overlay ve isteğe bağlı bileşenler:
-**[deploy/kubernetes](deploy/kubernetes/README.md)** — tek replika, root olmayan kullanıcı, salt okunur dosya
-sistemi, PVC gerekmez (durum Wazuh Indexer'da). Bileşenler: `networkpolicy`, `ingress-nginx` (TLS, cert-manager,
-oauth2-proxy seçeneği) ve `ingress-traefik-authentik` (SSO).
+[Helm chart](deploy/helm/wazuh-daily-triage) ve isteğe bağlı bileşenleriyle
+[Kustomize base](deploy/kubernetes/README.md): tek replika, root olmayan kullanıcı, salt okunur dosya sistemi,
+PVC yok. Üretim rehberi: [Kubernetes](https://github.com/dururustem68/wazuh-daily-triage/wiki/Kubernetes-TR).
 
 ## Yapay zekâ sağlayıcıları
 
-Anahtar sizin. Her sağlayıcı için ayrıntılı kurulum: **[docs/providers.tr.md](docs/providers.tr.md)**.
+| Sağlayıcı | `LLM_PROVIDER` | `LLM_BASE_URL` |
+|---|---|---|
+| Claude (Anthropic) | `anthropic` | – |
+| OpenAI | `openai` | `https://api.openai.com/v1` |
+| Google Gemini | `openai` | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| DeepSeek | `openai` | `https://api.deepseek.com` |
+| Azure OpenAI | `openai` | `?api-version=` içeren tam dağıtım adresi |
+| Ollama, vLLM, LM Studio, LiteLLM | `openai` | örneğin `http://ollama:11434/v1` |
 
-| Sağlayıcı | `LLM_PROVIDER` | `LLM_BASE_URL` | Örnek `LLM_MODEL` |
-|---|---|---|---|
-| Claude (Anthropic) | `anthropic` | — | `claude-sonnet-5-5` |
-| OpenAI | `openai` | `https://api.openai.com/v1` | `gpt-6.1-sol` ¹ |
-| Google Gemini | `openai` | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.8-flash` |
-| DeepSeek | `openai` | `https://api.deepseek.com` | `deepseek-flash` |
-| Azure OpenAI | `openai` | `?api-version=` içeren tam deployment adresi | deployment adınız |
-| Ollama / vLLM / LM Studio / LiteLLM | `openai` | ör. `http://ollama:11434/v1` | ör. `qwen3:14b` |
+Model araç (fonksiyon) çağırmayı desteklemelidir. Her ortam kendi modelini kullanabilir; örneğin ağınızdan
+çıkmaması gereken veri için yerel bir model. Model adları ve parametre farkları:
+[docs/providers.tr.md](docs/providers.tr.md).
 
-¹ OpenAI akıl yürütme modelleri ayrıca `LLM_TOKEN_PARAM=max_completion_tokens` ve `LLM_TEMPERATURE=none` ister.
+## Kısaca güvenlik ve gizlilik
 
-Model araç kullanımını (function calling) desteklemelidir. Her ortam kendi modelini seçebilir (`llm:` bloğu).
+- **Varsayılan olarak Wazuh'a karşı salt okunur.** Active response yok, yapılandırma yazımı yok, ajan komutu
+  yok. İndekse yazma yalnız uygulamanın kendi indekslerine yapılır.
+- **Model okur ve önerir.** Kabuk yok, dışarıya istek yok; sorgular alan izin listesi ve boyut sınırlarıyla
+  kısıtlıdır, bu yüzden bir alarmın içine yerleştirilmiş metin keyfi bir sorguya dönüşemez.
+- **Kural dağıtımı isteğe bağlıdır**; ayrı, en az yetkili bir API kullanıcısı kullanır, tek bir dosyaya yazar
+  ve herhangi bir hatada geri alır.
+- **Barındırılan modelde özetler ve örnek log satırları o sağlayıcıya gider.** Kişisel veri ve sırlar önce
+  takma adla değiştirilir (elden gelen en iyi çaba; DLP değildir); düzenlemeye tabi veri için yerel model
+  kullanın.
+- **Üretim modunda uygulama** örnek parolayla, eksik `APP_SECRET` ile, güvensiz çerezle ve kapatılmış TLS
+  doğrulamasıyla açılmaz. Durum değiştiren istekler özet zincirli bir denetim izine yazılır.
 
-## Bildirimler — e-posta, Telegram, Teams, Slack, Discord, ntfy, webhook
+Ayrıntı: [Güvenlik modeli](https://github.com/dururustem68/wazuh-daily-triage/wiki/Security-Model-TR) ·
+[Gizlilik](https://github.com/dururustem68/wazuh-daily-triage/wiki/Privacy-TR) ·
+[docs/security-exceptions.md](docs/security-exceptions.md). Güvenlik açıklarını özel olarak bildirin:
+[SECURITY.md](SECURITY.md).
 
-| Ne zaman | Ayar (varsayılan) |
+## Dokümantasyon
+
+Bu README kısa sürümdür. El kitabı [wiki](https://github.com/dururustem68/wazuh-daily-triage/wiki/Home-TR)'dir;
+`docs/` dizini wiki'nin bağlantı verdiği başvuru belgelerini tutar.
+
+| Konu | Nerede |
 |---|---|
-| SIEM sessiz, indexer red, manager süreci durmuş, indexer diski ≥ %90 | `on_critical_flags: true` |
-| *Gerçek olay* etiketli ya da *kritik* önemde bulgu | `on_real_incident: true`, `on_critical_findings: true` |
-| Koşunun kendisi başarısız | `on_run_error: false` |
-| **Her** koşudan sonra kısa özet (sağlık, sayılar, bekleyen öneriler) | `on_run_summary: false` |
-| Kural taslağı uygulandı, geri alındı ya da kaldırıldı | `on_rule_deploy: true` |
-| **10 dakikada bir canlılık kontrolü** (yapay zekâ yok): indexer/API erişilemez, süreç durdu, SIEM sessiz, disk ≥ %90 — sorun, hatırlatma, düzeldi | `on_liveness: true`, `liveness.interval_minutes` |
+| Demodan ilk gerçek rapora | [Başlangıç](https://github.com/dururustem68/wazuh-daily-triage/wiki/Getting-Started-TR) |
+| Kurulum ve yapılandırma | [Kurulum](https://github.com/dururustem68/wazuh-daily-triage/wiki/Installation-TR), [Yapılandırma](https://github.com/dururustem68/wazuh-daily-triage/wiki/Configuration-TR), [Kubernetes](https://github.com/dururustem68/wazuh-daily-triage/wiki/Kubernetes-TR) |
+| Günlük kullanım | [Kullanıcı rehberi](https://github.com/dururustem68/wazuh-daily-triage/wiki/User-Guide-TR), [Kural yaşam döngüsü](https://github.com/dururustem68/wazuh-daily-triage/wiki/Rule-Lifecycle-TR), [Nöbet](https://github.com/dururustem68/wazuh-daily-triage/wiki/Watch-TR), [MCP](https://github.com/dururustem68/wazuh-daily-triage/wiki/MCP-TR) |
+| Güvenlik ve gizlilik | [Güvenlik modeli](https://github.com/dururustem68/wazuh-daily-triage/wiki/Security-Model-TR), [Gizlilik](https://github.com/dururustem68/wazuh-daily-triage/wiki/Privacy-TR), [Güvenlik kontrol listesi](https://github.com/dururustem68/wazuh-daily-triage/wiki/Security-Checklist-TR) |
+| İşletim | [Sorun giderme](https://github.com/dururustem68/wazuh-daily-triage/wiki/Troubleshooting-TR), [Yedekleme](https://github.com/dururustem68/wazuh-daily-triage/wiki/Backup-TR), [Yükseltme](https://github.com/dururustem68/wazuh-daily-triage/wiki/Upgrade-TR) |
+| Sürümler ve sınırlar | [Uyumluluk](https://github.com/dururustem68/wazuh-daily-triage/wiki/Compatibility-TR) |
+| Örnekler, SSS, sözlük | [Örnek senaryolar](https://github.com/dururustem68/wazuh-daily-triage/wiki/Scenarios-TR), [SSS](https://github.com/dururustem68/wazuh-daily-triage/wiki/FAQ-TR) |
+| Başvuru (İngilizce) | [yetkiler](docs/permissions.md), [kural dağıtımı](docs/rule-deployment.md), [bildirimler](docs/notifications.md), [sağlayıcılar](docs/providers.tr.md), [kaynaklar](docs/sources.md), [mimari](docs/architecture.md), [eval](docs/eval.md) |
 
-Aynı kritik konu `repeat_hours` (24) içinde tekrar gönderilmez. Bir kanal, alanları dolu olduğu anda etkinleşir;
-ortam sayfasındaki **Bildirim testi** hepsini dener.
+## Uyumluluk
 
-```sh
-# .env — kanalları istediğiniz gibi birleştirin
-NOTIFY_UI_URL=https://triage.example.internal      # mesajlardaki bağlantı
-NOTIFY_ON_RUN_SUMMARY=true
+- Wazuh **4.x**; 4.14'e karşı geliştirilip test edildi. Standart `wazuh-alerts-*` şablonuyla Wazuh Indexer
+  (OpenSearch 2.x).
+- Wazuh sunucu API'si isteğe bağlıdır; yoksa ajan ve daemon sağlığı, kural bilgisi ve logtest kapalıdır.
+- Python **3.11–3.15**.
 
-TELEGRAM_BOT_TOKEN=123456789:AA...                 # @BotFather → /newbot
-TELEGRAM_CHAT_ID=-1001234567890                    # aşağıya bakın
-
-TEAMS_WEBHOOK_URL=https://...                      # kanal → Workflows → "Post to a channel when a webhook request is received"
-
-SLACK_WEBHOOK_URL=https://hooks.slack.com/...      # Your Apps → Incoming Webhooks
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...   # kanal → Edit → Integrations → Webhooks
-
-WEBHOOK_URL=https://soar.example.internal/hook     # jenerik JSON webhook (Zapier/Make/SOAR)
-WEBHOOK_TOKEN=...                                  # isteğe bağlı → Authorization: Bearer
-
-NTFY_TOPIC=wazuh-triage                            # https://ntfy.sh/wazuh-triage (ya da tam URL)
-NTFY_TOKEN=...                                     # isteğe bağlı, korumalı konu için
-
-SMTP_HOST=smtp.example.org
-SMTP_PORT=587
-SMTP_SECURITY=starttls                             # starttls | ssl | none
-SMTP_USER=...
-SMTP_PASSWORD=...
-SMTP_FROM=wazuh-triage@example.org
-SMTP_TO=secops@example.org,oncall@example.org
-```
-
-- **Telegram chat id:** botu gruba ekleyin (ya da bota mesaj yazın), `/start@<botunuz>` gönderin, sonra
-  `https://api.telegram.org/bot<token>/getUpdates` adresinde `"chat":{"id":...}` değerini alın; grup id'leri
-  eksidir (`-100…`). Wazuh alarmlarını zaten Dashboard'un Notifications eklentisiyle Telegram'a gönderiyorsanız
-  aynı bot token'ı ve chat id burada da çalışır.
-- **Teams:** eski Office 365 "Incoming Webhook" bağlayıcıları kaldırıldı; yukarıdaki Workflows şablonunu kullanın.
-  Mesajlar rapor bağlantılı Adaptive Card olarak gelir.
-- **Slack:** bir uygulama oluşturun → *Incoming Webhooks* → kanala ekleyin → Webhook URL'ini kopyalayın. Mesajlar
-  rapor bağlantılı block-kit bölümleri olarak gelir.
-- **Discord:** kanal → *Edit* → *Integrations* → *Webhooks* → *New Webhook*. Düz metin mesajlar.
-- **Jenerik webhook:** JSON gövdesi kabul eden herhangi bir uç nokta (`{"title", "lines", "link", "text"}`);
-  `WEBHOOK_TOKEN` ile `Bearer` başlığı ekleyin.
-- **ntfy:** `https://ntfy.sh/<topic>` adresine (veya kendi sunucunuza) push; başlık bildirim başlığı olur.
-- Çok ortamlı kurulumda aynı anahtarlar `notify:` bloğuna (genel ya da ortam başına) yazılır —
-  bkz. [docs/notifications.md](docs/notifications.md).
-
-Mesajlarda ortam adı, bulgu başlıkları, sunucu adları ve IP'ler bulunur; kanalı buna göre seçin.
-
-## Kural taslakları — komutlar ya da tek tıkla uygulama
-
-Bilgi tabanındaki her kural taslağında üç düğme vardır:
-
-- **Komutlar** — manager'da yapıştırılacak blok: yedek, `etc/rules/wdt_rules.xml`'e ekleme, `wazuh-analysisd -t`
-  (hata olursa yedeği geri yükler), restart, kontrol, geri alma. Her ortamda çalışır.
-- **Onayla ve uygula** — ortam başına isteğe bağlı (`rule_deploy`). Taslağı ayrı, en az yetkili bir API
-  kullanıcısıyla yazar, doğrular, manager'ı ya da cluster'ı yeniden başlatır, kural ID'lerinin yüklendiğini
-  kontrol eder, iki yönlü logtest yapar ve herhangi bir hatada **kendiliğinden geri alır**. Alarm susturan ya da
-  seviye düşüren taslaklar, kural ID'leri yazılarak ikinci kez onaylanır.
-- **Wazuh'tan kaldır** — uygulanmış taslağı aynı güvenceyle geri çeker.
-- **Canlıda kontrol et / Kalıcı hale getir** — kural uygulandığından beri gerçek olayda tetiklendi mi görün ve
-  onu kendi kural dosyanıza / deponuza taşıyacak paketi alın (`promote:` ayarı).
-
-Kurulum ve gereken API yetkileri: [docs/rule-deployment.md](docs/rule-deployment.md).
-
-## Bilgi tabanı içe / dışa aktarma
-
-Elinizdeki notları (bilinen gürültü, kararlar, dersler) YAML listesi olarak getirin — biçim
-[`config/seed/example.yaml`](config/seed/example.yaml) ile aynı:
-
-```sh
-python -m app.kb import gurultu.yaml -e prod --dry-run   # önizleme
-python -m app.kb import gurultu.yaml -e prod --update    # yenileri ekle, değişenleri güncelle (key ya da tür+başlık)
-kubectl exec -i deploy/wazuh-daily-triage -- python -m app.kb import - -e prod --update < gurultu.yaml
-python -m app.kb export -e prod --kind baseline > baseline.yaml
-```
-
-Ya da bilgi tabanı sayfasındaki **İçe / dışa aktar** kutusunu kullanın. Tekrar çalıştırmak çift kayıt oluşturmaz.
-
-## Güvenlik
-
-> **Varsayılan duruş:** Wazuh'a yazma yok, kabuk yok, modelden dışarı istek yok. Yapay zekânın yapabildiği her
-> şey, tanımlı sınırlar içinde bir okuma sorgusu ya da insan onayı bekleyen bir *öneridir*. Üretimde uygulama
-> örnek parolalarla, eksik `APP_SECRET` ile, güvensiz çerezle veya kapatılmış TLS doğrulamasıyla **başlamayı
-> reddeder**; durum değiştiren her istek kurcalamaya karşı korunan denetim izine yazılır.
-
-- Wazuh'a karşı varsayılan olarak **salt okunur**: Active Response, konfig yazma, ajan komutu yok. İsteğe bağlı
-  kural uygulama ayrı bir API kullanıcısı kullanır (yalnız özel kural dosyası yükleme + restart); uygulama tek bir
-  ayrılmış dosyaya yazar.
-- Alarm içerikleri saldırgan kontrolündedir (prompt injection); kandırılmış bir model en fazla bilgi tabanına
-  *öneri* ekleyebilir, siz onaylamadan etkisizdir. Sorgu koruması (`query_guard`) alan adlarını, zaman aralığını,
-  kova ve belge sayılarını sınırlar; enjekte edilen metin pahalı ya da keyfî bir sorguya dönüşemez.
-- **Arayüzde en az yetki:** yönetici ve salt okunur görüntüleyici rolleri, izin matrisi ve isteğe bağlı ortam
-  kısıtı (`ADMIN_ENVS`, `VIEWER_ENVS`, `MCP_ENVS`). Kontroller her rotada sunucu tarafında yapılır.
-- **Denetim izi:** girişler, reddedilen istekler, kararlar ve kural uygulamaları `logs/audit.jsonl` dosyasına
-  aktör, rol, ortam, sonuç ve SHA-256 zinciriyle eklenir; bir satır değişirse zincir kırılır.
-- **Kural uygulama kapalı devre çalışır (fail closed):** doğrulama, restart ve logtest doğrulanır; başarısız bir
-  beklenti *ya da* yeniden üretilemeyen bir örnek değişikliği geri alır; geri alma da başarısız olursa kritik
-  seviyede loglanır.
-- Harici bir LLM kullanıyorsanız alarm özetleri o sağlayıcıya gider. Düzenlemeye tabi ortamlarda (BDDK, KVKK,
-  GDPR) yerel model ya da `privacy.mode: mask` kullanın: kişisel veriler (e-posta, telefon, TCKN, IBAN, kart;
-  istenirse IP) modele gitmeden takma adla değiştirilir, gizli bilgiler silinir. `privacy.detect` loglarda açık
-  duran kişisel veriyi işaretler ([docs/privacy.md](docs/privacy.md)).
-- Arayüz: parola + imzalı çerez, deneme sınırı, sıkı CSP; konteyner root olmayan kullanıcıyla ve salt okunur
-  dosya sistemiyle çalışır. İsteğe bağlı salt okunur `VIEWER_PASSWORD` ile ekip hiçbir şeyi değiştirmeden her
-  şeyi görüntüleyebilir.
-- **İşletim:** `/metrics` (yönetici oturumu ya da `METRICS_TOKEN`) koşu, hata, süre, token ve uygulama
-  sayaçlarını verir; `/healthz` canlılık, `/readyz` hazırlık probudur (bilerek indexer çağırmaz; böylece kesinti
-  sırasında kesintiyi anlatan arayüz servisten düşmez); her log satırı ve denetim kaydı `X-Request-ID` taşır.
-
-Bilinen sınırlar ve sürüm matrisi: [docs/compatibility.md](docs/compatibility.md). Bilinçli istisnalar:
-[docs/security-exceptions.md](docs/security-exceptions.md).
-
-## Uyumluluk (özet)
-
-- Wazuh **4.x** (4.14 ile geliştirildi ve test edildi) — all-in-one, dağıtık, Docker ve Kubernetes.
-- Wazuh Indexer / OpenSearch 2.x, standart `wazuh-alerts-*` şablonu; indeks desenleri yapılandırılabilir.
-- Wazuh API isteğe bağlı; yoksa ajan/daemon sağlığı, kural bilgisi ve logtest kapalıdır.
-- Python **3.11–3.13**; basic auth, özel CA (`ca_file`) ve karşılıklı TLS desteklenir.
-
-## Kaliteyi kendiniz ölçün
-
-Bu README'de başkasının alarmlarından gelen bir "yakalama oranı" yok; sizin verinizde bir anlamı olmaz. Onun
-yerine ölçüm aracı geliyor: `python -m app.eval`, kendi incelediğiniz günleri yeniden oynatır ve yapay zekâyı
-vardığınız sonuçla karşılaştırır.
-
-```sh
-python -m app.eval config/eval/demo.yaml               # demo senaryoları, Wazuh gerekmez
-python -m app.eval cases.yaml --repeat 3 --out res.json
-```
-
-Her senaryo için **yakalama oranı**, kaçırılan maddeler, gürültü ihlalleri (bilinen gürültünün olay olarak
-bildirilmesi), adım sayısı, token ve süre raporlanır — böylece prompt, model veya eşik değişikliği ölçülen bir
-karar olur (`docs/eval.md`).
-
-## Mimari
-
-```
-          ┌──────────────── wazuh-daily-triage (tek konteyner) ──────────────────┐
-zamanlayıcı│ Collector ──► deterministik özet + sağlık bayrakları                 │
- / düğme  │      │                                                               │
-          │      ▼                                                               │
-          │ Ajan döngüsü ◄──► LLM (Anthropic / OpenAI uyumlu)                    │
-          │   araçlar: search · aggregate · timeline · ip_profile · correlate ·  │
-          │   vulns · agent · rule · logtest · validate_rule_xml · propose       │
-          │      │                                                               │
-          │      ▼                                                               │
-          │ submit_report ──► daily-triage-runs ──► notify (e-posta/Telegram/Teams/Slack/Discord/ntfy/webhook) │
-          │ Web arayüzü ◄──► daily-triage-runs / -knowledge                      │
-          │ Onayla ve uygula (isteğe bağlı, ayrı API kullanıcısı) ──► etc/rules/wdt_rules │
-          └───────────┬──────────────────────────────┬───────────────────────────┘
-                      │ HTTPS 9200                   │ HTTPS 55000
-               Wazuh Indexer                  Wazuh sunucu API'si
-```
-
-Python 3.12, FastAPI, Jinja2, httpx. Sağlayıcı SDK'sı yok, ön yüz derleme adımı yok. Modül haritası, istek akışı
-ve genişletme noktaları: [docs/architecture.md](docs/architecture.md).
+Neyin test edildiği, neyin beklendiği ve neyin desteklenmediği:
+[Uyumluluk](https://github.com/dururustem68/wazuh-daily-triage/wiki/Compatibility-TR).
 
 ## Geliştirme
 
@@ -315,47 +172,24 @@ ve genişletme noktaları: [docs/architecture.md](docs/architecture.md).
 python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 pytest
-pytest --cov=app --cov-report=term-missing     # CI'ın yüklediği
 ruff check .
 WDT_DEMO=true APP_PASSWORD=x uvicorn app.main:app --reload
 ```
 
-`app/demo.py` küçük bir OpenSearch sorgu motoru ve sentetik veri içerir; böylece collector ve araçlar küme olmadan
-test edilir. Arayüze dil eklemek = `app/i18n.py`'ye bir sözlük eklemek.
-
-### Kendiniz ölçün
-
-Bu README'de pazarlama sayısı yok: başkasının alarmlarından gelen bir yakalama oranı sizin veriniz hakkında az şey
-söyler. Depo bunun yerine ölçüm aracını veriyor — `python -m app.eval`, kendi incelediğiniz günleri yeniden oynatır
-ve yapay zekâyı vardığınız sonuçla karşılaştırır:
-
-```sh
-python -m app.eval config/eval/demo.yaml               # demo senaryoları, Wazuh gerekmez
-python -m app.eval cases.yaml --repeat 3 --out res.json
-```
-
-Her senaryo için **yakalama oranı** (beklenen maddeler bulundu), **kaçırılan** maddeler, **gürültü ihlalleri**
-(bilinen gürültünün olay olarak bildirilmesi), bulgular, araç adımları, token ve süre raporlanır — böylece prompt,
-model veya eşik değişikliği ölçülen bir karar olur. Gerçek günlerden kendi senaryolarınızı yazın (`docs/eval.md`);
-bir gerilemeyi görmek için üç ile beş yeter. CI test paketini çalıştırır, değerlendirmeyi değil (model ve sizin
-veriniz gerekir).
-
-## Yol haritası
-
-[ROADMAP.md](ROADMAP.md) — öncelik listesinde imzalı imaj sürümleri (her derlemede SBOM zaten üretiliyor),
-ServiceNow/GitHub biletleme, decoder taslakları, gömülü grafikler ve daha fazla dil var.
+Test paketi yerleşik bir demo motorunda çalışır ve cluster istemez. Burada pazarlama rakamı yoktur: bir modeli
+kendi incelediğiniz günlerde `python -m app.eval` ile ölçün ([docs/eval.md](docs/eval.md)). Devamı:
+[Geliştirme](https://github.com/dururustem68/wazuh-daily-triage/wiki/Development-TR) ·
+[CONTRIBUTING.md](CONTRIBUTING.md) · [ROADMAP.md](ROADMAP.md).
 
 ## Teşekkür
 
-- [Wazuh — Threat hunting with agentic AI](https://wazuh.com/blog/threat-hunting-with-agentic-ai/) (en az yetkili
-  roller, korelasyon penceresi)
-- [gensecaihq/Wazuh-MCP-Server](https://github.com/gensecaihq/Wazuh-MCP-Server),
-  [gbrigandi/mcp-server-wazuh](https://github.com/gbrigandi/mcp-server-wazuh)
+- [Wazuh — Threat hunting with agentic AI](https://wazuh.com/blog/threat-hunting-with-agentic-ai/) (en az yetkili roller, korelasyon penceresi)
+- [gensecaihq/Wazuh-MCP-Server](https://github.com/gensecaihq/Wazuh-MCP-Server), [gbrigandi/mcp-server-wazuh](https://github.com/gbrigandi/mcp-server-wazuh)
 
 ## Lisans
 
-Telif hakkı © 2026 Rüstem Duru. **GNU Affero General Public License v3.0** ile lisanslanmıştır — bkz.
-[LICENSE](LICENSE) ve [NOTICE](NOTICE). Değiştirilmiş bir sürümü ağ üzerinden kullanıcılara sunarsanız kaynak
-kodunu onlara sunmanız gerekir (`SOURCE_URL`'yi kendi fork'unuza yönlendirin).
+Telif hakkı © 2026 Rüstem Duru. **GNU Affero General Public License v3.0** ile lisanslanmıştır; bkz.
+[LICENSE](LICENSE) ve [NOTICE](NOTICE). Değiştirilmiş bir sürümü ağ üzerinden kullanıcılara sunuyorsanız kaynak
+kodunu da sunmanız gerekir (`SOURCE_URL` değerini kendi çatalınıza ayarlayın).
 
-Wazuh, Wazuh Inc.'in ticari markasıdır; bu proje Wazuh Inc. ile bağlantılı değildir.
+Wazuh, Wazuh, Inc. şirketinin ticari markasıdır. Bu proje bağımsızdır ve Wazuh, Inc. ile bağlantısı yoktur.

@@ -1,7 +1,8 @@
 # Installation
 
 Three supported ways to run it. All of them use the same container image and the same configuration files;
-pick one and continue with [Configuration](Configuration).
+pick one and continue with [Configuration](Configuration). For a guided first run, from the demo to a checked
+report from your own Wazuh, follow [Getting started](Getting-Started).
 
 | Path | Use it when | Time |
 |---|---|---|
@@ -96,15 +97,15 @@ docker compose up -d
 docker compose exec triage python -m app.check
 ```
 
-`python -m app.check [env…] [--no-llm]` (or **Test connections** on the environment page) verifies the Indexer
+`python -m app.check [env…] [--no-llm]` (or **Test connections** on the environment's **Reports** page) verifies the Indexer
 (alerts, vulnerabilities, storage indices), the API, configured extra sources and the model without starting a
-run. Notifications have their own **Test notification** button.
+run. Notifications have their own **Test notifications** button.
 
 > Comments in `.env` must be on their own line: `docker compose` treats everything after `#` on a value line as
 > part of the value.
 
 > **Pin the image for production.** `docker-compose.yml` uses `:latest` so the demo always works. Replace it with
-> `ghcr.io/dururustem68/wazuh-daily-triage:0.10.1` (or your own digest) so an upgrade is a deliberate change.
+> `ghcr.io/dururustem68/wazuh-daily-triage:0.11.0` (or your own digest) so an upgrade is a deliberate change.
 
 ### A3. Several Wazuh environments
 
@@ -170,7 +171,7 @@ app:
 
 ```sh
 helm install wazuh-daily-triage wazuh-daily-triage/wazuh-daily-triage \
-  --version 0.2.1 -f my-values.yaml
+  --version 0.3.0 -f my-values.yaml
 ```
 
 Or install straight from a checkout: `helm install wazuh-daily-triage ./deploy/helm/wazuh-daily-triage -f my-values.yaml`.
@@ -186,7 +187,7 @@ placeholders.
 cp -r deploy/kubernetes/example ~/triage-overlay
 cd ~/triage-overlay
 # outside the repository the relative "../base" no longer resolves — point it at the pinned remote base:
-sed -i 's#^  - ../base.*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.10.1#' kustomization.yaml
+sed -i 's#^  - ../base.*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.11.0#' kustomization.yaml
 cp secret.env.example secret.env
 vi secret.env environments.yaml context.md
 kubectl apply -k .
@@ -217,7 +218,7 @@ WDT_CONFIG=config/environments.yaml APP_PASSWORD=... uvicorn app.main:app --relo
 ```
 
 The application does **not** read `.env` itself; export the variables (or use Docker, which passes the file
-with `env_file`). Python 3.11–3.13 is supported; `tzdata` installs the timezone database, so the configured
+with `env_file`). Python 3.11–3.15 is supported; `tzdata` installs the timezone database, so the configured
 `TZ` works on slim images too.
 
 ## TLS and the reverse proxy
@@ -271,7 +272,7 @@ curl -fsS http://127.0.0.1:8080/metrics     # needs an admin session or METRICS_
 
 Then:
 
-1. Open the environment page and press **Test connections**.
+1. Open the environment's **Reports** page (sidebar) and press **Test connections**.
 2. Press **Run check now** (or wait for the schedule) and confirm a report appears.
 3. Approve or reject one finding; open **Knowledge base** and confirm the decision is stored.
 4. Check the audit trail (`docker compose exec triage tail logs/audit.jsonl`) for the decision.
@@ -286,6 +287,8 @@ disabled for an endpoint, or `rule_deploy.enabled` without credentials. See
 
 ## Upgrade and rollback
 
+The procedure with pre-checks, limits of a rollback and notes per version is on the [Upgrade](Upgrade) page.
+
 The application is stateless: reports and the knowledge base are documents in the Wazuh Indexer
 (`daily-triage-*`). There is no database migration.
 
@@ -297,7 +300,7 @@ docker compose exec triage python -m app.check
 
 # Helm
 helm upgrade wazuh-daily-triage wazuh-daily-triage/wazuh-daily-triage \
-  --version 0.2.1 -f my-values.yaml
+  --version 0.3.0 -f my-values.yaml
 helm rollback wazuh-daily-triage 1     # if needed
 ```
 
@@ -316,6 +319,9 @@ Read [CHANGELOG.md](https://github.com/dururustem68/wazuh-daily-triage/blob/main
 runs stay searchable; `run_retention_days` (YAML) prunes old run documents only, never the knowledge base.
 
 ## Troubleshooting
+
+The most common installation problems are below; the full list by area is on the
+[Troubleshooting](Troubleshooting) page.
 
 | Symptom | Cause and fix |
 |---|---|

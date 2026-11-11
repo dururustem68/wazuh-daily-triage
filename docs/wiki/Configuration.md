@@ -63,6 +63,10 @@ otherwise                → single-environment mode from WAZUH_* variables
 | `TRUSTED_PROXIES` | *(empty)* | Addresses/CIDRs of your reverse proxy: its `X-Forwarded-For` is believed (login throttling, audit) and — in SSO mode — only these peers may reach the UI. |
 | `PROXY_SECRET` | *(empty)* | SSO mode: requests must carry it as `X-WDT-Proxy-Secret`. |
 | `SSO_REQUIRE_USER` | `true` | SSO mode: refuse requests without a user header. |
+| `SSO_ADMIN_GROUPS` | *(empty)* | SSO mode (0.11): comma-separated groups whose members are administrators. Empty: nobody is. |
+| `SSO_VIEWER_GROUPS` | *(empty)* | SSO mode: groups whose members are read-only viewers. |
+| `SSO_DEFAULT_ROLE` | `viewer` (`deny` if `SSO_VIEWER_GROUPS` is set) | SSO mode: role of a user in no listed group: `viewer`, `admin` or `deny`. |
+| `GROUP_HEADER` | `X-authentik-groups,X-Forwarded-Groups,X-Auth-Request-Groups,Remote-Groups` | SSO mode: headers the groups are read from (`|`, `,` or `;` separated). |
 | `MCP_RATE_PER_MINUTE` | `120` | MCP requests per minute and client address (`0` = unlimited). |
 | `BACKUP_S3_*`, `BACKUP_PASSPHRASE` | *(empty)* | S3 target and the passphrase for automatic backups — see [Backup](Backup). |
 | `METRICS_TOKEN` | *(empty)* | Bearer token for `/metrics`; when empty an admin session is required. |
@@ -277,7 +281,7 @@ rotate `APP_SECRET` for that.
 ```sh
 docker compose exec triage python -m app.check          # indexer, alerts, vulnerabilities, storage, API, extra sources, model (--no-llm skips it)
 docker compose exec triage python -c "from app.config import load_settings; s=load_settings(); print([e.id for e in s.environments])"
-# notifications are tested separately: environment page → "Test notification" (POST /api/e/<env>/notify-test)
+# notifications are tested separately: Reports page → "Test notifications" (POST /api/e/<env>/notify-test)
 ```
 
 `app/security.py` validates the security-relevant settings at startup. In production it refuses to start on

@@ -18,7 +18,7 @@ that every patch release of a third-party product was tried.
 
 | Item | Supported |
 |---|---|
-| Python | **3.11 – 3.13** (CI matrix: 3.11, 3.12, 3.13) |
+| Python | **3.11 – 3.15** (CI matrix: 3.11, 3.12, 3.13, 3.15; the image is built on 3.15) |
 | Operating system | Linux containers (the image), Windows and macOS for development |
 | Container | non-root user, read-only root filesystem, all capabilities dropped; one writable volume for state |
 | Browser | current Chrome, Firefox, Edge, Safari (no inline scripts, so a strict CSP is enforced) |
@@ -43,7 +43,7 @@ Model names are not hard-coded; see [providers.md](providers.md) for the `.env`/
 |---|---|
 | E-mail (SMTP/STARTTLS/SSL) | any SMTP server; `SMTP_VERIFY_TLS` can be disabled deliberately |
 | Telegram, Teams, Slack, Discord, ntfy, generic webhook | one or more channels at once |
-| Jira / ServiceNow | incident tickets, optional |
+| Zammad / Jira | incident tickets, optional |
 | Prometheus, Loki, Kubernetes API | read-only sources, optional; configured per environment |
 | MCP clients (Claude Desktop, …) | Streamable HTTP on `POST /mcp`, bearer token, optional `MCP_ENVS` allow-list |
 
@@ -58,5 +58,7 @@ Model names are not hard-coded; see [providers.md](providers.md) for the `.env`/
   default window instead of the exact gap.
 - **One process per installation** for scheduling: two replicas with the scheduler enabled would run twice.
   Run one replica, or set `WDT_SCHEDULER=false` on the extra ones.
+- **Two roles.** Administrator and read-only viewer (password or SSO groups); no finer roles.
+- **ATT&CK view** depends on the rules' `<mitre>` blocks; a tactic without alerts is a hint, not measured coverage.
 - **Audit trail rotation**: the file is rotated at 20 MB, keeping three generations, unless a log shipper moves
   it. Retention and shipping are described in [permissions.md](permissions.md).

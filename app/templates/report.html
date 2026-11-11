@@ -65,6 +65,7 @@
     <h3 class="ftitle">{{ f.title }}</h3>
     <div class="detail">{{ f.detail|md }}</div>
     {% if f.evidence %}<ul class="evidence">{% for e in f.evidence %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+{% if f.mitre %}<div class="ttags">{% for x in f.mitre %}<a class="ttag" href="{{ attack_url(x) }}" rel="noopener" target="_blank" title="MITRE ATT&amp;CK">{{ x }}</a>{% endfor %}{% for t in f.mitre_tactics or [] %}<span class="ttag tac">{{ t }}</span>{% endfor %}</div>{% endif %}
     <div class="meta">{% if f.rule_ids %}<span>{{ _('rep.rules') }}: {{ f.rule_ids|join(', ') }}</span>{% endif %}
       {% if f.agents %}<span>{{ _('rep.agents') }}: {{ f.agents|join(', ') }}</span>{% endif %}</div>
     {% if f.recommendation %}<div class="reco"><b>{{ _('rep.recommendation') }}</b> {{ f.recommendation|md }}</div>{% endif %}
@@ -130,10 +131,7 @@
     <div><b>{{ hl.silence_minutes if hl.silence_minutes is not none else '—' }}</b><span>{{ _('rep.silence') }}</span></div>
   </div>
   {% if hourly %}
-  <div class="hist">
-    {% for h in hourly %}<div class="bar{{ ' empty' if h.n == 0 }}" data-h="{{ [2, (h.n * 100 / hmax)|round(0, 'ceil')|int]|max }}" title="{{ h.t|ts }}: {{ h.n }}"></div>{% endfor %}
-  </div>
-  <div class="row small muted"><span>{{ hourly[0].t|tss }}</span><span class="spacer"></span><span>{{ hourly[-1].t|tss }}</span></div>
+  {{ hourly_chart(hourly, _('dash.vol'), _('dash.legend.total')) }}
   {% endif %}
 
 </section>

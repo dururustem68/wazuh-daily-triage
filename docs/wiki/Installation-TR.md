@@ -1,7 +1,8 @@
 # Kurulum
 
 Üç desteklenen çalıştırma yolu var. Hepsi aynı konteyner imajını ve aynı yapılandırma dosyalarını kullanır;
-birini seçin ve [Yapılandırma](Configuration-TR) sayfasıyla devam edin.
+birini seçin ve [Yapılandırma](Configuration-TR) sayfasıyla devam edin. Demodan kendi Wazuh'unuzdan alınmış,
+denetlenmiş bir rapora kadar adım adım ilk çalıştırma için [Başlangıç](Getting-Started-TR) sayfasını izleyin.
 
 | Yol | Ne zaman | Süre |
 |---|---|---|
@@ -96,15 +97,15 @@ docker compose up -d
 docker compose exec triage python -m app.check
 ```
 
-`python -m app.check [ortam…] [--no-llm]` (veya ortam sayfasındaki **Test connections**) Indexer'ı (alarm,
+`python -m app.check [ortam…] [--no-llm]` (veya ortamın **Raporlar** sayfasındaki **Test connections**) Indexer'ı (alarm,
 zafiyet ve depolama indeksleri), API'yi, yapılandırılmış ek kaynakları ve modeli koşu başlatmadan doğrular.
-Bildirimlerin kendi **Test notification** düğmesi vardır.
+Bildirimlerin kendi **Bildirim testi** düğmesi vardır.
 
 > `.env` içindeki yorumlar kendi satırında olmalıdır: `docker compose`, değer satırında `#` sonrasını değerin
 > parçası sayar.
 
 > **Üretimde imajı sabitleyin.** `docker-compose.yml` demoyu kolaylaştırmak için `:latest` kullanır. Üretimde
-> `ghcr.io/dururustem68/wazuh-daily-triage:0.10.1` (veya kendi digest'inizi) yazın; böylece yükseltme bilinçli
+> `ghcr.io/dururustem68/wazuh-daily-triage:0.11.0` (veya kendi digest'inizi) yazın; böylece yükseltme bilinçli
 > bir adım olur.
 
 ### A3. Birden çok Wazuh ortamı
@@ -171,7 +172,7 @@ app:
 
 ```sh
 helm install wazuh-daily-triage wazuh-daily-triage/wazuh-daily-triage \
-  --version 0.2.1 -f my-values.yaml
+  --version 0.3.0 -f my-values.yaml
 ```
 
 Depodan doğrudan: `helm install wazuh-daily-triage ./deploy/helm/wazuh-daily-triage -f my-values.yaml`.
@@ -187,7 +188,7 @@ Depodan doğrudan: `helm install wazuh-daily-triage ./deploy/helm/wazuh-daily-tr
 cp -r deploy/kubernetes/example ~/triage-overlay
 cd ~/triage-overlay
 # depo dışında göreli "../base" çözülmez — sürümü sabitlenmiş uzak base'i gösterin:
-sed -i 's#^  - ../base.*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.10.1#' kustomization.yaml
+sed -i 's#^  - ../base.*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.11.0#' kustomization.yaml
 cp secret.env.example secret.env
 vi secret.env environments.yaml context.md
 kubectl apply -k .
@@ -218,7 +219,7 @@ WDT_CONFIG=config/environments.yaml APP_PASSWORD=... uvicorn app.main:app --relo
 ```
 
 Uygulama `.env` dosyasını **kendisi okumaz**; değişkenleri dışa aktarın (veya `env_file` ile geçen Docker'ı
-kullanın). Python 3.11–3.13 desteklenir; `tzdata` saat dilimi veritabanını kurar, böylece slim imajlarda da
+kullanın). Python 3.11–3.15 desteklenir; `tzdata` saat dilimi veritabanını kurar, böylece slim imajlarda da
 `TZ` çalışır.
 
 ## TLS ve ters vekil (reverse proxy)
@@ -273,7 +274,7 @@ curl -fsS http://127.0.0.1:8080/metrics     # admin oturumu veya METRICS_TOKEN g
 
 Ardından:
 
-1. Ortam sayfasını açıp **Test connections** düğmesine basın.
+1. Kenar çubuğundan ortamın **Raporlar** sayfasını açıp **Test connections** düğmesine basın.
 2. **Run check now** ile (veya zamanlamayı bekleyerek) bir raporun oluştuğunu doğrulayın.
 3. Bir bulguyu onaylayın veya reddedin; **Knowledge base** sayfasında kararın saklandığını görün.
 4. Denetim kaydında kararı kontrol edin (`docker compose exec triage tail logs/audit.jsonl`).
@@ -288,6 +289,9 @@ istisnası için [docs/security-exceptions.md](https://github.com/dururustem68/w
 
 ## Yükseltme ve geri dönüş
 
+Ön denetimler, geri dönüşün sınırları ve sürüm notlarıyla birlikte prosedür [Yükseltme](Upgrade-TR)
+sayfasındadır.
+
 Uygulama durumsuzdur: raporlar ve bilgi tabanı Wazuh Indexer'daki (`daily-triage-*`) belgelerdir. Veritabanı
 geçişi yoktur.
 
@@ -299,7 +303,7 @@ docker compose exec triage python -m app.check
 
 # Helm
 helm upgrade wazuh-daily-triage wazuh-daily-triage/wazuh-daily-triage \
-  --version 0.2.1 -f my-values.yaml
+  --version 0.3.0 -f my-values.yaml
 helm rollback wazuh-daily-triage 1     # gerekirse
 ```
 
@@ -319,6 +323,9 @@ Mevcut koşular aranabilir kalır; `run_retention_days` (YAML) yalnızca eski ko
 dokunmaz.
 
 ## Sorun giderme
+
+En sık kurulum sorunları aşağıdadır; alanlara göre tam liste [Sorun giderme](Troubleshooting-TR)
+sayfasındadır.
 
 | Belirti | Neden ve çözüm |
 |---|---|

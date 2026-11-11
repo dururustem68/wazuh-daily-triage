@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{{ _('att.title') }} · {{ env.name }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div class="titles"><div class="eyebrow">{{ env.name }}</div><h1>{{ _('att.title') }}</h1>
+    <div class="sub">{{ _('att.intro') }}</div></div>
+  <div class="tools">
+    <div class="seg" role="group">{% for d in (1, 7, 14, 30) %}<a class="{{ 'on' if d == days }}" href="?days={{ d }}{{ ('&tactic=' ~ tactic|urlencode) if tactic }}">{{ _('att.days', d=d) }}</a>{% endfor %}</div>
+  </div>
+</div>
+{% if not m %}<div class="card err">{{ _('att.error') }}</div>{% else %}
+<div class="ktiles">
+  <div class="ktile"><span class="klabel">{{ _('att.k.mapped') }}</span><b class="kval">{{ m.mapped|n }}</b>
+    <span class="kdelta">{{ ((100 * m.mapped_share)|round(1)) }} % · {{ _('att.of_total', n=m.total|n) }}</span></div>
+  <div class="ktile"><span class="klabel">{{ _('att.k.tech') }}</span><b class="kval">{{ m.techniques|length }}</b>
+    <span class="kdelta">{{ _('att.k.tactics', n=(m.columns|selectattr('count')|list|length)) }}</span></div>
+  <div class="ktile {{ 'warn' if m.new }}"><span class="klabel">{{ _('att.k.new') }}</span><b class="kval">{{ m.new|length }}</b>
+    <span class="kdelta">{{ _('att.new_title', d=m.lookback_days) }}</span></div>
+  <div class="ktile"><span class="klabel">{{ _('att.k.silent') }}</span><b class="kval">{{ m.silent|length }}</b>
+    <span class="kdelta">/ 14</span></div>
+</div>
+
+{% if not m.mapped %}<div class="card empty"><b>{{ _('att.none') }}</b></div>{% else %}
+<section class="panel">
+  <div class="phead"><h2>{{ _('att.matrix') }}</h2>
+    {% if tactic %}<span class="pill blue">{{ _('att.filter', t=tactic) }}</span><a class="small" href="?days={{ days }}">{{ _('att.clear') }}</a>{% endif %}
+    <span class="spacer"></span><span class="legend small">{{ _('att.legend') }} <i class="hcell h1"></i><i class="hcell h2"></i><i class="hcell h3"></i><i class="hcell h4"></i><i class="hcell h5"></i></span></div>
+  <div class="matrix">
+    {% for col in m.columns %}{% if not tactic or col.tactic == tactic %}
+    <div class="mcol {{ 'blank' if not col.count }} {{ 'focus' if tactic == col.tactic }}">
+      <a class="mhead" href="?days={{ days }}&tactic={{ col.tactic|urlencode }}" title="{{ col.id }}">
+        <span>{{ col.tactic }}</span><b>{{ chart.compact(col.count) if col.count else '–' }}</b>
+        <small>{{ _('att.n_tech', n=col.cells|length) }}{% if col.prev or col.count %} · {{ delta(((col.count - col.prev) / col.prev) if col.prev else none) }}{% endif %}</small></a>
+      {% for t in col.cells %}
+      <a class="mcell {{ t.heat }} {{ 'new' if t.new }}" href="{{ t.url }}" rel="noopener" target="_blank"
+         title="{{ _('att.cell_tip', id=t.id, name=t.name, n=t.count|n, h=t.high|n, l=m.high_level, a=t.agents, rules=t.rules|join(', ')) }}">
+        <span class="tid">{{ t.id }}{% if t.new %} <em>{{ _('att.new') }}</em>{% endif %}</span>
+        <span class="tnm">{{ t.name }}</span>
+        <span class="tct">{{ t.count|n }}{% if t.high %} · <span class="hi">{{ t.high|n }}</span>{% endif %}</span>
+      </a>
+      {% else %}<div class="mnone">{{ _('dash.att_silent') }}</div>{% endfor %}
+    </div>
+    {% endif %}{% endfor %}
+  </div>
+  <p class="small muted">{{ _('att.cross') }}</p>
+</section>
+
+<div class="dgrid">
+  <section class="panel span2 table-card">
+    <div class="phead pad"><h2>{{ _('att.list') }}</h2><span class="count">{{ m.techniques|length }}</span></div>
+    <div class="scrollx"><table class="tbl">
+      <tr><th>{{ _('att.c.tech') }}</th><th>{{ _('att.c.tactics') }}</th><th class="r">{{ _('att.c.count') }}</th><th class="r">L{{ m.high_level }}+</th>
+        <th>{{ _('att.c.trend') }}</th><th class="r">{{ _('att.c.agents') }}</th><th>{{ _('att.c.rules') }}</th><th>{{ _('att.c.last') }}</th></tr>
+      {% for t in m.techniques %}{% if not tactic or tactic in t.tactics %}
+      <tr><td><a href="{{ t.url }}" rel="noopener" target="_blank"><code>{{ t.id }}</code></a> {{ t.name }}{% if t.new %} <span class="pill amber">{{ _('att.new') }}</span>{% endif %}</td>
+        <td class="small">{{ t.tactics|join(', ') }}</td><td class="r">{{ t.count|n }}</td><td class="r">{{ t.high|n }}</td>
+        <td class="small">{% if t.trend is none %}{{ _('nm.new') if not t.prev else '—' }}{% else %}<span class="{{ 'bad' if t.trend > 0.5 else 'good' if t.trend < -0.3 }}">{{ delta(t.trend) }}</span>{% endif %}</td>
+        <td class="r">{{ t.agents }}</td><td class="small">{% for r in t.rules %}<code>{{ r }}</code> {% endfor %}</td><td class="small nowrap">{{ t.last|ts }}</td></tr>
+      {% endif %}{% endfor %}
+    </table></div>
+  </section>
+  <section class="panel">
+    <div class="phead"><h2>{{ _('att.silent_title') }}</h2><span class="count">{{ m.silent|length }}</span></div>
+    {% if m.silent %}<ul class="chips">{% for s in m.silent %}<li>{{ s }}</li>{% endfor %}</ul>{% endif %}
+    {% if m.silent_lookback %}<p class="small"><b>{{ _('att.silent_lb', d=m.lookback_days) }}</b> {{ m.silent_lookback|join(', ') }}</p>{% endif %}
+    <p class="small muted">{{ _('att.silent_note') }}</p>
+    {% if m.new %}<h3>{{ _('att.new_title', d=m.lookback_days) }}</h3>
+      <ul class="chips">{% for t in m.new %}<li><a href="{{ t.url }}" rel="noopener" target="_blank">{{ t.id }}</a> {{ t.name }}</li>{% endfor %}</ul>{% endif %}
+    {% if m.gone %}<h3>{{ _('att.gone') }}</h3><ul class="chips">{% for x in m.gone %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+  </section>
+</div>
+{% endif %}{% endif %}
+{% endblock %}

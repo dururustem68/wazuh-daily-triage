@@ -1,323 +1,168 @@
 # Wazuh Daily Triage
 
-**AI-assisted daily review for [Wazuh](https://wazuh.com) SIEM.** Every morning it checks that your SIEM is
-actually alive, separates real risk from known noise, writes a short diagnostic report back into your Wazuh
-Indexer, asks you only what needs a human decision — and remembers your answers next time.
+**An on-call companion for [Wazuh](https://wazuh.com) SIEM.** A rule-based watch tells you within minutes when
+something urgent happens, without calling an AI. Once or twice a day an AI round checks that the SIEM is
+actually alive, separates real risk from known noise, writes a short report into your own Wazuh Indexer and asks
+you only what needs a human decision. It remembers your answers.
 
-Bring your own AI: Anthropic, OpenAI, Azure OpenAI or any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio,
-LiteLLM). One Docker container, read-only towards Wazuh by default. Critical alerts and run summaries go to
-e-mail, Telegram, Microsoft Teams, Slack, Discord, ntfy or a generic webhook.
+Bring your own model: Anthropic, OpenAI, Azure OpenAI or any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio,
+LiteLLM). One Docker container, read-only towards Wazuh by default, personal data masked before it reaches the
+model.
 
-[English](README.md) · [Türkçe](README.tr.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [AI providers](docs/providers.md) · [Notifications](docs/notifications.md) · [Permissions & network](docs/permissions.md) · [Rule deployment](docs/rule-deployment.md) · [Architecture](docs/architecture.md) · [Compatibility](docs/compatibility.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[English](README.md) · [Türkçe](README.tr.md) · [Deutsch](README.de.md) · [Español](README.es.md) ·
+**[Wiki](https://github.com/dururustem68/wazuh-daily-triage/wiki)** ·
+[Getting started](https://github.com/dururustem68/wazuh-daily-triage/wiki/Getting-Started) ·
+[Security model](https://github.com/dururustem68/wazuh-daily-triage/wiki/Security-Model) ·
+[Changelog](CHANGELOG.md)
 
-![Report](docs/screenshot-report.png)
+![Dashboard](docs/screenshot-dashboard.png)
 
-| Recommendation inbox | Knowledge base and rule drafts |
+| MITRE ATT&CK | Report |
 |---|---|
-| ![Inbox](docs/screenshot-inbox.png) | ![Knowledge base](docs/screenshot-knowledge.png) |
-
-<img src="docs/screenshot-audit-pdf.png" alt="Monthly audit report (PDF)" width="430">
+| ![ATT&CK matrix](docs/screenshot-attack.png) | ![Report](docs/screenshot-report.png) |
 
 ## Why
 
-If your mornings start with the same Wazuh routine — *is data flowing, are agents connected, what is at level
-7+, which of it is the usual noise, which of it is real* — this tool does the legwork and calls you only where
-a decision is needed. It encodes hard-won review habits: health before alerts, distributions instead of
-averages, "same count on every agent = feed event", "zero does not mean the rule works", level-lowering instead
-of silencing.
+If your mornings start with the same Wazuh routine (is data flowing, are agents connected, what is at level 7
+and above, which of it is the usual noise, which of it is real), this tool does the legwork and calls you only
+where a decision is needed. It encodes hard-won review habits: health before alerts, distributions instead of
+averages, "same count on every agent means a feed event", "zero does not mean the rule works", lowering a level
+instead of silencing.
 
-## Features
+## What it is, and what it is not
 
-- **Scheduled runs** per environment (one or more times a day + weekdays). The window is "since the last successful run", so
-  Monday morning covers the weekend.
-- **Deterministic collection first** — independent of the AI: last alert time and empty hours (blind spots),
-  indexer health and disk, manager daemons, inactive agents, `ossec.log` errors, level distribution, high-level
-  groups (rule × agent × first/last seen × source IP × sample), comparison with the previous window, rule IDs
-  **seen for the first time in 14 days**, watched rules, vulnerability summary.
-- **AI diagnosis** — the model reads the summary plus your knowledge base, digs deeper with read-only tools
-  (time distribution, IP profile, ±30 min correlation, logtest, rule definitions) and submits a structured
-  report: *real incident, investigate, detection gap, false positive, baseline increase…* It drafts Wazuh
-  rules and checks them for XML errors, OS_Regex pitfalls and ID collisions.
-- **Rule drafts you can ship** — every draft comes with copy-paste commands for the manager (backup,
-  `wazuh-analysisd -t`, restart, roll back). Optionally, **Approve and deploy** writes it to one dedicated rules
-  file through the Wazuh API, validates, restarts, checks it loaded, runs a two-way logtest and rolls back on any
-  failure; drafts that silence or lower alerts need a typed second confirmation
-  ([docs/rule-deployment.md](docs/rule-deployment.md)). Off by default.
-- **It asks you** — "Was this SSH login yours?" Your answer goes into the knowledge base and is context for the
-  next run.
-- **Knowledge base** — known noise, decisions ("don't suggest X"), open items, lessons, "look at this tomorrow"
-  requests. AI proposals have **no effect until you approve them**. Bring your existing notes with YAML
-  import/export (UI or `python -m app.kb`), repeatable without duplicates.
-- **Recommendation inbox** — findings one at a time, de-duplicated across runs; one decision settles every
-  occurrence. Findings that need a look on a server carry exact read-only commands, and one click copies the
-  finding with those commands so you can paste the output where you work.
-- **Notifications by e-mail, Telegram, Microsoft Teams, Slack, Discord, ntfy or a generic webhook** — critical
-  situations (SIEM silent, indexer red, real incidents) without repeating the same item every run, an optional
-  short summary after every run, and rule deployments ([docs/notifications.md](docs/notifications.md)).
-- **Live verification** — a deployed, approved or promoted rule is checked against real events after every run:
-  "confirmed live 12× (last …)" or "not seen for 5 days". `logtest passed` is not proof; a real event is.
-- **Make permanent** — for a tested draft, a promotion package for *your* configuration management: the rule
-  block with provenance, a script (backup → append → `wazuh-analysisd -t` on the running manager → roll out with
-  `kubectl apply -k` or a restart → check it loaded) and a draft § for your alert catalogue.
-- **Mail channel saturation** — with `mail:` set, each run shows the hours a flood exceeded `email_maxperhour`
-  and the other rules that fired in those hours and may never have been mailed.
-- **Coverage and vulnerability SLA** — agents per status/version/node, expected-but-missing agents from an
-  inventory list, and active vulnerabilities open longer than the SLA per severity.
-- **Monthly audit report** — alert volume, runs, findings and your decisions, rule changes (who, when, what was
-  lowered), SIEM outages from the liveness check, coverage and vulnerability SLA. Deterministic (no AI), downloadable
-  as PDF or Markdown — evidence for ISO 27001 / ISMS reviews.
-- **Anomalies without AI** — every run compares rule × agent counts with the previous 14 days: spikes (z-score)
-  and rules firing on an agent for the first time; the AI starts from there.
-- **Beyond Wazuh (optional)** — read-only Prometheus, Loki and Kubernetes tools (pods, restarts, OOM kills, node
-  pressure, events, pod logs; never secrets) so the cause of an alert can be checked, not guessed
-  ([docs/sources.md](docs/sources.md)).
-- **Incident record drafts** — one click on a finding: the AI gathers the evidence and fills your incident
-  template (timeline, root cause, impact, evidence queries, actions); edit, download, or open it as a Zammad or
-  Jira ticket.
-- **MCP server** — the same read-only tools for Claude Desktop or any MCP client, so you can investigate with live
-  data from your own assistant ([docs/mcp.md](docs/mcp.md)).
-- **Evaluation** — `python -m app.eval` replays days you reviewed yourself and scores the AI (recall, noise
-  reported as incidents, tokens): compare models and prompts with numbers ([docs/eval.md](docs/eval.md)).
-- **Copy-ready output** — every finding and question has a copy button (plain text: evidence, recommendation,
-  commands) for tickets, mail or a terminal.
-- **Stored in Wazuh itself** — `daily-triage-runs` and `daily-triage-knowledge` indices in
-  each environment's own indexer. No extra database. Optional `run_retention_days` prunes old runs; the knowledge
-  base is never deleted.
-- **Multi-environment, multi-language** (English, Turkish, Spanish, German), per-environment AI override (e.g. a
-  local model for regulated data), connection test in the UI and CLI.
+| It is | It is not |
+|---|---|
+| a daily review and on-call aid that reads what Wazuh produced | a replacement for Wazuh or its dashboard |
+| read-only towards Wazuh by default | a SOAR: it does not block, isolate or run commands on agents |
+| an assistant that proposes; a person decides | an autonomous responder |
+| one container that keeps its data in your own Wazuh Indexer | a hosted service, or another database to run |
+
+## Highlights
+
+- **Dashboard.** Key figures with trend lines and the change against the previous period, alert volume over time,
+  severity bands, top rules, agents and source addresses — for 24 hours, 7 or 30 days, without AI.
+- **MITRE ATT&CK.** A tactic strip on the dashboard and a tactic × technique matrix per environment: new
+  techniques, changes, tactics without any alert; findings carry their technique ids.
+- **The watch.** Local rules check every few minutes for a critical alert, a watched rule, a successful login
+  after failed attempts, Active Response, a sudden increase or lost agents, and notify at once. No model call.
+- **The AI round.** Deterministic collection first (health, volume, new rules, anomalies), then a model with
+  read-only tools writes findings with evidence, asks questions and judges every watch event.
+- **It learns from you.** Decisions, known noise and answers go into a knowledge base that every later run
+  reads. Proposals from the AI have no effect until you approve them.
+- **Recommendation inbox.** Findings one at a time, without duplicates across runs; one decision settles every
+  occurrence.
+- **Rule drafts you can trust.** Replay a draft against 14 days of real alerts, apply it with copy-paste
+  commands or an optional one-click deployment with validation and automatic rollback, then see it confirmed on
+  live events.
+- **Personal data stays in.** E-mail addresses, phone numbers, national IDs, IBANs, cards and secrets are
+  masked before anything is sent to the model. On by default.
+- **MCP server.** The same read-only tools for Claude Desktop, Cursor, VS Code or any MCP client.
+- **Notifications** by e-mail, Telegram, Microsoft Teams, Slack, Discord, ntfy or a generic webhook.
+- **No extra database.** State lives in `daily-triage-*` indices of your own Indexer, with encrypted backup.
+- **Monthly audit report** without AI, as PDF or Markdown: volume, decisions, rule changes, outages.
+- **Roles.** Administrator and read-only viewer, by password or — behind Keycloak, Authentik or oauth2-proxy — by
+  SSO group.
+- **Multi-environment, multi-language** (English, Turkish, Spanish, German), Docker Compose or Kubernetes.
+
+Every feature is described in the [wiki](https://github.com/dururustem68/wazuh-daily-triage/wiki).
 
 ## Quick start
 
-### 1. Try the demo (no Wazuh needed)
+### Try the demo (no Wazuh, no model needed)
 
 ```sh
 git clone https://github.com/dururustem68/wazuh-daily-triage.git && cd wazuh-daily-triage
 cp .env.demo .env
 docker compose up -d --build
-# open http://127.0.0.1:8080 — password: demo-password-change-me
+# open http://127.0.0.1:8080 and sign in with: demo-password-change-me
 ```
 
-The demo uses synthetic data (Jenkins Basic-Auth brute force, SSH attempts, a disconnected agent, a
-post-update vulnerability burst…). `mock` does no real analysis; set the `LLM_*` variables to try a real model
-on the same data.
+The demo uses synthetic data and a mock model, and starts with a finished report, watch events and waiting
+suggestions.
 
-### 2. Connect your Wazuh — one environment, no YAML
+### Connect your Wazuh
 
-Create the read-only accounts described in **[docs/permissions.md](docs/permissions.md)**, then in `.env`:
+1. Create the read-only accounts from [docs/permissions.md](docs/permissions.md). Do not use admin credentials.
+2. Start from the example file and fill in your values:
 
-```sh
-WDT_DEMO=false
-LLM_PROVIDER=anthropic          # or openai
-LLM_MODEL=<model id from your provider>
-LLM_API_KEY=<your key>
-WAZUH_INDEXER_URL=https://wazuh-indexer.example.internal:9200
-WAZUH_INDEXER_USER=daily-triage
-WAZUH_INDEXER_PASSWORD=...
-WAZUH_API_URL=https://wazuh-manager.example.internal:55000   # optional
-WAZUH_API_USER=daily-triage
-WAZUH_API_PASSWORD=...
-WAZUH_CA_FILE=/app/config/certs/root-ca.pem                   # copy your CA into ./config/certs/
-```
+   ```sh
+   cp .env.example .env
+   openssl rand -hex 32            # APP_SECRET
+   vi .env                         # APP_PASSWORD, LLM_*, WAZUH_INDEXER_*, WAZUH_API_*, WAZUH_CA_FILE
+   docker compose up -d
+   docker compose exec triage python -m app.check
+   ```
 
-```sh
-docker compose up -d
-docker compose exec triage python -m app.check    # or "Test connections" on the environment page
-```
+3. Press **Run check now** and check the first report.
 
-### 3. Several environments
-
-```sh
-cp config/environments.example.yaml config/environments.yaml
-vi config/environments.yaml        # one block per Wazuh; secrets as ${VARS} from .env
-vi config/context/<env>.md         # a few lines describing the environment
-```
-
-`config/environments.yaml`, `config/context/*`, `config/seed/*`, `config/certs/` and `.env` are git-ignored.
+The step-by-step version with expected results and common errors is
+**[Getting started](https://github.com/dururustem68/wazuh-daily-triage/wiki/Getting-Started)**. Before
+production, go through the
+[security checklist](https://github.com/dururustem68/wazuh-daily-triage/wiki/Security-Checklist).
 
 ### Kubernetes
 
-A **[Helm chart](deploy/helm/wazuh-daily-triage)** and a kustomize base, example overlay and optional components in
-**[deploy/kubernetes](deploy/kubernetes/README.md)** — single replica, non-root, read-only filesystem, no PVC
-(state lives in the Wazuh Indexer). Components: `networkpolicy`, `ingress-nginx` (TLS, cert-manager, oauth2-proxy
-option) and `ingress-traefik-authentik` (SSO).
+A [Helm chart](deploy/helm/wazuh-daily-triage) and a [Kustomize base](deploy/kubernetes/README.md) with optional
+components: single replica, non-root, read-only filesystem, no PVC. Production guide:
+[Kubernetes](https://github.com/dururustem68/wazuh-daily-triage/wiki/Kubernetes).
 
 ## AI providers
 
-Bring your own key. Full setup for each provider, including model names and parameter quirks:
-**[docs/providers.md](docs/providers.md)**.
+| Provider | `LLM_PROVIDER` | `LLM_BASE_URL` |
+|---|---|---|
+| Claude (Anthropic) | `anthropic` | – |
+| OpenAI | `openai` | `https://api.openai.com/v1` |
+| Google Gemini | `openai` | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| DeepSeek | `openai` | `https://api.deepseek.com` |
+| Azure OpenAI | `openai` | full deployment URL with `?api-version=` |
+| Ollama, vLLM, LM Studio, LiteLLM | `openai` | for example `http://ollama:11434/v1` |
 
-| Provider | `LLM_PROVIDER` | `LLM_BASE_URL` | Example `LLM_MODEL` |
-|---|---|---|---|
-| Claude (Anthropic) | `anthropic` | — | `claude-sonnet-5-5` |
-| OpenAI | `openai` | `https://api.openai.com/v1` | `gpt-6.1-sol` ¹ |
-| Google Gemini | `openai` | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.8-flash` |
-| DeepSeek | `openai` | `https://api.deepseek.com` | `deepseek-flash` |
-| Azure OpenAI | `openai` | full deployment URL with `?api-version=` | your deployment |
-| Ollama / vLLM / LM Studio / LiteLLM | `openai` | e.g. `http://ollama:11434/v1` | e.g. `qwen3:14b` |
+The model must support tool (function) calling. Each environment can use its own model, for example a local one
+for data that must not leave your network. Model names and parameter quirks: [docs/providers.md](docs/providers.md).
 
-¹ OpenAI reasoning models also need `LLM_TOKEN_PARAM=max_completion_tokens` and `LLM_TEMPERATURE=none`.
+## Security and privacy in short
 
-The model must support tool (function) calling. Each environment can override the model (`llm:` block) — e.g.
-a local model for an environment whose data must not leave your network. `max_tool_steps` caps cost per run.
+- **Read-only towards Wazuh by default.** No active response, no configuration writes, no agent commands. The
+  only index writes go to the application's own indices.
+- **The model reads and proposes.** No shell, no outbound requests; queries are bounded by a field allow-list
+  and size limits, so text injected into an alert cannot become an arbitrary query.
+- **Rule deployment is opt-in**, uses a separate least-privilege API user, writes one dedicated file and rolls
+  back on any failure.
+- **With a hosted model, summaries and sample log lines go to that provider.** Personal data and secrets are
+  pseudonymised first (best effort, not a DLP); for regulated data use a local model.
+- **Production startup refuses** example passwords, a missing `APP_SECRET`, insecure cookies and disabled TLS
+  verification. State-changing requests are written to a hash-chained audit trail.
 
-## Notifications — e-mail, Telegram, Teams, Slack, Discord, ntfy, webhook
+Details: [Security model](https://github.com/dururustem68/wazuh-daily-triage/wiki/Security-Model) ·
+[Privacy](https://github.com/dururustem68/wazuh-daily-triage/wiki/Privacy) ·
+[docs/security-exceptions.md](docs/security-exceptions.md). Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
 
-| When | Setting (default) |
+## Documentation
+
+This README is the short version. The [wiki](https://github.com/dururustem68/wazuh-daily-triage/wiki) is the
+handbook; the `docs/` folder holds the reference documents the wiki links to.
+
+| Topic | Where |
 |---|---|
-| SIEM silent, indexer red, manager daemon down, indexer disk ≥ 90 % | `on_critical_flags: true` |
-| Finding labelled *real incident* / severity *critical* | `on_real_incident: true`, `on_critical_findings: true` |
-| The run itself failed | `on_run_error: false` |
-| Short summary after **every** run (health, counts, recommendations waiting) | `on_run_summary: false` |
-| A rule draft was deployed, rolled back or removed | `on_rule_deploy: true` |
-| **Liveness check every 10 min** (no AI): indexer/API unreachable, daemon down, SIEM silent, disk ≥ 90 % — problem, reminder, recovered | `on_liveness: true`, `liveness.interval_minutes` |
-
-The same critical item is not repeated within `repeat_hours` (24). A channel is active as soon as its fields are
-set; **Test notifications** on the environment page checks all of them.
-
-```sh
-# .env — any combination of channels
-NOTIFY_UI_URL=https://triage.example.internal      # link in messages
-NOTIFY_ON_RUN_SUMMARY=true
-
-TELEGRAM_BOT_TOKEN=123456789:AA...                 # @BotFather → /newbot
-TELEGRAM_CHAT_ID=-1001234567890                    # see below
-
-TEAMS_WEBHOOK_URL=https://...                      # channel → Workflows → "Post to a channel when a webhook request is received"
-
-SLACK_WEBHOOK_URL=https://hooks.slack.com/...      # Your Apps → Incoming Webhooks
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...   # channel → Edit → Integrations → Webhooks
-
-WEBHOOK_URL=https://soar.example.internal/hook     # generic JSON webhook (Zapier/Make/SOAR)
-WEBHOOK_TOKEN=...                                  # optional → Authorization: Bearer
-
-NTFY_TOPIC=wazuh-triage                            # https://ntfy.sh/wazuh-triage (or a full URL)
-NTFY_TOKEN=...                                     # optional, for a protected topic
-
-SMTP_HOST=smtp.example.org
-SMTP_PORT=587
-SMTP_SECURITY=starttls                             # starttls | ssl | none
-SMTP_USER=...
-SMTP_PASSWORD=...
-SMTP_FROM=wazuh-triage@example.org
-SMTP_TO=secops@example.org,oncall@example.org
-```
-
-- **Telegram chat id:** add the bot to the group (or send it a message), send `/start@<your_bot>`, then open
-  `https://api.telegram.org/bot<token>/getUpdates` and take `"chat":{"id":...}` — group ids are negative
-  (`-100…`). Already sending Wazuh alerts to Telegram through the Dashboard's Notifications plugin? The same
-  bot token and chat id work here.
-- **Teams:** the old Office 365 "Incoming Webhook" connectors are retired; use the Workflows template above.
-  Messages arrive as Adaptive Cards with a link to the report.
-- **Slack:** create an app → *Incoming Webhooks* → add to a channel → copy the Webhook URL. Messages arrive as
-  block-kit sections with a link to the report.
-- **Discord:** channel → *Edit* → *Integrations* → *Webhooks* → *New Webhook*. Plain-text messages.
-- **Generic webhook:** any endpoint that accepts a JSON body (`{"title", "lines", "link", "text"}`); set
-  `WEBHOOK_TOKEN` for a `Bearer` header.
-- **ntfy:** push to `https://ntfy.sh/<topic>` (or self-host); the title becomes the notification title.
-- Multi-environment setups put the same keys in a `notify:` block, globally or per environment —
-  see [docs/notifications.md](docs/notifications.md).
-
-Messages contain environment names, finding titles, host names and IPs — pick channels accordingly.
-
-## Rule drafts — commands or one-click deploy
-
-Every rule draft in the knowledge base has three buttons:
-
-- **Commands** — a copy-paste block for the manager: backup, append to `etc/rules/wdt_rules.xml`,
-  `wazuh-analysisd -t` (restores the backup if it fails), restart, verify, roll back. Works everywhere.
-- **Approve and deploy** — opt-in per environment (`rule_deploy`). Writes the draft through the Wazuh API with a
-  separate least-privilege user, validates, restarts the manager or cluster, checks the rule IDs are loaded,
-  runs the draft's two-way logtest and **rolls back automatically** on any failure. Drafts that silence or lower
-  alerts need the rule IDs typed as a second confirmation.
-- **Remove from Wazuh** — undoes a deployed draft the same way.
-- **Check live / Make permanent** — see whether the rule fired on real events since it was applied, and get the
-  package that moves it into your own rules file / repository (configure `promote:`).
-
-Setup and the exact API permissions: [docs/rule-deployment.md](docs/rule-deployment.md).
-
-## Knowledge base import / export
-
-Bring the notes you already keep (known noise, decisions, lessons) as a YAML list — the same format as
-[`config/seed/example.yaml`](config/seed/example.yaml):
-
-```sh
-python -m app.kb import noise.yaml -e prod --dry-run     # preview
-python -m app.kb import noise.yaml -e prod --update      # add new, update changed (matched by key or kind+title)
-kubectl exec -i deploy/wazuh-daily-triage -- python -m app.kb import - -e prod --update < noise.yaml
-python -m app.kb export -e prod --kind baseline > baseline.yaml
-```
-
-Or use **Import / export** on the knowledge base page. Re-running never creates duplicates.
+| From the demo to a first real report | [Getting started](https://github.com/dururustem68/wazuh-daily-triage/wiki/Getting-Started) |
+| Installation and configuration | [Installation](https://github.com/dururustem68/wazuh-daily-triage/wiki/Installation), [Configuration](https://github.com/dururustem68/wazuh-daily-triage/wiki/Configuration), [Kubernetes](https://github.com/dururustem68/wazuh-daily-triage/wiki/Kubernetes) |
+| Daily use | [User guide](https://github.com/dururustem68/wazuh-daily-triage/wiki/User-Guide), [Rule lifecycle](https://github.com/dururustem68/wazuh-daily-triage/wiki/Rule-Lifecycle), [Watch](https://github.com/dururustem68/wazuh-daily-triage/wiki/Watch), [MCP](https://github.com/dururustem68/wazuh-daily-triage/wiki/MCP) |
+| Security and privacy | [Security model](https://github.com/dururustem68/wazuh-daily-triage/wiki/Security-Model), [Privacy](https://github.com/dururustem68/wazuh-daily-triage/wiki/Privacy), [Security checklist](https://github.com/dururustem68/wazuh-daily-triage/wiki/Security-Checklist) |
+| Operations | [Troubleshooting](https://github.com/dururustem68/wazuh-daily-triage/wiki/Troubleshooting), [Backup](https://github.com/dururustem68/wazuh-daily-triage/wiki/Backup), [Upgrade](https://github.com/dururustem68/wazuh-daily-triage/wiki/Upgrade) |
+| Versions and limits | [Compatibility](https://github.com/dururustem68/wazuh-daily-triage/wiki/Compatibility) |
+| Examples, FAQ, glossary | [Scenarios](https://github.com/dururustem68/wazuh-daily-triage/wiki/Scenarios), [FAQ](https://github.com/dururustem68/wazuh-daily-triage/wiki/FAQ) |
+| Reference | [permissions](docs/permissions.md), [rule deployment](docs/rule-deployment.md), [notifications](docs/notifications.md), [providers](docs/providers.md), [sources](docs/sources.md), [architecture](docs/architecture.md), [eval](docs/eval.md) |
 
 ## Compatibility
 
-See [docs/compatibility.md](docs/compatibility.md) for the full matrix (Wazuh, indexer, Python, providers,
-integrations, known limits). In short:
+- Wazuh **4.x**, developed and tested against 4.14; Wazuh Indexer (OpenSearch 2.x) with the standard
+  `wazuh-alerts-*` template.
+- The Wazuh server API is optional; without it agent and daemon health, rule information and logtest are off.
+- Python **3.11–3.15**.
 
-- Wazuh **4.x** (developed and tested against 4.14) — all-in-one, distributed, Docker and Kubernetes deployments.
-- Wazuh Indexer / OpenSearch 2.x with the standard `wazuh-alerts-*` template. Index patterns are configurable.
-- Wazuh server API is optional; without it agent/daemon health, rule info and logtest are disabled.
-- Python **3.11–3.13**; basic auth, private CA (`ca_file`) and mutual TLS (`client_cert`/`client_key`) supported.
-
-## Security model
-
-> **Default posture:** no write access to Wazuh, no shell, no outbound requests from the model. Everything the
-> AI can do is a read query inside configured limits, or a *proposal* that waits for a human. Production startup
-> refuses example passwords, a missing `APP_SECRET`, insecure cookies and disabled TLS verification; every
-> state-changing request is written to a tamper-evident audit trail.
-
-- **Read-only towards Wazuh by default.** No active response, no config writes, no agent commands. The only
-  index writes go to its own `daily-triage-*` indices. The opt-in rule deployment uses a separate API user that
-  can only upload custom rules files and restart the manager; the application writes one dedicated file.
-- **Prompt injection.** Alert content (URLs, `full_log`, user agents, user names) is attacker-controlled. The
-  prompt marks it as data, and even a fooled model can at most add a *proposal* to the knowledge base, which
-  does nothing until you approve it. Field names, time windows, bucket counts and document sizes are capped by
-  `query_guard`, so injected text cannot turn into an expensive or arbitrary query.
-- **Least privilege in the UI.** Two roles (admin, read-only viewer) with a permission matrix, and an optional
-  per-role environment allow-list (`ADMIN_ENVS`, `VIEWER_ENVS`, `MCP_ENVS`) when production and staging share one
-  installation. Checks run server-side on every route, not in the template.
-- **Audit trail.** Logins, denials, decisions, deployments and every state-changing request are appended to
-  `logs/audit.jsonl` with actor, role, environment, result and a SHA-256 hash chain — tampering breaks the chain.
-- **Rule deployment fails closed.** Validation, restart and logtest are verified; a failed expectation *or* a
-  sample that cannot be reproduced rolls the change back, and a failed rollback is logged as critical.
-- **Data leaving your network.** With a hosted LLM, alert summaries and sample log lines are sent to that
-  provider. For regulated data use a local model or `privacy.mode: mask` — personal data (e-mail, phone,
-  national IDs, IBAN, cards; optionally IPs) is pseudonymised before it reaches the model and mapped back in tool
-  calls and reports, secrets are removed; `privacy.detect` flags personal data stored in clear text in your logs
-  ([docs/privacy.md](docs/privacy.md); best effort, not a full DLP).
-- **Web UI.** Password + signed `HttpOnly`/`SameSite=Strict` cookie, login throttling, strict CSP (no inline
-  scripts), model output rendered as markdown with HTML disabled. An optional read-only `VIEWER_PASSWORD` lets a
-  team view everything without changing anything. The container runs as non-root with a read-only filesystem and
-  all capabilities dropped. Put it behind TLS; with an SSO proxy set `AUTH_DISABLED=true`.
-- **Operations.** `/metrics` (admin session or `METRICS_TOKEN`) exposes run, error, duration, token and deploy
-  counters; `/healthz` is the liveness probe and `/readyz` the readiness probe (deliberately no Indexer call, so an
-  outage never pulls the UI that explains it); every log line and audit record carries an `X-Request-ID`.
-
-Report vulnerabilities privately — see [SECURITY.md](SECURITY.md). Deliberate overrides are listed in
-[docs/security-exceptions.md](docs/security-exceptions.md).
-
-## Architecture
-
-```
-          ┌──────────────── wazuh-daily-triage (one container) ─────────────────┐
-schedule  │ Collector ──► deterministic summary + health flags                   │
- / button │      │                                                               │
-          │      ▼                                                               │
-          │ Agent loop ◄──► LLM (Anthropic / OpenAI-compatible)                  │
-          │   tools: search · aggregate · timeline · ip_profile · correlate ·    │
-          │   vulns · agent · rule · logtest · validate_rule_xml · propose        │
-          │      │                                                               │
-          │      ▼                                                               │
-          │ submit_report ──► daily-triage-runs ──► notify (mail/Telegram/Teams/Slack/Discord/ntfy/webhook) │
-          │ Web UI ◄──► daily-triage-runs / -knowledge                           │
-          │ Approve & deploy (opt-in, separate API user) ──► etc/rules/wdt_rules │
-          └───────────┬──────────────────────────────┬───────────────────────────┘
-                      │ HTTPS 9200                   │ HTTPS 55000
-               Wazuh Indexer                  Wazuh server API
-```
-
-Python 3.12, FastAPI, Jinja2, httpx. No provider SDKs, no front-end build step. Module map, request flow and
-extension points: [docs/architecture.md](docs/architecture.md).
+What is tested, what is expected and what is not supported:
+[Compatibility](https://github.com/dururustem68/wazuh-daily-triage/wiki/Compatibility).
 
 ## Development
 
@@ -325,34 +170,14 @@ extension points: [docs/architecture.md](docs/architecture.md).
 python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 pytest
-pytest --cov=app --cov-report=term-missing     # what CI uploads
 ruff check .
 WDT_DEMO=true APP_PASSWORD=x uvicorn app.main:app --reload
 ```
 
-`app/demo.py` contains a tiny OpenSearch query engine and synthetic data, so the collector and tools are tested
-without a cluster. Adding a UI language = adding a dictionary to `app/i18n.py`.
-
-### Measure it yourself
-
-There are no marketing numbers in this README: a recall figure from someone else's alerts says little about
-yours. The repository ships the instrument instead — `python -m app.eval` replays days you reviewed yourself
-and scores the AI against what you concluded:
-
-```sh
-python -m app.eval config/eval/demo.yaml               # demo cases, no Wazuh needed
-python -m app.eval cases.yaml --repeat 3 --out res.json
-```
-
-Per case it reports **recall** (expected items found), **missed** items, **noise violations** (known noise
-reported as an incident), findings, tool steps, tokens and wall time — so a prompt, model or threshold change
-is a measured decision. Write your own cases from real days (`docs/eval.md`); three to five are enough to spot a
-regression. CI runs the suite, not the evaluation (it needs a model and your data).
-
-## Roadmap
-
-See [ROADMAP.md](ROADMAP.md) — the priority list includes signed image releases (an SBOM is already produced
-per build), ServiceNow/GitHub ticketing, decoder drafts, embedded charts and more languages.
+The test suite runs on a built-in demo engine and needs no cluster. There are no marketing numbers here: measure
+a model on days you reviewed yourself with `python -m app.eval` ([docs/eval.md](docs/eval.md)). More:
+[Development](https://github.com/dururustem68/wazuh-daily-triage/wiki/Development) ·
+[CONTRIBUTING.md](CONTRIBUTING.md) · [ROADMAP.md](ROADMAP.md).
 
 ## Acknowledgements
 
@@ -361,7 +186,7 @@ per build), ServiceNow/GitHub ticketing, decoder drafts, embedded charts and mor
 
 ## License
 
-Copyright © 2026 Rüstem Duru. Licensed under the **GNU Affero General Public License v3.0** — see
+Copyright © 2026 Rüstem Duru. Licensed under the **GNU Affero General Public License v3.0**; see
 [LICENSE](LICENSE) and [NOTICE](NOTICE). If you run a modified version for users over a network, you must
 offer them its source code (set `SOURCE_URL` to your fork).
 
