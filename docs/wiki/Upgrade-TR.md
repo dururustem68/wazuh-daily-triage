@@ -72,6 +72,20 @@ etkisizdir. Eski sürüm yeni veriyle düzgün çalışmazsa yükseltmeden önce
 
 ## Sürüm notları
 
+### 0.11.1
+
+- **Uzun işlemler arka planda çalışır.** Kural dağıtma ve kaldırma, bağlantı testi, olay kaydı taslakları ve
+  *Ne yapardı?* bir iş ile `202` yanıtı verir; sayfa `GET /api/e/<env>/jobs/<id>` adresini yoklar ve dağıtım
+  adımlarını canlı gösterir. Hiçbir vekil zaman aşımı (oauth2-proxy'nin 30 sn'si) bunları artık kesemez. Bu
+  rotaları çağırıp sonucu yanıtta bekleyen betikler `?wait=true` ekler.
+- **Durum tutan kurallar doğru logtest edilir.** Frekans / `if_matched_*` kuralları logtest adımında her seferinde
+  başarısız olup geri alınıyordu (tek olay yalnız üst kurala ulaşır). Örnekler artık tek logtest oturumunda tekrar
+  oynatılır.
+- **Yarıda kalan dağıtımlar görünür.** Dağıtım ortasında yeniden başlatma, *Uygulanıyor*'da takılı kayıt yerine
+  *Yarıda kaldı — yöneticiyi kontrol edin* bırakır.
+- **Kubernetes:** `terminationGracePeriodSeconds: 420` (temel manifest ve chart değeri); böylece süren bir dağıtım
+  rollout sırasında bitebilir; `JOB_DRAIN_SECONDS` (varsayılan 400) uygulamanın bekleme süresidir.
+
 ### 0.11.0
 
 - **SSO rolleri (SSO vekili arkasında işlem gerekir).** 0.11 öncesinde her SSO kullanıcısı yöneticiydi. Artık rol,
@@ -115,7 +129,7 @@ Daha eski sürümler: değişiklik günlüğü.
 
 Ayrıca: [Yedekleme](Backup-TR) · [Uyumluluk](Compatibility-TR) · [Sorun giderme](Troubleshooting-TR)
 
-*0.11.0 için geçerlidir · gözden geçirme: 2026-11-11*
+*0.11.1 için geçerlidir · gözden geçirme: 2026-11-12*
 
 ---
 

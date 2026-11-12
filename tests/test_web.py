@@ -60,7 +60,7 @@ def test_flow(c):
     k = c.post("/api/e/demo/k", json={"kind": "decision", "title": "Do not suggest NFS alerts"}).json()
     assert c.post(f"/api/e/demo/k/{k['id']}", json={"status": "closed"}).json()["status"] == "closed"
     assert "NFS" in c.get("/e/demo/k").text
-    chk = c.post("/api/e/demo/check").json()["results"]
+    chk = c.post("/api/e/demo/check?wait=true").json()["results"]
     assert {x["key"] for x in chk} == {"indexer", "alerts", "vulns", "storage", "api", "llm"}
     assert all(x["ok"] for x in chk), chk
     assert page.text.count("data-copy-text") >= 2          # every finding and question can be copied
@@ -135,10 +135,10 @@ def test_rule_draft_ui_and_deploy(c):
     assert "data-deploy" in page and "data-cmds" in page and "100970" in page
     v = c.get(f"/api/e/demo/k/{k['id']}/rule").json()
     assert v["analysis"]["ok"] and "wazuh-analysisd -t" in v["commands"]
-    rec = c.post(f"/api/e/demo/k/{k['id']}/deploy", json={}).json()
+    rec = c.post(f"/api/e/demo/k/{k['id']}/deploy?wait=true", json={}).json()
     assert rec["state"] == "deployed" and rec["by"] == "ui"
     assert "data-undeploy" in c.get("/e/demo/k").text
-    assert c.post(f"/api/e/demo/k/{k['id']}/undeploy").json()["state"] == "removed"
+    assert c.post(f"/api/e/demo/k/{k['id']}/undeploy?wait=true").json()["state"] == "removed"
 
 
 def test_kb_import_export_web(c):
@@ -219,7 +219,7 @@ def test_noise_map_whatif_pages(c):
     assert p.status_code == 200 and "31101" in p.text
     k = c.post("/api/e/demo/k/noise-draft", json={"rule_id": "31101", "mode": "skeleton"}).json()
     assert k["kind"] == "rule_draft" and k["status"] == "proposed" and "<if_sid>31101</if_sid>" in k["xml"]
-    w = c.get(f"/api/e/demo/k/{k['id']}/whatif").json()
+    w = c.get(f"/api/e/demo/k/{k['id']}/whatif?wait=true").json()
     assert w["ok"] and w["rules"][0]["parent_events"] > 0
     q = c.post("/api/e/demo/k/noise-draft", json={"rule_id": "31101", "mode": "request"}).json()
     assert q["kind"] == "request"

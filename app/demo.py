@@ -568,6 +568,23 @@ class FakeAPI:
         return {"output": {"rule": {"id": "1002", "level": 2, "description": "Unknown problem somewhere in the system."},
                            "decoder": {"name": "syslog"}}, "alert": False, "messages": []}
 
+    async def logtest_replay(self, event, times, log_format="syslog", location="daily-triage"):
+        """Stateful replay: a deployed frequency child of 5710 fires once ``frequency`` events were seen."""
+        import re as _re
+        out = []
+        for n in range(1, max(1, times) + 1):
+            hit = None
+            if "Invalid user" in event:
+                for content in self.files.values():
+                    for m in _re.finditer(r"<rule\b([^>]*)>(.*?)</rule>", content, _re.S):
+                        a = dict(_re.findall(r'(\w+)="([^"]*)"', m.group(1)))
+                        if a.get("frequency", "").isdigit() and n >= int(a["frequency"]) \
+                                and "<if_matched_sid>5710</if_matched_sid>" in m.group(2):
+                            hit = {"output": {"rule": {"id": a.get("id"), "level": int(a.get("level") or 0)},
+                                              "decoder": {"name": "sshd"}}, "alert": True, "messages": []}
+            out.append(hit or await self.logtest(event, log_format, location))
+        return out
+
     # --- rule deployment -------------------------------------------------
     def reset_token(self):
         pass

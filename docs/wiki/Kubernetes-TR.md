@@ -28,10 +28,10 @@ helm repo add wazuh-daily-triage https://dururustem68.github.io/wazuh-daily-tria
 helm repo update
 helm install wazuh-daily-triage wazuh-daily-triage/wazuh-daily-triage \
   --namespace wazuh-daily-triage --create-namespace \
-  --version 0.3.0 -f my-values.yaml
+  --version 0.3.1 -f my-values.yaml
 ```
 
-Chart 0.3.0, uygulamanın 0.11.0 sürümünü kurar. Üretimde önemli değerler:
+Chart 0.3.1, uygulamanın 0.11.1 sürümünü kurar. Üretimde önemli değerler:
 
 | Değer | Ne yazılır |
 |---|---|
@@ -129,7 +129,7 @@ helm -n wazuh-daily-triage rollback wazuh-daily-triage <revizyon>
 
 Önce yedek alın ve sürüm notlarını okuyun: [Yükseltme](Upgrade-TR).
 
-*0.11.0, chart 0.3.0 için geçerlidir · gözden geçirme: 2026-11-11*
+*0.11.1, chart 0.3.1 için geçerlidir · gözden geçirme: 2026-11-12*
 
 ---
 

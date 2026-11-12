@@ -73,6 +73,10 @@ class SchedulerMixin:
         return None
 
     async def close(self):
+        import os
+        # a rule deployment must not stop between writing the file and its rollback (terminationGracePeriodSeconds
+        # in the manifests leaves room for this)
+        await self.jobs.drain(float(os.environ.get("JOB_DRAIN_SECONDS", "400")))
         for rt in self.envs.values():
             await rt.ix.close()
             if rt.api:

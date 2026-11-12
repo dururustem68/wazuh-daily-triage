@@ -127,6 +127,9 @@ Modelleri izlenimle değil sayıyla karşılaştırın: `python -m app.eval`
 | Üst kural bilinmiyor | `etc/rules` içindeki dosyaların yükleme sırası | hem ayarda hem politikada daha sonra sıralanan bir ad kullanın, örneğin `zz_wdt_rules.xml` |
 | Geri alma **başarısız** (logda kritik) | manager geri yüklenen dosyayı kabul etmedi ya da yeniden başlamadı | bir kişi manager'a bakmalı: manager'da `wazuh-analysisd -t`, sonra dosya |
 | Yeniden başlatma zaman aşımına uğruyor | yavaş cluster | `restart_timeout` değerini yükseltin |
+| Frekans kuralı geri alındı, `match → <üst kural> ✗` | 0.11.1 öncesinde tek logtest olayı yalnız üst kurala ulaşabilir | 0.11.1 örneği tek oturumda `frequency + 2` kez tekrar oynatır |
+| Kayıtta *Yarıda kaldı — yöneticiyi kontrol edin* yazıyor | dağıtım sırasında pod yeniden başladı | manager'da kural dosyasını kontrol edin (`grep -n wdt:begin`), sonra yeniden dağıtın ya da kaldırın |
+| Uzun bir işlemde (dağıtım, bağlantı testi, olay taslağı) `502`/`504`, 0.11.1 öncesi | vekilin arka uç zaman aşımı (oauth2-proxy: 30 sn); işlem sürdü | 0.11.1'e yükseltin (arka plan işleri); sonucu denetim izinde görün; bkz. [SSO vekil kimlik doğrulama](SSO-Proxy-Auth-TR) |
 
 ## Kubernetes
 
@@ -169,7 +172,7 @@ Sürümü (Hakkında sayfası), kurulum biçimini, istek kimliğini ve ilgili lo
 [GitHub güvenlik bildirimleri](https://github.com/dururustem68/wazuh-daily-triage/security/advisories/new)
 üzerinden özel olarak iletilir.
 
-*0.11.0 için geçerlidir · gözden geçirme: 2026-11-11*
+*0.11.1 için geçerlidir · gözden geçirme: 2026-11-12*
 
 ---
 

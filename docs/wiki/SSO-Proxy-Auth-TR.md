@@ -128,6 +128,7 @@ wazuh-triage-dedicated → Add mapper → By configuration → Group Membership*
 - --set-xauthrequest=true          # X-Auth-Request-User ve X-Auth-Request-Groups üretir
 - --oidc-groups-claim=groups       # Keycloak mapper'ının yazdığı claim
 - --skip-auth-route=POST=^/mcp$    # yalnızca MCP sunucusunu kullanıyorsanız
+- --upstream-timeout=120s          # oauth2-proxy ≥ 7.6; varsayılan 30s (aşağıda "Uzun işlemler")
 ```
 
 `--set-xauthrequest=true`, `<proxy>/oauth2/auth` yanıtına `X-Auth-Request-User` ve `X-Auth-Request-Groups`
@@ -246,8 +247,8 @@ Overlay'de etkinleştirin:
 
 ```yaml
 components:   # uzak ve sürümü sabit — host adlarını düzenlemek için klasörleri overlay'in yanına kopyalayın
-  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/networkpolicy?ref=v0.11.0
-  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/ingress-traefik-authentik?ref=v0.11.0
+  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/networkpolicy?ref=v0.11.1
+  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/ingress-traefik-authentik?ref=v0.11.1
 ```
 
 Bileşen `AUTH_DISABLED=true`, `COOKIE_SECURE=true` ve `NOTIFY_UI_URL` değerlerini zaten ayarlar (host'u
@@ -292,6 +293,25 @@ fiilen kimlik doğrulamasızdır. Dışarı açmadan önce ağ politikasını d�
 | `/mcp` `404` dönüyor | `MCP_TOKEN` ayarlı değil; amaçlanan “kapalı” yanıtı budur. [MCP](MCP-TR). |
 | SSO'dan sonra probe'lar başarısız | Vekil `/healthz`/`/readyz` yollarını yakalıyor. Bu yolları geçirin veya probe'u poda yönlendirin. |
 | Çıkış SSO oturumunu bitirmiyor | Uygulamanın `/logout` yalnızca kendi çerezini siler. IdP/vekil çıkışını kullanın veya uygulama çıkış düğmesini gizleyin. |
+
+## Uzun işlemler ve vekil zaman aşımları (0.11.1)
+
+oauth2-proxy varsayılan olarak arka uçtan **30 sn** sonra vazgeçer ve `502` döner; ingress-nginx, Traefik ve
+Kong'un kendi okuma zaman aşımları vardır (çoğunlukla 60 sn). Bir kural dağıtımı (manager yeniden başlatma +
+doğrulama + logtest) yaklaşık bir dakika sürer. 0.11.1'den beri uygulama bu tür istekleri hemen `202` ile yanıtlar
+ve sayfa bir arka plan işini yoklar (kural dağıtma ve kaldırma, bağlantı testi, olay kaydı taslağı, *Ne yapardı?*);
+böylece bu zaman aşımları arayüz için artık önemli değildir. Betikler ve yavaş sayfalar için güvenlik payı olarak
+yine de önerilir:
+
+| Vekil | Ayar |
+|---|---|
+| oauth2-proxy | `--upstream-timeout=120s` (ya da `OAUTH2_PROXY_UPSTREAM_TIMEOUT=120s`) |
+| ingress-nginx | `nginx.ingress.kubernetes.io/proxy-read-timeout: "120"` |
+| Traefik | `serversTransport` → `forwardingTimeouts.responseHeaderTimeout: 120s` |
+| Kong | servis `read_timeout: 120000` |
+
+Eski eşzamanlı yanıtı isteyen API istemcileri `?wait=true` ekler — yalnız zaman aşımı yeterince uzun bir vekil
+üzerinden.
 
 ## Planlanması gereken sınırlar
 

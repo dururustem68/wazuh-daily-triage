@@ -127,6 +127,7 @@ wazuh-triage-dedicated → Add mapper → By configuration → Group Membership*
 - --set-xauthrequest=true          # emits X-Auth-Request-User and X-Auth-Request-Groups
 - --oidc-groups-claim=groups       # the claim the Keycloak mapper writes
 - --skip-auth-route=POST=^/mcp$    # only if you use the MCP server
+- --upstream-timeout=120s          # oauth2-proxy ≥ 7.6; default 30s (see "Long operations" below)
 ```
 
 `--set-xauthrequest=true` is what makes `<proxy>/oauth2/auth` return `X-Auth-Request-User` and
@@ -249,8 +250,8 @@ Enable it in your overlay:
 
 ```yaml
 components:   # remote, pinned — or copy the folders next to your overlay to edit the host names
-  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/networkpolicy?ref=v0.11.0
-  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/ingress-traefik-authentik?ref=v0.11.0
+  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/networkpolicy?ref=v0.11.1
+  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/components/ingress-traefik-authentik?ref=v0.11.1
 ```
 
 The component already sets `AUTH_DISABLED=true`, `COOKIE_SECURE=true` and `NOTIFY_UI_URL` (edit the host). Add
@@ -295,6 +296,24 @@ effectively unauthenticated. Fix the network policy before exposing it.
 | `/mcp` returns `404` | `MCP_TOKEN` is not set; that is the intended “disabled” answer. See [MCP](MCP). |
 | Probes fail after enabling SSO | The proxy intercepts `/healthz`/`/readyz`. Let those paths through, or point the probe at the pod. |
 | Logout does not end the SSO session | The app's `/logout` only clears its own cookie. Use the IdP/proxy logout, or hide the app logout button. |
+
+## Long operations and proxy time-outs (0.11.1)
+
+oauth2-proxy gives up on an upstream after **30 s** by default and answers `502`; ingress-nginx, Traefik and
+Kong have their own read time-outs (often 60 s). A rule deployment (manager restart + verification + logtest)
+takes about a minute. Since 0.11.1 the application answers such requests at once with `202` and the page polls a
+background job (rule deploy and remove, connection test, incident draft, *What would it do?*), so these time-outs
+no longer matter for the UI. Still recommended, as a safety margin for scripts and slow pages:
+
+| Proxy | Setting |
+|---|---|
+| oauth2-proxy | `--upstream-timeout=120s` (or `OAUTH2_PROXY_UPSTREAM_TIMEOUT=120s`) |
+| ingress-nginx | `nginx.ingress.kubernetes.io/proxy-read-timeout: "120"` |
+| Traefik | `serversTransport` → `forwardingTimeouts.responseHeaderTimeout: 120s` |
+| Kong | service `read_timeout: 120000` |
+
+API clients that want the old synchronous answer add `?wait=true` — only through a proxy with a long enough
+time-out.
 
 ## Limitations to plan around
 

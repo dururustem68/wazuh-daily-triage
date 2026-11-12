@@ -13,6 +13,7 @@ import ipaddress
 import re
 import time
 import xml.etree.ElementTree as ET  # ParseError only; parsing goes through defusedxml
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from defusedxml import ElementTree as SafeET
@@ -108,10 +109,31 @@ def parse(xml: str) -> tuple[list[dict], list[str]]:
         rules.append({"id": r.get("id"), "level": r.get("level"), "overwrite": r.get("overwrite") == "yes",
                       "options": opts, "parents": parents, "description": desc, "conditions": conds,
                       "frequency": r.get("frequency"), "timeframe": r.get("timeframe"), "ignore": r.get("ignore"),
-                      "if_group": [el.text for el in r.iter("if_group")] + [el.text for el in r.iter("if_matched_group")]})
+                      "if_group": [el.text for el in r.iter("if_group")] + [el.text for el in r.iter("if_matched_group")],
+                      "matched": any(True for t in ("if_matched_sid", "if_matched_group") for _ in r.iter(t))})
     if not rules:
         errors.append("no <rule> element")
     return rules, errors
+
+
+MAX_REPLAY = 64
+
+
+def replay_count(rules: list[dict]) -> int:
+    """How many times a logtest sample must be replayed in one session for the draft's rules to be able to fire.
+
+    A frequency rule fires only after ``frequency`` matching events within ``timeframe`` (two extra events
+    cover off-by-one differences between Wazuh versions); an ``if_matched_sid``/``if_matched_group`` rule
+    needs at least one earlier event. Stateless rules need one.
+    """
+    n = 1
+    for r in rules:
+        f = str(r.get("frequency") or "").strip()
+        if f.isdigit():
+            n = max(n, int(f) + 2)
+        elif r.get("matched"):
+            n = max(n, 2)
+    return min(n, MAX_REPLAY)
 
 
 INTERNAL_GROUPS = {"rootcheck", "syscheck", "syscheck_file", "syscheck_entry_added", "syscheck_entry_modified",
@@ -178,7 +200,7 @@ async def analyse(xml: str, cfg: RuleDeployCfg, api: WazuhAPI | None, high_level
     for v in parents_info.values():
         internal |= set(v.get("groups") or [])
     not_replayable = sorted(internal & INTERNAL_GROUPS)
-    return {"ok": not errors, "errors": errors, "risky": sorted(set(risky)), "ids": ids,
+    return {"replay": replay_count(rules), "ok": not errors, "errors": errors, "risky": sorted(set(risky)), "ids": ids,
             "replayable": not not_replayable, "internal_groups": not_replayable,
             "test_policy": {"require_tests": cfg.require_tests, "allow_inconclusive": cfg.allow_inconclusive},
             "xml": _normalise(xml), "parents": {k: {"level": v.get("level"), "description": v.get("description"),
@@ -227,6 +249,9 @@ def commands(kid: str, xml: str, cfg: RuleDeployCfg, title: str = "", ids: list[
     ]
     if tests:
         lines.append("# logtest: paste each event into /var/ossec/bin/wazuh-logtest")
+        rc = replay_count(parse(xml)[0])
+        if rc > 1:
+            lines.append(f"#   stateful rule (frequency / if_matched): paste the same event {rc} times in ONE session")
         for t in tests[:6]:
             lines.append(f"#   expect {t.get('expect', 'match')}: {str(t.get('event', ''))[:300]}")
     lines += [
@@ -264,8 +289,11 @@ async def _wait_back(api: WazuhAPI, ids: list[str], file: str, timeout: int, pre
     raise DeployError(f"manager did not come back as expected within {timeout}s ({last})")
 
 
-async def _run_tests(api: WazuhAPI, ids: list[str], tests: list[dict]) -> list[dict]:
+async def _run_tests(api: WazuhAPI, ids: list[str], tests: list[dict], replay: int = 1) -> list[dict]:
     """Run the draft's logtest samples and classify each one.
+
+    With ``replay`` > 1 (frequency / correlation rules) each sample is sent ``replay`` times through one logtest
+    session, so the rule sees the history it needs; ``events`` records after how many events it fired.
 
     ``passed``      the expected outcome was observed,
     ``failed``      the observed outcome differs from the expectation (the rule is wrong),
@@ -274,29 +302,41 @@ async def _run_tests(api: WazuhAPI, ids: list[str], tests: list[dict]) -> list[d
     """
     out = []
     for t in tests[:6]:
-        d = await api.logtest(t["event"], t.get("log_format", "syslog"), t.get("location", "daily-triage"))
-        rid = str(((d.get("output") or {}).get("rule") or {}).get("id", ""))
+        fmt, loc = t.get("log_format", "syslog"), t.get("location", "daily-triage")
+        if replay > 1 and hasattr(api, "logtest_replay"):
+            seq = await api.logtest_replay(t["event"], replay, fmt, loc)
+        else:
+            seq = [await api.logtest(t["event"], fmt, loc)]
+        rids = [str(((d.get("output") or {}).get("rule") or {}).get("id", "")) for d in seq]
+        hit = next((i for i, r in enumerate(rids, 1) if r in ids), 0)
+        rid = rids[hit - 1] if hit else next((r for r in reversed(rids) if r), "")
         want = t.get("expect", "match") == "match"
         # no rule at all matched the sample (not even a parent): the sample is not reproducible, not a rule failure
         if want and not rid:
             state = "inconclusive"
-        elif (rid in ids) == want:
+        elif bool(hit) == want:
             state = "passed"
         else:
             state = "failed"
         out.append({"expect": "match" if want else "no_match", "got_rule": rid, "state": state,
-                    "ok": state == "passed", "inconclusive": state == "inconclusive"})
+                    "ok": state == "passed", "inconclusive": state == "inconclusive",
+                    "events": hit or len(seq), "replayed": len(seq)})
     return out
 
 
 def _test_summary(res: list[dict]) -> str:
     sym = {"passed": "✓", "failed": "✗", "inconclusive": "?", "not_run": "–"}
-    return "; ".join(f"{r['expect']} → {r.get('got_rule') or '-'} {sym.get(r.get('state'), '?')}" for r in res)
+    def one(r: dict) -> str:
+        n = r.get("replayed", 1)
+        when = f" (event {r.get('events')}/{n})" if n > 1 else ""
+        return f"{r['expect']} → {r.get('got_rule') or '-'}{when} {sym.get(r.get('state'), '?')}"
+    return "; ".join(one(r) for r in res)
 
 
 async def apply(api: WazuhAPI, cfg: RuleDeployCfg, kid: str, xml: str, ids: list[str], title: str = "",
                 tests: list[dict] | None = None, remove: bool = False, replayable: bool = True,
-                allow_inconclusive: bool | None = None) -> list[dict]:
+                allow_inconclusive: bool | None = None, replay: int = 1,
+                on_step: Callable[[dict], None] | None = None) -> list[dict]:
     """Write (or remove) one draft's block, validate, restart, verify; roll back on any failure.
 
     Fail closed: a failed logtest expectation blocks deployment, and so does an inconclusive sample unless
@@ -312,6 +352,8 @@ async def apply(api: WazuhAPI, cfg: RuleDeployCfg, kid: str, xml: str, ids: list
         if state:
             d["state"] = state
         steps.append(d)
+        if on_step:
+            on_step(d)
 
     cluster = await api.cluster_running()
     step("cluster" if cluster else "standalone manager", True, "restart via /cluster/restart" if cluster else "")
@@ -376,7 +418,9 @@ async def apply(api: WazuhAPI, cfg: RuleDeployCfg, kid: str, xml: str, ids: list
                  "replayed through logtest — the rule is loaded; confirm it on the next real event",
                  state="not_run")
         elif tests and not remove:
-            res = await _run_tests(api, ids, tests)
+            if replay > 1:
+                step("logtest replay", True, f"stateful rule: each sample is sent {replay}× in one logtest session")
+            res = await _run_tests(api, ids, tests, replay)
             failed = [r for r in res if r["state"] == "failed"]
             unclear = [r for r in res if r["state"] == "inconclusive"]
             blocked = bool(failed) or (bool(unclear) and not allow_inconclusive)

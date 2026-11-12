@@ -45,6 +45,7 @@ otherwise                → single-environment mode from WAZUH_* variables
 | `SOURCE_URL` | project repository | Footer link (AGPL-3.0 §13 — point it at your fork if you modify the code). |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
 | `WDT_SCHEDULER` | `true` | `false` disables the in-process scheduler (manual runs and the UI still work). |
+| `JOB_DRAIN_SECONDS` | `400` | 0.11.1: seconds to wait at shutdown for a running background job (rule deployment); keep it below `terminationGracePeriodSeconds`. |
 | `WDT_DEMO` | `false` | Demo mode: synthetic data, `config/demo.yaml`, never in production. |
 | `WDT_CONFIG` | `config/environments.yaml` | Path to the YAML configuration. |
 

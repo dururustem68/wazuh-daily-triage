@@ -7,11 +7,12 @@ import re
 
 import yaml
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from .. import auditlog
 from ..i18n import t
+from ..jobs import Job, JobError
 from ..observability import REQUEST_ID, metrics
 from ..store import KNOWLEDGE_KINDS, now_iso
 from .common import AUTH_DISABLED, actor, ui_lang
@@ -21,6 +22,35 @@ from .common import runtime as _rt
 from .ui import USER_STATUSES
 
 router = APIRouter()
+
+
+# ----------------------------------------------------------------------------- background jobs
+# Operations that can take longer than a reverse proxy waits (oauth2-proxy: 30 s by default) run as jobs: the
+# request is answered with 202 and the page polls /jobs/<id>. API clients may pass ?wait=true for the old
+# synchronous answer — only safe when no proxy with a short timeout sits in between.
+def _wants_wait(request: Request) -> bool:
+    return request.query_params.get("wait", "").lower() in ("1", "true", "yes")
+
+
+async def _launch(request: Request, kind: str, env_id: str, key: str, fn) -> object:
+    rt = _rt(request)
+    job: Job = rt.jobs.start(kind, env_id, key, actor(request), fn)
+    if _wants_wait(request):
+        await rt.jobs.wait(job)
+        if job.state == "error":
+            raise HTTPException(job.status, job.error)
+        return job.result
+    return JSONResponse(job.public(), status_code=202 if job.state == "running" else 200)
+
+
+@router.get("/api/e/{env_id}/jobs/{job_id}")
+async def api_job(request: Request, env_id: str, job_id: str):
+    _env(request, env_id)
+    job = _rt(request).jobs.get(job_id)
+    # a job is visible to the user who started it (and to admins) — never across environments
+    if not job or job.env != env_id or (job.actor != actor(request) and _role(request) == "viewer"):
+        raise HTTPException(404, t(ui_lang(request), "job.gone"))
+    return job.public()
 
 
 class RunReq(BaseModel):
@@ -53,11 +83,14 @@ async def api_status(request: Request, env_id: str, run_id: str):
 @router.post("/api/e/{env_id}/check")
 async def api_check(request: Request, env_id: str):
     _env(request, env_id)
-    lang = ui_lang(request)
-    res = await _rt(request).check(env_id)
-    for r in res:
-        r["label"] = t(lang, f"chk.{r['key']}")
-    return {"results": res}
+    lang, rt = ui_lang(request), _rt(request)
+
+    async def work(job):
+        res = await rt.check(env_id)
+        for r in res:
+            r["label"] = t(lang, f"chk.{r['key']}")
+        return {"results": res}
+    return await _launch(request, "check", env_id, f"check:{env_id}", work)
 
 
 @router.post("/api/e/{env_id}/notify-test")
@@ -121,11 +154,18 @@ class IncidentReq(BaseModel):
 
 @router.post("/api/e/{env_id}/r/{run_id}/f/{fid}/incident")
 async def api_incident(request: Request, env_id: str, run_id: str, fid: str):
-    _env(request, env_id)
-    try:
-        return await _rt(request).incident_draft(env_id, run_id, fid, actor(request), ui_lang(request))
-    except KeyError as e:
-        raise HTTPException(404) from e
+    er = _env(request, env_id)
+    run = await er.repo.get_run(run_id)
+    if not run or not any(x.get("id") == fid for x in run.get("findings") or []):
+        raise HTTPException(404)
+    rt, who, lang = _rt(request), actor(request), ui_lang(request)
+
+    async def work(job):
+        try:
+            return await rt.incident_draft(env_id, run_id, fid, who, lang)
+        except KeyError as e:
+            raise JobError("not found", 404) from e
+    return await _launch(request, "incident", env_id, f"incident:{env_id}:{run_id}:{fid}", work)
 
 
 @router.post("/api/e/{env_id}/r/{run_id}/f/{fid}/incident/save")
@@ -267,10 +307,15 @@ async def api_rule_view(request: Request, env_id: str, kid: str):
 @router.get("/api/e/{env_id}/k/{kid}/whatif")
 async def api_rule_whatif(request: Request, env_id: str, kid: str, days: int = 14):
     _env(request, env_id)
+    rt = _rt(request)
     try:
-        return await _rt(request).rule_whatif(env_id, kid, days)
+        await rt._rule_entry(rt.envs[env_id], kid)
     except KeyError as e:
         raise HTTPException(404) from e
+
+    async def work(job):
+        return await rt.rule_whatif(env_id, kid, days)
+    return await _launch(request, "whatif", env_id, f"whatif:{env_id}:{kid}:{days}", work)
 
 
 class DeployReq(BaseModel):
@@ -278,9 +323,12 @@ class DeployReq(BaseModel):
 
 
 async def _deploy(request: Request, env_id: str, kid: str, confirm: str, remove: bool):
+    """Checks run now (403 / 400 / 404 / 409 at once); the deployment itself — manager restart, verification,
+    logtest, rollback — runs as a background job that the page polls, so no proxy timeout can cut it off."""
     _env(request, env_id)
+    rt = _rt(request)
     try:
-        rec = await _rt(request).rule_deploy(env_id, kid, actor(request), confirm, remove=remove)
+        prep = await rt.rule_deploy_prepare(env_id, kid, confirm, remove=remove)
     except KeyError as e:
         raise HTTPException(404) from e
     except PermissionError as e:
@@ -290,14 +338,34 @@ async def _deploy(request: Request, env_id: str, kid: str, confirm: str, remove:
     except RuntimeError as e:
         raise HTTPException(409, str(e)) from e
     action = "rule.undeploy" if remove else "rule.deploy"
-    metrics.inc("wdt_rule_deploy_total", state=str(rec.get("state")), action=action.split(".")[-1])
-    auditlog.record(action, actor=actor(request), role=_role(request) or ("proxy" if AUTH_DISABLED else "ui"),
-                    env=env_id, target=kid,
-                    result=f"{rec.get('state')} (rollback: {rec.get('rollback_state', 'n/a')})",
-                    request_id=REQUEST_ID.get(), method="POST", path_=request.url.path,
-                    detail={"ids": rec.get("ids"), "file": rec.get("file"), "risky": rec.get("risky"),
-                            "error": rec.get("error")})
-    return rec
+    who, role_ = actor(request), _role(request) or ("proxy" if AUTH_DISABLED else "ui")
+    rid, path = REQUEST_ID.get(), request.url.path
+
+    async def work(job):
+        try:
+            rec = await rt.rule_deploy(env_id, kid, who, confirm, remove=remove, prepared=prep,
+                                       on_step=job.progress.append)
+        except KeyError as e:
+            raise JobError("not found", 404) from e
+        except PermissionError as e:
+            raise JobError(str(e), 403) from e
+        except ValueError as e:
+            raise JobError(str(e), 400) from e
+        except RuntimeError as e:
+            raise JobError(str(e), 409) from e
+        except BaseException as e:   # interrupted (shutdown) or unexpected: still leave an audit record
+            auditlog.record(action, actor=who, role=role_, env=env_id, target=kid,
+                            result=f"interrupted ({type(e).__name__})", request_id=rid, method="POST", path_=path,
+                            detail={"job": job.id, "error": str(e)[:300]})
+            raise
+        metrics.inc("wdt_rule_deploy_total", state=str(rec.get("state")), action=action.split(".")[-1])
+        auditlog.record(action, actor=who, role=role_, env=env_id, target=kid,
+                        result=f"{rec.get('state')} (rollback: {rec.get('rollback_state', 'n/a')})",
+                        request_id=rid, method="POST", path_=path,
+                        detail={"ids": rec.get("ids"), "file": rec.get("file"), "risky": rec.get("risky"),
+                                "error": rec.get("error"), "job": job.id})
+        return rec
+    return await _launch(request, action.split(".")[-1], env_id, f"deploy:{env_id}:{kid}", work)
 
 
 @router.post("/api/e/{env_id}/k/{kid}/deploy")

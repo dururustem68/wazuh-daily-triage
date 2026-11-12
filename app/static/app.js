@@ -7,14 +7,46 @@ let T = {};
 try { T = JSON.parse(document.getElementById("i18n").textContent); } catch (e) { T = {}; }
 const tr = (k, n) => (T[k] || k).replace("{n}", n);
 
-async function api(url, method = "POST", body) {
-  const r = await fetch(url, {
-    method, headers: { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body), credentials: "same-origin",
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`);
-  return data;
+// Every JSON call goes through here. Long operations (rule deployment, connection test, incident draft,
+// what-if) answer 202 with a background job; api() then polls the job until it ends, so no reverse-proxy
+// timeout can cut the operation off. onProgress receives the job (steps so far, elapsed seconds).
+async function api(url, method = "POST", body, onProgress) {
+  let r;
+  try {
+    r = await fetch(url, {
+      method, headers: { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body), credentials: "same-origin",
+    });
+  } catch (e) { throw new Error(tr("job_lost")); }
+  const data = await r.json().catch(() => null);
+  if (!r.ok) {
+    // a gateway error page (HTML) from oauth2-proxy / ingress / Kong — not an answer from the application
+    if (!data && [502, 503, 504].includes(r.status)) throw new Error(tr("job_proxy", r.status));
+    throw new Error((data && (data.detail || data.error)) || `HTTP ${r.status}`);
+  }
+  if (r.status === 202 && data && data.job && data.poll) return followJob(data, onProgress);
+  return data || {};
+}
+
+async function followJob(job, onProgress) {
+  const t0 = Date.now();
+  let misses = 0;
+  for (;;) {
+    if (onProgress) onProgress(job, Math.round((Date.now() - t0) / 1000));
+    if (job.state === "done") return job.result;
+    if (job.state === "error") throw new Error(job.error || tr("error"));
+    await new Promise(res => setTimeout(res, 1500));
+    try {
+      const r = await fetch(job.poll, { credentials: "same-origin" });
+      if (r.status === 404) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || tr("job_lost")); }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      job = await r.json(); misses = 0;
+    } catch (e) {
+      // the job keeps running on the server: ride out restarts of the proxy or short network drops
+      if (/^HTTP |Failed|NetworkError|fetch/i.test(e.message) && ++misses < 40) continue;
+      throw e.message.startsWith("HTTP ") ? new Error(tr("job_lost")) : e;
+    }
+  }
 }
 
 function poll(env, runId, el, reload) {
@@ -163,6 +195,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const stepsHtml = rec => `<ul class="steps">${(rec.steps || []).map(s =>
       `<li class="${s.ok ? "ok" : "bad"}">${s.ok ? "✓" : "✗"} ${escapeHtml(s.step)} ${escapeHtml(s.detail || "")}</li>`).join("")}</ul>`
       + (rec.error ? `<p class="bad">${escapeHtml(rec.error)}</p>` : "");
+    const progress = (job, secs) => {
+      if (job.state !== "running") return;
+      show(`<p>⏳ ${escapeHtml(tr("rd_working"))} <span class="muted">${escapeHtml(tr("job_elapsed", secs))}</span></p>`
+        + stepsHtml({ steps: job.progress }));
+    };
     const cmds = card.querySelector("[data-cmds]");
     if (cmds) cmds.addEventListener("click", async () => {
       cmds.disabled = true;
@@ -249,7 +286,7 @@ document.addEventListener("DOMContentLoaded", () => {
       card.querySelectorAll("button").forEach(b => b.disabled = true);
       show(`<p>⏳ ${escapeHtml(tr("rd_working"))}</p>`);
       try {
-        const rec = await api(url + "/deploy", "POST", { confirm: confirmText });
+        const rec = await api(url + "/deploy", "POST", { confirm: confirmText }, progress);
         show(stepsHtml(rec));
         setTimeout(() => location.reload(), rec.state === "deployed" ? 2500 : 8000);
       } catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); card.querySelectorAll("button").forEach(b => b.disabled = false); }
@@ -261,9 +298,18 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!confirm(tr("rd_unconfirm").replace("{file}", v.file))) return;
       card.querySelectorAll("button").forEach(b => b.disabled = true);
       show(`<p>⏳ ${escapeHtml(tr("rd_working"))}</p>`);
-      try { const rec = await api(url + "/undeploy", "POST"); show(stepsHtml(rec)); setTimeout(() => location.reload(), 2500); }
+      try { const rec = await api(url + "/undeploy", "POST", undefined, progress); show(stepsHtml(rec)); setTimeout(() => location.reload(), 2500); }
       catch (e) { show(`<p class="bad">${escapeHtml(e.message)}</p>`); card.querySelectorAll("button").forEach(b => b.disabled = false); }
     });
+
+    if (card.querySelector("[data-deploying]")) {
+      const watch = async () => {
+        try { const v = await api(url + "/rule", "GET"); if (!v.deploy || v.deploy.state !== "running") { location.reload(); return; } }
+        catch (e) { /* keep watching */ }
+        setTimeout(watch, 3000);
+      };
+      setTimeout(watch, 3000);
+    }
 
     const del = card.querySelector("[data-del]");
     if (del) del.addEventListener("click", async () => {

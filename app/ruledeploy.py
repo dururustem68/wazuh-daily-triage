@@ -59,36 +59,62 @@ class RuleDeployMixin:
         d = await self._rule_entry(rt, kid)
         return await simulate(rt.env, rt.ix, rulemod.extract_xml(d), days=max(1, min(days, 30)))
 
-    async def rule_deploy(self, env_id: str, kid: str, actor: str, confirm: str = "", remove: bool = False) -> dict:
+    async def rule_deploy_prepare(self, env_id: str, kid: str, confirm: str = "", remove: bool = False) -> dict:
+        """Every check that can refuse a deployment, before anything runs: the request is answered with
+        403 / 400 / 409 at once instead of from a background job. Nothing is written here."""
         rt = self.envs[env_id]
-        api = self._deploy_api(rt)
-        if api is None:
+        if not self.deploy_ready(rt.env):
             raise PermissionError("rule deployment is off for this environment "
                                   "(rule_deploy.enabled with a separate username/password)")
+        if rt.deploy_lock.locked():
+            raise RuntimeError("another deployment is in progress")
+        d = await self._rule_entry(rt, kid)
+        xml = rulemod.extract_xml(d)
+        an = await rulemod.analyse(xml, rt.env.rule_deploy, rt.api, rt.env.high_level)
+        ids = an["ids"]
+        if not remove:
+            if not an["ok"]:
+                raise ValueError("; ".join(an["errors"]))
+            if an["risky"] and confirm.replace(" ", "") != ",".join(ids):
+                raise PermissionError("this draft silences or lowers alerts; type the rule id(s) to confirm: "
+                                      + ",".join(ids))
+            # fail closed: policy may require replayable samples before anything is written to the manager
+            if rt.env.rule_deploy.require_tests and an.get("replayable", True) and not d.get("tests"):
+                raise ValueError("deployment policy requires logtest samples (rule_deploy.require_tests) — "
+                                 "add two-way test events to the draft or provide the commands manually; "
+                                 "see docs/rule-deployment.md")
+        return {"xml": xml, "analysis": an, "confirm": confirm}
+
+    async def rule_deploy(self, env_id: str, kid: str, actor: str, confirm: str = "", remove: bool = False,
+                          on_step=None, prepared: dict | None = None) -> dict:
+        """Deploy (or remove) a rule draft and return the deployment record.
+
+        Long-running (manager restart + verification): the web API runs it as a background job
+        (app/jobs.py) and the page polls; ``on_step`` receives each step as it happens.
+        """
+        rt = self.envs[env_id]
+        prep = prepared or await self.rule_deploy_prepare(env_id, kid, confirm, remove)
+        api = self._deploy_api(rt)
+        if api is None:
+            raise PermissionError("rule deployment is off for this environment")
         if rt.deploy_lock.locked():
             raise RuntimeError("another deployment is in progress")
         async with rt.deploy_lock:
             d = await self._rule_entry(rt, kid)
             xml = rulemod.extract_xml(d)
-            an = await rulemod.analyse(xml, rt.env.rule_deploy, rt.api, rt.env.high_level)
+            if xml != prep["xml"]:   # edited between the check and the start: check again
+                prep = await self.rule_deploy_prepare_locked(rt, d, xml, prep["confirm"], remove)
+            an = prep["analysis"]
             ids = an["ids"]
-            if not remove:
-                if not an["ok"]:
-                    raise ValueError("; ".join(an["errors"]))
-                if an["risky"] and confirm.replace(" ", "") != ",".join(ids):
-                    raise PermissionError("this draft silences or lowers alerts; type the rule id(s) to confirm: "
-                                          + ",".join(ids))
-                # fail closed: policy may require replayable samples before anything is written to the manager
-                if rt.env.rule_deploy.require_tests and an.get("replayable", True) and not d.get("tests"):
-                    raise ValueError("deployment policy requires logtest samples (rule_deploy.require_tests) — "
-                                     "add two-way test events to the draft or provide the commands manually; "
-                                     "see docs/rule-deployment.md")
             rec = {"state": "running", "action": "remove" if remove else "deploy", "at": now_iso(), "by": actor,
                    "file": rt.env.rule_deploy.file, "ids": ids, "risky": an["risky"]}
+            # persisted before anything is written: a restart in the middle leaves a visible "interrupted" record
+            await self._save_deploy(rt, kid, rec, previous=True)
             try:
                 rec["steps"] = await rulemod.apply(api, rt.env.rule_deploy, kid, xml, ids, d.get("title", ""),
                                                    d.get("tests"), remove=remove,
-                                                   replayable=an.get("replayable", True))
+                                                   replayable=an.get("replayable", True),
+                                                   replay=an.get("replay", 1), on_step=on_step)
                 rec["state"] = "removed" if remove else "deployed"
                 rec["rollback_state"] = "not_needed"
             except rulemod.DeployError as e:
@@ -101,24 +127,68 @@ class RuleDeployMixin:
                 rec.update(state="failed", error=f"{e}"[:500], rollback_state="not_needed",
                            steps=[{"step": "connect as " + (rt.env.rule_deploy.username or "?"), "ok": False,
                                    "detail": "nothing was changed"}])
+            except BaseException as e:   # cancelled at shutdown or an unexpected error: never leave "running"
+                rec.update(state="interrupted", error=f"{type(e).__name__}: {e}"[:500], rollback_state="unknown")
+                log.critical("%s: deployment of rule %s was interrupted (%s) — check %s on the manager",
+                             env_id, kid, type(e).__name__, rt.env.rule_deploy.file)
+                await self._save_deploy(rt, kid, rec)
+                raise
             finally:
                 if api is not rt.api:
                     await api.close()
-            async with self.run_lock(f"k:{kid}"):
-                d = await self._rule_entry(rt, kid)
-                hist = (d.get("deploy_history") or [])[-9:]
-                if d.get("deploy"):
-                    hist.append({k: v for k, v in d["deploy"].items() if k != "steps"})
-                patch = {"deploy": rec, "deploy_history": hist, "updated_at": now_iso()}
-                if rec["state"] == "deployed":
-                    patch["status"] = "active"
-                elif rec["state"] == "removed":
-                    patch["status"] = "closed"
-                d.update(patch)
-                await rt.store.put("knowledge", kid, d)
+            rec["finished_at"] = now_iso()
+            d = await self._save_deploy(rt, kid, rec)
             log.info("rule %s %s by %s: %s", kid, rec["action"], actor, rec["state"])
             await self._notify_rule(rt, d, rec, transport=self.notify_transport)
             return rec
+
+    async def rule_deploy_prepare_locked(self, rt: EnvRuntime, d: dict, xml: str, confirm: str,
+                                         remove: bool) -> dict:
+        an = await rulemod.analyse(xml, rt.env.rule_deploy, rt.api, rt.env.high_level)
+        if not remove:
+            if not an["ok"]:
+                raise ValueError("; ".join(an["errors"]))
+            if an["risky"] and confirm.replace(" ", "") != ",".join(an["ids"]):
+                raise PermissionError("the draft changed and now silences or lowers alerts; confirm again")
+        return {"xml": xml, "analysis": an, "confirm": confirm}
+
+    async def _save_deploy(self, rt: EnvRuntime, kid: str, rec: dict, previous: bool = False) -> dict:
+        """Store the deployment record; ``previous`` moves the last record into the history first."""
+        async with self.run_lock(f"k:{kid}"):
+            d = await self._rule_entry(rt, kid)
+            patch: dict = {"deploy": dict(rec), "updated_at": now_iso()}
+            if previous:
+                hist = (d.get("deploy_history") or [])[-9:]
+                if d.get("deploy"):
+                    hist.append({k: v for k, v in d["deploy"].items() if k != "steps"})
+                patch["deploy_history"] = hist
+            if rec["state"] == "deployed":
+                patch["status"] = "active"
+            elif rec["state"] == "removed":
+                patch["status"] = "closed"
+            d.update(patch)
+            await rt.store.put("knowledge", kid, d)
+            return d
+
+    async def recover_interrupted_deploys(self) -> None:
+        """At start-up: a deployment record still ``running`` means the process stopped in the middle."""
+        for rt in self.envs.values():
+            try:
+                rows = await rt.repo.list_knowledge(kinds=["rule_draft"], size=500)
+            except Exception as e:  # noqa: BLE001
+                log.warning("%s: could not check for interrupted deployments: %s", rt.env.id, e)
+                continue
+            for d in rows:
+                dep = d.get("deploy") or {}
+                if dep.get("state") != "running":
+                    continue
+                dep.update(state="interrupted", rollback_state="unknown", finished_at=now_iso(),
+                           error="the application stopped during this deployment — check "
+                                 f"{dep.get('file') or rt.env.rule_deploy.file} on the manager, then deploy "
+                                 "again or remove the draft")
+                await self._save_deploy(rt, d["id"], dep)
+                log.critical("%s: deployment of rule draft %s was interrupted by a restart — check %s on the "
+                             "manager", rt.env.id, d["id"], dep.get("file"))
 
     # ------------------------------------------------------------ live verification / promotion
     async def verify_rules(self, env_id: str, kid: str | None = None) -> list[dict]:

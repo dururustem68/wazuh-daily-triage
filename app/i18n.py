@@ -1354,6 +1354,10 @@ from .i18n_v11 import EXTRA as _V11  # noqa: E402 - 0.11 messages (dashboard, AT
 
 for _lang, _msgs in _V11.items():
     CATALOG[_lang].update(_msgs)
+from .i18n_v111 import EXTRA as _V111  # noqa: E402 - 0.11.1 messages (background jobs)
+
+for _lang, _msgs in _V111.items():
+    CATALOG[_lang].update(_msgs)
 LANG_NAMES = {"en": "English", "tr": "Türkçe", "es": "Español", "de": "Deutsch"}
 OUTPUT_LANGUAGE = {"en": "English", "tr": "Turkish", "es": "Spanish", "de": "German"}
 

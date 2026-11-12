@@ -27,10 +27,10 @@ helm repo add wazuh-daily-triage https://dururustem68.github.io/wazuh-daily-tria
 helm repo update
 helm install wazuh-daily-triage wazuh-daily-triage/wazuh-daily-triage \
   --namespace wazuh-daily-triage --create-namespace \
-  --version 0.3.0 -f my-values.yaml
+  --version 0.3.1 -f my-values.yaml
 ```
 
-Chart 0.3.0 deploys application 0.11.0. The values that matter in production:
+Chart 0.3.1 deploys application 0.11.1. The values that matter in production:
 
 | Value | Set it to |
 |---|---|
@@ -126,7 +126,7 @@ helm -n wazuh-daily-triage rollback wazuh-daily-triage <revision>
 
 Take a backup first and read the version notes: [Upgrade](Upgrade).
 
-*Applies to 0.11.0, chart 0.3.0 · reviewed 2026-11-11*
+*Applies to 0.11.1, chart 0.3.1 · reviewed 2026-11-12*
 
 ---
 

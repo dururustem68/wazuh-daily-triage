@@ -70,6 +70,19 @@ you took before the upgrade.
 
 ## Version notes
 
+### 0.11.1
+
+- **Long operations run in the background.** Rule deploy and remove, the connection test, incident drafts and
+  *What would it do?* answer `202` with a job; the page polls `GET /api/e/<env>/jobs/<id>` and shows deployment
+  steps live. No proxy time-out (oauth2-proxy's 30 s) can cut them off any more. Scripts that called these routes
+  and expected the result in the response add `?wait=true`.
+- **Stateful rules are logtested correctly.** Frequency / `if_matched_*` rules used to fail the logtest step and
+  roll back every time (one event only reaches the parent). Samples are now replayed in one logtest session.
+- **Interrupted deployments are visible.** A restart in the middle of a deployment leaves *Interrupted — check
+  the manager* instead of a record stuck in *Deploying*.
+- **Kubernetes:** `terminationGracePeriodSeconds: 420` (base manifest and chart value) so a running deployment
+  can finish during a rollout; `JOB_DRAIN_SECONDS` (default 400) is how long the application waits.
+
 ### 0.11.0
 
 - **SSO roles (action needed behind an SSO proxy).** Before 0.11 every SSO user was an administrator. Now the
@@ -113,7 +126,7 @@ Older versions: the changelog.
 
 See also: [Backup](Backup) · [Compatibility](Compatibility) · [Troubleshooting](Troubleshooting)
 
-*Applies to 0.11.0 · reviewed 2026-11-11*
+*Applies to 0.11.1 · reviewed 2026-11-12*
 
 ---
 

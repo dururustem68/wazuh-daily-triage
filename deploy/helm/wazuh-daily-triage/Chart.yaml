@@ -2,8 +2,8 @@ apiVersion: v2
 name: wazuh-daily-triage
 description: AI-assisted daily review for the Wazuh SIEM
 type: application
-version: 0.3.0
-appVersion: "0.11.0"
+version: 0.3.1
+appVersion: "0.11.1"
 kubeVersion: ">=1.25-0"
 home: https://github.com/dururustem68/wazuh-daily-triage
 icon: https://raw.githubusercontent.com/dururustem68/wazuh-daily-triage/main/app/static/icon.svg

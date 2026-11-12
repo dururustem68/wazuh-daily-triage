@@ -36,7 +36,15 @@ Deployment is **off by default**. With it off the application stays fully read-o
    * `not_run` — manager-internal events (rootcheck, FIM, SCA, vulnerability) that logtest cannot replay; the rule
      is loaded and must be confirmed on the next real event.
 
+   Stateful rules (`frequency`/`timeframe`, `if_matched_sid`, `if_matched_group`) cannot fire on a single event,
+   so their samples are replayed `frequency + 2` times (at least 2, at most 64) in **one** logtest session (the
+   `token` of `PUT /logtest`); the step records the event the rule fired on (`event 10/12`).
+
    With `require_tests: true` a draft without samples is refused before anything is written.
+
+   Since 0.11.1 steps 2–8 run as a **background job**: the request is answered with `202` and the page polls
+   `GET /api/e/<env>/jobs/<id>`, so a reverse proxy's time-out (oauth2-proxy: 30 s) cannot cut the deployment off.
+   The record is stored as `running` first; a restart in the middle marks it `interrupted` at start-up.
 8. **Records** who did it (the SSO user from `X-authentik-username`, `X-Forwarded-User`, `Remote-User` or
    `X-Auth-Request-User` when `AUTH_DISABLED=true` behind a proxy — configurable with `USER_HEADER`),
    when, every step with its state, the **rollback outcome** (not needed / done / **failed**) and keeps the last

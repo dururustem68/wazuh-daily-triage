@@ -5,6 +5,34 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.1] — 2026-11-12
+
+### Fixed
+- **Rule deployment behind an SSO proxy returned HTTP 502** although the deployment went on: a deployment
+  (manager restart, verification, logtest) takes about a minute, oauth2-proxy waits 30 s. Long operations now run
+  as **background jobs** (`app/jobs.py`): rule deploy / remove, connection test, incident draft and *What would it
+  do?* answer `202 {"job", "poll"}` and the page polls `GET /api/e/<env>/jobs/<id>`. The checks that can refuse a
+  deployment still answer immediately (403 / 400 / 404 / 409). `?wait=true` keeps the synchronous answer for API
+  clients. Double clicks reuse the running job.
+- **Frequency and correlation rules always failed the logtest step** and were rolled back: one logtest event can
+  only reach the parent rule. Samples of rules with `frequency`, `if_matched_sid` or `if_matched_group` are now
+  replayed `frequency + 2` times (at least twice, at most 64) in one logtest session (token); the step shows the
+  event the rule fired on. The manual commands say how many times to paste the sample.
+
+### Added
+- Live deployment progress: each step appears as it happens; elapsed time is shown.
+- The deployment record is stored as *running* before anything is written; a restart in the middle marks it
+  **interrupted** at start-up (critical log line) instead of leaving it stuck. A job that is cancelled at shutdown
+  is audited as `interrupted`.
+- Graceful shutdown waits for running jobs (`JOB_DRAIN_SECONDS`, default 400); `terminationGracePeriodSeconds: 420`
+  in the base manifest and the chart (`terminationGracePeriodSeconds` value).
+- The browser explains a gateway error page (502 / 503 / 504 without JSON) as a proxy time-out — the operation may
+  still be running — instead of `HTTP 502`; job polling rides out short network or proxy interruptions.
+
+### Changed
+- `POST …/deploy`, `…/undeploy`, `…/check`, `…/f/<id>/incident` and `GET …/whatif` return `202` with a job.
+  Chart 0.3.1.
+
 ## [0.11.0] — 2026-11-11
 
 ### Added

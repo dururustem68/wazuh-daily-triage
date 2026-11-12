@@ -72,7 +72,22 @@ bölümü.
 4. Manager'ı ya da cluster'ı yeniden başlatır. Olay işleme yaklaşık 20–60 saniye durur.
 5. `wazuh-analysisd` çalışana ve yeni kural ID'leri yüklenene kadar bekler.
 6. Taslağın logtest örneklerini çalıştırır: en az bir eşleşmesi gereken ve bir eşleşmemesi gereken örnek.
+   Durum tutan kurallarda (`frequency`/`timeframe`, `if_matched_sid`, `if_matched_group`) her örnek **tek** bir
+   logtest oturumunda `frequency + 2` kez tekrar gönderilir; böylece kural ihtiyaç duyduğu geçmişi görür. Adım,
+   kuralın kaçıncı olayda tetiklendiğini gösterir; örn. `match → 119250 (event 10/12) ✓`.
 7. Kimin yaptığını, her adımı ve geri alma sonucunu bilgi tabanı kaydına ve denetim izine yazar.
+
+### Arka planda çalışır (0.11.1)
+
+Bir dağıtım yaklaşık bir dakika sürer (yeniden başlatma, doğrulama, logtest) — bu, pek çok ters vekilin
+beklediğinden uzundur (oauth2-proxy: 30 sn). Bu yüzden düğme bir **arka plan işi** başlatır: dağıtımı
+reddedebilecek denetimler (dağıtım kapalı, başka bir dağıtım sürüyor, taslakta hata, yazılı onay eksik, örnek
+eksik) hemen yanıt verir; sonrası sunucuda çalışır ve sayfa her adımı gerçekleştiği anda gösterir. Sekmeyi
+kapatmak ya da vekil zaman aşımı işi durdurmaz; bilgi tabanı sayfası yeniden açıldığında *Uygulanıyor* görünür ve iş
+bitince sayfa yenilenir. Kayıt, dosyaya bir şey yazılmadan önce *running* olarak saklanır; ortada bir pod yeniden
+başlarsa sessizlik yerine **Yarıda kaldı — yöneticiyi kontrol edin** kaydı (ve kritik log satırı) kalır.
+Kapanışta uygulama süren dağıtımı bekler (`JOB_DRAIN_SECONDS`, varsayılan 400; manifestlerde
+`terminationGracePeriodSeconds: 420`).
 
 ### Ne zaman geri alır
 
@@ -81,6 +96,7 @@ bölümü.
 | Doğrulama başarısız | önceki dosya geri yüklenir, yeniden başlatma yok |
 | Manager geri gelmiyor ya da kural ID'leri yüklenmemiş | geri alınır |
 | Bir örnek başka kuralla eşleşiyor ya da eşleşmesi beklenirken hiçbiriyle eşleşmiyor | geri alınır |
+| Frekans kuralı, örnek yalnız üst kuralla eşleşiyor (0.11.1 öncesi) | geri alınır — tek logtest olayı frekans kuralını asla tetikleyemez; 0.11.1 örneği tekrar oynatır |
 | Bir örnek hiçbir kuralla eşleşmiyor (*inconclusive*) | geri alınır (`allow_inconclusive: true` değilse) |
 | Taslağın örneği yok ve `require_tests: true` | hiçbir şey yazılmadan reddedilir |
 | Manager içi olaylar (rootcheck, FIM, SCA, zafiyet) | dağıtılır, logtest *çalıştırılmadı*; bir sonraki gerçek olayda doğrulayın |
@@ -128,10 +144,12 @@ yoldan. Uygulamanın yazdığı her şey o tek dosyadadır; manager üzerinde
 | Denetim üst kuralın bilinmediğini söylüyor | yükleme sırası: Wazuh `etc/rules` dizinini alfabetik yükler; dosya, üst kuralı taşıyan dosyadan sonra sıralanmalıdır. İleti `zz_wdt_rules.xml` gibi bir ad önerir |
 | Taslak ID'si yüzünden reddediliyor | `id_min`–`id_max` aralığının dışında |
 | Pod yeniden başlayınca kural kayboluyor | manager'daki `etc/rules` kalıcı bir birimde değil |
+| **Approve and deploy** HTTP 502/504 veriyor (0.11.1 öncesi) | vekil beklemeyi bıraktı, dağıtım sürdü. Sonuç için denetim izine (`rule.deploy`) bakın. 0.11.1 işi arka planda çalıştırır |
+| *Yarıda kaldı — yöneticiyi kontrol edin* | uygulama dağıtım sırasında yeniden başladı: manager'da kural dosyasını `grep -n wdt:begin` ile kontrol edin, sonra yeniden dağıtın ya da taslağı kaldırın |
 
 Devamı: [Sorun giderme](Troubleshooting-TR).
 
-*0.11.0 için geçerlidir · gözden geçirme: 2026-11-11*
+*0.11.1 için geçerlidir · gözden geçirme: 2026-11-12*
 
 ---
 

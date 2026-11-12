@@ -122,6 +122,29 @@ class WazuhAPI:
                 pass
         return data
 
+    async def logtest_replay(self, event: str, times: int, log_format: str = "syslog",
+                             location: str = "daily-triage") -> list[dict]:
+        """Send the same event ``times`` times through ONE logtest session (token), so frequency and
+        correlation rules (``frequency``/``timeframe``, ``if_matched_sid``) see the history they need."""
+        out: list[dict] = []
+        tok = None
+        try:
+            for _ in range(max(1, times)):
+                body = {"event": event, "log_format": log_format, "location": location}
+                if tok:
+                    body["token"] = tok
+                r = await self.request("PUT", "/logtest", json=body)
+                data = r.get("data", {})
+                tok = data.get("token") or tok
+                out.append(data)
+        finally:
+            if tok:
+                try:
+                    await self.request("DELETE", f"/logtest/sessions/{tok}")
+                except WazuhAPIError:
+                    pass
+        return out
+
     # --- rule deployment (separate, write-enabled user; see app/rules.py) ----
     async def cluster_running(self) -> bool:
         try:

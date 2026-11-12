@@ -74,8 +74,9 @@
   <textarea class="kraw" hidden>{{ r.body or '' }}</textarea>
   {% if r.rule_ids %}<p class="small muted">{{ _('rep.rules') }}: {{ r.rule_ids|join(', ') }}</p>{% endif %}
   {% if r.kind == 'rule_draft' %}
-    {% if r.deploy %}<p class="small"><span class="pill {{ {'deployed':'green','failed':'red','running':'amber'}.get(r.deploy.state, 'gray') }}">{{ _('rd.state.' ~ r.deploy.state) }}</span>
+    {% if r.deploy %}<p class="small"><span class="pill {{ {'deployed':'green','failed':'red','interrupted':'red','running':'amber'}.get(r.deploy.state, 'gray') }}">{{ _('rd.state.' ~ r.deploy.state) }}</span>
       {{ r.deploy.by }} · {{ r.deploy.at|ts }} · <code>{{ r.deploy.file }}</code>{% if r.deploy.error %} — {{ r.deploy.error }}{% endif %}</p>
+      {% if r.deploy.state == 'running' %}<p class="small muted" data-deploying>⏳ {{ _('rd.running_note') }}</p>{% endif %}
       {% if r.deploy.steps %}<details><summary class="small">{{ _('rd.steps') }}</summary><ul class="steps small">
         {% for st in r.deploy.steps %}<li class="{{ 'ok' if st.ok else 'bad' }}">{{ '✓' if st.ok else '✗' }} {{ st.step }} {{ st.detail }}</li>{% endfor %}
       </ul></details>{% endif %}{% endif %}

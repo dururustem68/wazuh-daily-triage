@@ -168,6 +168,10 @@ networkPolicy:
   wazuhNamespace: wazuh
   wazuhCIDR: ""          # set to the indexer/API address when Wazuh is outside the cluster
 
+# 0.11.1: a running rule deployment (restart + verification, rollback on failure) may finish before the pod stops;
+# idle pods stop at once. Keep it above JOB_DRAIN_SECONDS (default 400).
+terminationGracePeriodSeconds: 420
+
 podAnnotations: {}
 nodeSelector: {}
 tolerations: []

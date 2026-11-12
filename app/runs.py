@@ -68,6 +68,7 @@ class RunMixin:
                     await rt.repo.save_run(r)
             except Exception as e:  # noqa: BLE001
                 log.warning("%s: could not check for interrupted runs: %s", rt.env.id, e)
+        await self.recover_interrupted_deploys()
 
     def _window(self, env: Environment, last: dict | None, to: datetime, hours: int | None):
         """Start where the last successful run ended, so consecutive runs cover the gap exactly once.

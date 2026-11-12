@@ -64,8 +64,23 @@ Off by default. Prerequisites: [Security checklist](Security-Checklist), section
    happens**.
 4. Restarts the manager, or the cluster. Event processing pauses for roughly 20–60 seconds.
 5. Waits until `wazuh-analysisd` runs and the new rule IDs are loaded.
-6. Runs the draft's logtest samples: at least one that must match and one that must not.
+6. Runs the draft's logtest samples: at least one that must match and one that must not. For a stateful rule
+   (`frequency`/`timeframe`, `if_matched_sid`, `if_matched_group`) each sample is replayed in **one** logtest
+   session — `frequency + 2` times — so the rule sees the history it needs; the step shows the event it fired on,
+   e.g. `match → 119250 (event 10/12) ✓`.
 7. Records who did it, every step, and the rollback outcome on the knowledge entry and in the audit trail.
+
+### It runs in the background (0.11.1)
+
+A deployment takes about a minute (restart, verification, logtest) — longer than many reverse proxies wait
+(oauth2-proxy: 30 s). The button therefore starts a **background job**: the checks that can refuse the
+deployment (deployment off, another one running, errors in the draft, missing typed confirmation, missing samples)
+answer at once; everything after that runs on the server while the page shows each step as it happens. Closing the
+tab or a proxy time-out does not stop it; reopening the knowledge page shows *Deploying* and refreshes when it is
+done. The record is stored as *running* before anything is written, so a pod restart in the middle leaves an
+**Interrupted — check the manager** record (and a critical log line) instead of silence. On shutdown the
+application waits for a running deployment (`JOB_DRAIN_SECONDS`, default 400; the manifests set
+`terminationGracePeriodSeconds: 420`).
 
 ### When it rolls back
 
@@ -74,6 +89,7 @@ Off by default. Prerequisites: [Security checklist](Security-Checklist), section
 | Validation fails | previous file restored, no restart |
 | Manager does not come back, or the rule IDs are not loaded | rolled back |
 | A sample matches a different rule, or none when one was expected | rolled back |
+| Frequency rule, sample matches only the parent (before 0.11.1) | rolled back — one logtest event can never fire a frequency rule; 0.11.1 replays the sample |
 | A sample matches no rule at all (*inconclusive*) | rolled back, unless `allow_inconclusive: true` |
 | Draft has no samples and `require_tests: true` | refused before anything is written |
 | Manager-internal events (rootcheck, FIM, SCA, vulnerability) | deployed, logtest *not run*; confirm on the next real event |
@@ -121,10 +137,12 @@ deployment. Everything the application ever wrote is in the one file; on the man
 | The check says the parent rule is unknown | load order: Wazuh loads `etc/rules` alphabetically; the file must sort after the file holding the parent. The message suggests a name such as `zz_wdt_rules.xml` |
 | The draft is refused for its ID | it is outside `id_min`–`id_max` |
 | The rule is gone after a pod restart | `etc/rules` on the manager is not on a persistent volume |
+| HTTP 502/504 on **Approve and deploy** (before 0.11.1) | the proxy stopped waiting; the deployment went on. Check the audit trail (`rule.deploy`) for the outcome. 0.11.1 runs it in the background |
+| *Interrupted — check the manager* | the application restarted during a deployment: `grep -n wdt:begin` the rule file on the manager, then deploy again or remove the draft |
 
 More: [Troubleshooting](Troubleshooting).
 
-*Applies to 0.11.0 · reviewed 2026-11-11*
+*Applies to 0.11.1 · reviewed 2026-11-12*
 
 ---
 

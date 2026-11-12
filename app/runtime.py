@@ -31,6 +31,7 @@ from .backup import BackupMixin
 from .config import Environment, LLMConfig, Settings
 from .diagnostics import DiagnosticsMixin
 from .incident_ops import IncidentMixin
+from .jobs import Jobs
 from .knowledgeio import KnowledgeIOMixin
 from .llm.base import make_llm
 from .reporting import _compact, _fmt_local, _neg_ts, flags_only_report, normalize_report
@@ -76,6 +77,7 @@ class Runtime(KnowledgeIOMixin, RunMixin, ReviewMixin, RuleDeployMixin, Incident
         self._watch_busy: set[str] = set()
         self._storage_last: dict[str, float] = {}
         self._backup_done: set[str] = set()
+        self.jobs = Jobs()                 # background jobs: deploy, connection test, incident draft, what-if
         for e in settings.environments:
             ix: Any
             api: Any

@@ -105,7 +105,7 @@ Bildirimlerin kendi **Bildirim testi** düğmesi vardır.
 > parçası sayar.
 
 > **Üretimde imajı sabitleyin.** `docker-compose.yml` demoyu kolaylaştırmak için `:latest` kullanır. Üretimde
-> `ghcr.io/dururustem68/wazuh-daily-triage:0.11.0` (veya kendi digest'inizi) yazın; böylece yükseltme bilinçli
+> `ghcr.io/dururustem68/wazuh-daily-triage:0.11.1` (veya kendi digest'inizi) yazın; böylece yükseltme bilinçli
 > bir adım olur.
 
 ### A3. Birden çok Wazuh ortamı
@@ -172,7 +172,7 @@ app:
 
 ```sh
 helm install wazuh-daily-triage wazuh-daily-triage/wazuh-daily-triage \
-  --version 0.3.0 -f my-values.yaml
+  --version 0.3.1 -f my-values.yaml
 ```
 
 Depodan doğrudan: `helm install wazuh-daily-triage ./deploy/helm/wazuh-daily-triage -f my-values.yaml`.
@@ -188,7 +188,7 @@ Depodan doğrudan: `helm install wazuh-daily-triage ./deploy/helm/wazuh-daily-tr
 cp -r deploy/kubernetes/example ~/triage-overlay
 cd ~/triage-overlay
 # depo dışında göreli "../base" çözülmez — sürümü sabitlenmiş uzak base'i gösterin:
-sed -i 's#^  - ../base.*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.11.0#' kustomization.yaml
+sed -i 's#^  - ../base.*#  - https://github.com/dururustem68/wazuh-daily-triage//deploy/kubernetes/base?ref=v0.11.1#' kustomization.yaml
 cp secret.env.example secret.env
 vi secret.env environments.yaml context.md
 kubectl apply -k .
@@ -303,7 +303,7 @@ docker compose exec triage python -m app.check
 
 # Helm
 helm upgrade wazuh-daily-triage wazuh-daily-triage/wazuh-daily-triage \
-  --version 0.3.0 -f my-values.yaml
+  --version 0.3.1 -f my-values.yaml
 helm rollback wazuh-daily-triage 1     # gerekirse
 ```
 

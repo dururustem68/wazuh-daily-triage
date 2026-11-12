@@ -22,6 +22,7 @@ spec:
     spec:
       serviceAccountName: {{ include "wdt.serviceAccountName" . }}
       automountServiceAccountToken: {{ .Values.rbac.create }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:

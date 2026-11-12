@@ -45,6 +45,7 @@ aksi halde                    → WAZUH_* değişkenleriyle tek ortam modu
 | `SOURCE_URL` | proje deposu | Alt bilgi bağlantısı (AGPL-3.0 §13 — kodu değiştirdiyseniz kendi fork'unuzu gösterin). |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
 | `WDT_SCHEDULER` | `true` | `false` süreç içi zamanlayıcıyı kapatır (elle koşu ve arayüz çalışır). |
+| `JOB_DRAIN_SECONDS` | `400` | 0.11.1: kapanışta süren bir arka plan işini (kural dağıtımı) bekleme süresi (sn); `terminationGracePeriodSeconds` değerinin altında tutun. |
 | `WDT_DEMO` | `false` | Demo modu: sentetik veri, `config/demo.yaml`, üretimde asla. |
 | `WDT_CONFIG` | `config/environments.yaml` | YAML yapılandırma yolu. |
 

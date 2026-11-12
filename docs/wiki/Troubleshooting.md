@@ -42,6 +42,8 @@ response header); searching the log for it gives the whole request.
 | *You do not have access to this environment* | the role's environment list excludes it | `ADMIN_ENVS` / `VIEWER_ENVS` |
 | `503` "audit trail is not writable" | production mode refuses changes without an audit trail | make the log directory writable (the `audit` volume) |
 | `502` from the proxy, container healthy | the proxy points at the wrong host or port | port 8080; `docker compose ps` |
+| `502`/`504` only on a long action (deploy, connection test, incident draft), before 0.11.1 | the proxy's upstream time-out (oauth2-proxy: 30 s); the action itself went on | upgrade to 0.11.1 (background jobs); check the audit trail for the outcome; see [SSO proxy authentication](SSO-Proxy-Auth#long-operations-and-proxy-time-outs-0111) |
+| *The proxy in front of the application gave up waiting* | same, on 0.11.1 for a request that is not a job | raise the proxy time-out; reload to see the result |
 | Banner "Some stored data could not be loaded" | a read from the Indexer failed | check the Indexer; the banner shows a request ID |
 
 ## Indexer: connection, TLS, authentication
@@ -128,6 +130,8 @@ Compare models with numbers instead of impressions: `python -m app.eval`
 | Parent rule unknown | load order of files in `etc/rules` | use a file name that sorts later, such as `zz_wdt_rules.xml`, in both the setting and the policy |
 | Rollback **failed** (critical in the log) | the manager did not accept the restored file or did not restart | a person must check the manager: `wazuh-analysisd -t` on the manager, then the file |
 | The restart times out | a slow cluster | raise `restart_timeout` |
+| Frequency rule rolled back, `match → <parent id> ✗` | before 0.11.1 a single logtest event can only reach the parent | 0.11.1 replays the sample `frequency + 2` times in one session |
+| Record says *Interrupted — check the manager* | the pod restarted during a deployment | check the rule file on the manager (`grep -n wdt:begin`), then deploy again or remove |
 
 ## Kubernetes
 
@@ -168,7 +172,7 @@ Open an issue with the version (About page), how it is deployed, the request ID,
 Remove host names, IP addresses and tokens first. Security problems go privately through
 [GitHub security advisories](https://github.com/dururustem68/wazuh-daily-triage/security/advisories/new).
 
-*Applies to 0.11.0 · reviewed 2026-11-11*
+*Applies to 0.11.1 · reviewed 2026-11-12*
 
 ---
 

@@ -20,7 +20,7 @@ lo explica y propone qué ajustar. Usted decide; nada cambia en Wazuh sin su apr
 
 ![Panel de guardia](images/dashboard.png)
 
-**Versión:** 0.11.0 · **Licencia:** AGPL-3.0-only · **Python:** 3.11–3.15 · **Wazuh:** 4.x
+**Versión:** 0.11.1 · **Licencia:** AGPL-3.0-only · **Python:** 3.11–3.15 · **Wazuh:** 4.x
 
 ## Qué es y qué no es
 

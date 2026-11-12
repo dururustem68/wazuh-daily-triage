@@ -11,6 +11,9 @@ spec:
   template:
     spec:
       automountServiceAccountToken: false
+      # a running rule deployment (manager restart + verification, rollback on failure) is allowed to finish
+      # before the pod stops; idle pods stop at once (JOB_DRAIN_SECONDS, default 400)
+      terminationGracePeriodSeconds: 420
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -20,7 +23,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: triage
-          image: ghcr.io/dururustem68/wazuh-daily-triage:0.11.0
+          image: ghcr.io/dururustem68/wazuh-daily-triage:0.11.1
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

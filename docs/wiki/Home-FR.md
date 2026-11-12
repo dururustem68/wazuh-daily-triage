@@ -22,7 +22,7 @@ Wazuh sans votre accord.
 
 ![Tableau de veille](images/dashboard.png)
 
-**Version :** 0.11.0 · **Licence :** AGPL-3.0-only · **Python :** 3.11–3.15 · **Wazuh :** 4.x
+**Version :** 0.11.1 · **Licence :** AGPL-3.0-only · **Python :** 3.11–3.15 · **Wazuh :** 4.x
 
 ## Ce que c'est, et ce que ce n'est pas
 
